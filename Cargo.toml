@@ -1,0 +1,27 @@
+[package]
+authors = ["omnect@conplement.de"]
+description = "WebService providing an API for omnect fetures."
+edition = "2021"
+homepage = "https://www.omnect.io/home"
+license = "MIT OR Apache-2.0"
+name = "omnect-ui"
+readme = "README.md"
+repository = "git@github.com:omnect/omnect-ui.git"
+version = "0.1.0"
+
+[dependencies]
+actix-files = "0.6"
+actix-rt = "2.9"
+actix-web = "4.5"
+actix-web-httpauth = "0.8"
+env_logger = "0.8"
+http-body-util = { version = "0.1", default-features = false, features = [] }
+hyper = { version = "1.3", default-features = false, features = [
+  "client",
+  "http1",
+] }
+hyper-util = { version = "0.1", default-features = false, features = ["tokio"] }
+jwt-simple = "0.12"
+log = "^0.4"
+log-panics = { version = "2", features = ["with-backtrace"] }
+tokio = { version = "1", features = ["net"] }
