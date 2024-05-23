@@ -1,17 +1,15 @@
-ARG docker_namespace
-ARG version_rust_container
+ARG DOCKER_NAMESPACE
+ARG VERSION_RUST_CONTAINER
 
-ARG distroless_image=gcr.io/distroless/base-debian12:nonroot
-FROM ${distroless_image} AS distroless
+ARG DISTROLESS_IMAGE=gcr.io/distroless/base-debian12:nonroot
+FROM ${DISTROLESS_IMAGE} AS distroless
 
-FROM ${docker_namespace}/rust:${version_rust_container} AS builder
+FROM ${DOCKER_NAMESPACE}/rust:${VERSION_RUST_CONTAINER} AS builder
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
-    clang \
     cmake \
-    lld \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ARG TARGETARCH
@@ -24,8 +22,7 @@ COPY src src
 COPY Cargo.lock Cargo.lock
 COPY Cargo.toml Cargo.toml
 
-RUN cargo build --target=$(xx-cargo --print-target-triple) --release --locked --target-dir ./build && \
-    xx-verify ./build/$(xx-cargo --print-target-triple)/release/omnect-ui
+RUN cargo build --release --locked --target-dir ./build
 
 # replace by the following as soon as bookworm is suppoted
 # curl -s https://packagecloud.io/install/repositories/FZambia/centrifugo/script.deb.sh | bash
@@ -38,7 +35,7 @@ RUN <<EOT
 
     mkdir -p /copy/status.d
 
-    executable=(build/$(xx-cargo --print-target-triple)/release/omnect-ui)
+    executable=(build/release/omnect-ui)
     
     mkdir -p /copy/$(dirname "${executable}")
     cp "${executable}" /copy/"${executable}"
@@ -75,9 +72,9 @@ RUN <<EOT
     done
 EOT
 
-FROM ${distroless_image} AS base
+FROM ${DISTROLESS_IMAGE} AS base
 
-COPY --from=builder /work/build/*/release/omnect-ui /
+COPY --from=builder /work/build/release/omnect-ui /
 COPY --from=builder /work/centrifugo /
 COPY --from=builder /copy/lib/ /lib/
 COPY --from=builder /copy/status.d /var/lib/dpkg/status.d
