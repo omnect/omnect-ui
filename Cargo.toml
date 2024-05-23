@@ -12,7 +12,7 @@ version = "0.1.0"
 [dependencies]
 actix-files = "0.6"
 actix-rt = "2.9"
-actix-web = "4.5"
+actix-web = { version = "4", features = ["rustls-0_22"] }
 actix-web-httpauth = "0.8"
 env_logger = "0.8"
 http-body-util = { version = "0.1", default-features = false, features = [] }
@@ -24,4 +24,6 @@ hyper-util = { version = "0.1", default-features = false, features = ["tokio"] }
 jwt-simple = "0.12"
 log = "^0.4"
 log-panics = { version = "2", features = ["with-backtrace"] }
-tokio = { version = "1", features = ["net"] }
+rustls = "0.22"
+rustls-pemfile = "2"
+tokio = { version = "1", features = ["macros", "net", "process"] }
