@@ -135,14 +135,14 @@
           }
         });
 
-        centrifuge.history("Version", { limit: 1 }).then(function (resp) {
+        centrifuge.history("Versions", { limit: 1 }).then(function (resp) {
           console.log(resp);
           if (0 < resp.publications.length) {
             setVersion(resp.publications[0].data);
           }
         });
 
-        centrifuge.history("Timeout", { limit: 1 }).then(function (resp) {
+        centrifuge.history("Timeouts", { limit: 1 }).then(function (resp) {
           console.log(resp);
           if (0 < resp.publications.length) {
             setTimeout(resp.publications[0].data);
@@ -150,8 +150,8 @@
         });
 
         subOnlineStatus = centrifuge.newSubscription("OnlineStatus");
-        subVersion = centrifuge.newSubscription("Version");
-        subTimeout = centrifuge.newSubscription("Timeout");
+        subVersion = centrifuge.newSubscription("Versions");
+        subTimeout = centrifuge.newSubscription("Timeouts");
 
         subOnlineStatus
           .on("publication", function (ctx) {
@@ -208,8 +208,8 @@
       }
 
       function setOnlineStatus(data) {
-        if (typeof data["online"] !== "undefined") {
-          online.innerHTML = data["online"];
+        if (typeof data["iothub"] !== "undefined") {
+          online.innerHTML = data["iothub"];
         }
       }
 
