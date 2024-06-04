@@ -281,14 +281,15 @@ fn verify(auth: BearerAuth) -> (StatusCode, String) {
     };
 
     let key = HS256Key::from_bytes(key.as_bytes());
-    let mut options = VerificationOptions::default();
+    let options = VerificationOptions {
+        accept_future: true,
+        time_tolerance: Some(Duration::from_mins(15)),
+        max_validity: Some(Duration::from_hours(TOKEN_EXPIRE_HOURES)),
+        required_subject: Some("omnect-ui".to_string()),
+        ..Default::default()
+    };
 
-    options.accept_future = true;
-    options.time_tolerance = Some(Duration::from_mins(15));
-    options.max_validity = Some(Duration::from_hours(TOKEN_EXPIRE_HOURES));
-    options.required_subject = Some("omnect-ui".to_string());
-
-    if let Err(e) = key.verify_token::<NoCustomClaims>(&auth.token(), Some(options)) {
+    if let Err(e) = key.verify_token::<NoCustomClaims>(auth.token(), Some(options)) {
         return (
             StatusCode::UNAUTHORIZED,
             format!("verify jwt token failed: {e}"),
