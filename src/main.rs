@@ -1,6 +1,5 @@
 use actix_files::{Files, NamedFile};
-use actix_web::http::StatusCode;
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{http::StatusCode, web, App, HttpResponse, HttpServer, Responder};
 use actix_web_httpauth::extractors::{basic::BasicAuth, bearer::BearerAuth};
 use env_logger::{Builder, Env, Target};
 use http_body_util::{BodyExt, Empty};
@@ -128,100 +127,108 @@ async fn main() {
 
 async fn index() -> actix_web::Result<NamedFile> {
     debug!("index() called");
+
+    // trigger omnect-device-service to republish
+    let res = post("/republish/v1", None).await;
+
+    if let Some(e) = res.error() {
+        error!("republish failed: {e}");
+
+        return Err(actix_web::error::ErrorInternalServerError(
+            "republish failed",
+        ));
+    }
+
     Ok(NamedFile::open(
         std::fs::canonicalize("static/index.html").expect("static/index.html not found"),
-    )
-    .expect("failed to open static/index.html"))
+    )?)
 }
 
-async fn login_token(auth: BasicAuth) -> HttpResponse {
+async fn login_token(auth: BasicAuth) -> impl Responder {
     debug!("login_token() called");
     let Ok(user) = std::env::var("LOGIN_USER") else {
-        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body("missing user");
+        error!("login_token: missing user");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
     let Ok(password) = std::env::var("LOGIN_PASSWORD") else {
-        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body("missing password");
+        error!("login_token: missing password");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
     if auth.user_id() != user || auth.password() != Some(password.as_str()) {
-        return HttpResponse::build(StatusCode::UNAUTHORIZED).body("wrong credentials");
+        error!("login_token: wrong credentials");
+        return HttpResponse::build(StatusCode::UNAUTHORIZED).finish();
     }
     let Ok(key) = std::env::var("CENTRIFUGO_TOKEN_HMAC_SECRET_KEY") else {
-        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body("missing secret key");
+        error!("login_token: missing secret key");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
     let key = HS256Key::from_bytes(key.as_bytes());
     let claims =
         Claims::create(Duration::from_hours(TOKEN_EXPIRE_HOURES)).with_subject("omnect-ui");
 
     let Ok(token) = key.authenticate(claims) else {
-        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body("cannot create token");
+        error!("login_token: cannot create token");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
 
     HttpResponse::Ok().body(token)
 }
 
-async fn refresh_token(auth: BearerAuth) -> HttpResponse {
+async fn refresh_token(auth: BearerAuth) -> impl Responder {
     debug!("refresh_token() called");
-    
+
     let (status_code, error_msg) = verify(auth);
 
     if status_code != StatusCode::OK {
         error!("refresh_token verify: {error_msg}");
-        return HttpResponse::build(status_code).body(error_msg);
+        return HttpResponse::build(status_code).finish();
     }
 
     let Ok(key) = std::env::var("CENTRIFUGO_TOKEN_HMAC_SECRET_KEY") else {
-        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body("missing secret key");
+        error!("refresh_token: missing secret key");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
     let key = HS256Key::from_bytes(key.as_bytes());
     let claims =
         Claims::create(Duration::from_hours(TOKEN_EXPIRE_HOURES)).with_subject("omnect-ui");
 
     let Ok(token) = key.authenticate(claims) else {
-        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body("cannot create token");
+        error!("refresh_token: cannot create token");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
 
     HttpResponse::Ok().body(token)
 }
 
-async fn reboot(auth: BearerAuth) -> HttpResponse {
+async fn reboot(auth: BearerAuth) -> impl Responder {
     debug!("reboot() called");
 
-    let (code, body) = put("/reboot/v1", auth).await;
-    if code != StatusCode::OK {
-        error!("reboot failed: {body}");
-    }
-    HttpResponse::build(code).body(body)
+    post("/reboot/v1", Some(auth)).await
 }
 
 async fn reload_network(auth: BearerAuth) -> impl Responder {
     debug!("reload_network() called");
 
-    let (code, body) = put("/reload-network/v1", auth).await;
-    if code != StatusCode::OK {
-        error!("reload-network failed: {body}");
-    }
-    HttpResponse::build(code).body(body)
+    post("/reload-network/v1", Some(auth)).await
 }
 
-async fn put(path: &str, auth: BearerAuth) -> (StatusCode, String) {
-    let (status_code, error_msg) = verify(auth);
+async fn post(path: &str, auth: Option<BearerAuth>) -> HttpResponse {
+    if let Some(auth) = auth {
+        let (status_code, error_msg) = verify(auth);
 
-    if status_code != StatusCode::OK {
-        error!("put {path} verify: {error_msg}");
-        return (status_code, error_msg);
+        if status_code != StatusCode::OK {
+            error!("put {path} verify: {error_msg}");
+            return HttpResponse::build(status_code).finish();
+        }
     }
 
     let Ok(stream) = UnixStream::connect(socket_path!()).await else {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "cannot create unix stream".to_string(),
-        );
+        error!("cannot create unix stream {}", socket_path!());
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
     let Ok((mut sender, conn)) = http1::handshake(TokioIo::new(stream)).await else {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "unix stream handshake failed".to_string(),
-        );
+        error!("unix stream handshake failed");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
 
     actix_rt::spawn(async move {
@@ -231,50 +238,38 @@ async fn put(path: &str, auth: BearerAuth) -> (StatusCode, String) {
     });
 
     if sender.ready().await.is_err() {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "unix stream unexpectedly closed".to_string(),
-        );
+        error!("unix stream unexpectedly closed");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     }
 
     let Ok(request) = Request::builder()
         .uri(path)
-        .method("PUT")
+        .method("POST")
         .header("Host", "localhost")
         .body(Empty::<Bytes>::new())
     else {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "build request failed".to_string(),
-        );
+        error!("build request failed");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
 
     let Ok(res) = sender.send_request(request).await else {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "send request failed".to_string(),
-        );
+        error!("send request failed");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
     let Ok(status_code) = StatusCode::from_u16(res.status().as_u16()) else {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "get status code failed".to_string(),
-        );
+        error!("get status code failed");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
     let Ok(body) = res.collect().await else {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "collect response body failed".to_string(),
-        );
+        error!("collect response body failed");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
     let Ok(body) = String::from_utf8(body.to_bytes().to_vec()) else {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "get response body failed".to_string(),
-        );
+        error!("get response body failed");
+        return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
 
-    (status_code, body.to_string())
+    HttpResponse::build(status_code).body(body)
 }
 
 fn verify(auth: BearerAuth) -> (StatusCode, String) {
