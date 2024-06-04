@@ -107,10 +107,7 @@ async fn main() {
     let mut centrifugo =
         Command::new(std::fs::canonicalize("centrifugo").expect("centrifugo not found"))
             .envs(vec![
-                (
-                    "CENTRIFUGO_ALLOWED_ORIGINS",
-                    "https://localhost:1977 https://0.0.0.0:1977",
-                ),
+                ("CENTRIFUGO_ALLOWED_ORIGINS", "*"),
                 ("CENTRIFUGO_ALLOW_SUBSCRIBE_FOR_CLIENT", "true"),
                 ("CENTRIFUGO_ALLOW_HISTORY_FOR_CLIENT", "true"),
                 ("CENTRIFUGO_HISTORY_SIZE", "1"),
