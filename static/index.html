@@ -109,7 +109,8 @@
 
       token = await response;
 
-      var centrifuge_url = "ws://" + window.location.hostname + ":8000/connection/websocket";
+      var centrifuge_url = "wss://" + window.location.hostname + ":8000/connection/websocket";
+      //var centrifuge_url = "ws://" + window.location.hostname + ":8000/connection/websocket";
       console.log(`centrifuge_url: ${centrifuge_url}`);
 
       centrifuge = new Centrifuge(

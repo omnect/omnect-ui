@@ -15,30 +15,6 @@ use tokio::{net::UnixStream, process::Command};
 
 const TOKEN_EXPIRE_HOURES: u64 = 2;
 
-#[macro_export]
-macro_rules! socket_path {
-    () => {{
-        const SOCKET_PATH_DEFAULT: &'static str = "/run/omnect-device-service/api.sock";
-        std::env::var("SOCKET_PATH").unwrap_or(SOCKET_PATH_DEFAULT.to_string())
-    }};
-}
-
-#[macro_export]
-macro_rules! ssl_cert_path {
-    () => {{
-        const SSL_CERT_PATH_DEFAULT: &'static str = "/cert/device_id_cert.pem";
-        std::env::var("SSL_CERT_PATH").unwrap_or(SSL_CERT_PATH_DEFAULT.to_string())
-    }};
-}
-
-#[macro_export]
-macro_rules! ssl_key_path {
-    () => {{
-        const SSL_KEY_PATH_DEFAULT: &'static str = "/cert/device_id_cert_key.pem";
-        std::env::var("SSL_KEY_PATH").unwrap_or(SSL_KEY_PATH_DEFAULT.to_string())
-    }};
-}
-
 #[actix_web::main]
 async fn main() {
     let mut builder;
@@ -64,10 +40,14 @@ async fn main() {
 
     info!("module version: {}", env!("CARGO_PKG_VERSION"));
 
-    let mut certs_file =
-        std::io::BufReader::new(std::fs::File::open(ssl_cert_path!()).expect("read ssl cert"));
-    let mut key_file =
-        std::io::BufReader::new(std::fs::File::open(ssl_key_path!()).expect("read ssl key"));
+    let mut certs_file = std::io::BufReader::new(
+        std::fs::File::open(std::env::var("SSL_CERT_PATH").expect("SSL_CERT_PATH missing"))
+            .expect("read ssl cert"),
+    );
+    let mut key_file = std::io::BufReader::new(
+        std::fs::File::open(std::env::var("SSL_KEY_PATH").expect("SSL_KEY_PATH missing"))
+            .expect("read ssl key"),
+    );
 
     let tls_certs = rustls_pemfile::certs(&mut certs_file)
         .collect::<Result<Vec<_>, _>>()
@@ -106,13 +86,6 @@ async fn main() {
 
     let mut centrifugo =
         Command::new(std::fs::canonicalize("centrifugo").expect("centrifugo not found"))
-            .envs(vec![
-                ("CENTRIFUGO_ALLOWED_ORIGINS", "*"),
-                ("CENTRIFUGO_ALLOW_SUBSCRIBE_FOR_CLIENT", "true"),
-                ("CENTRIFUGO_ALLOW_HISTORY_FOR_CLIENT", "true"),
-                ("CENTRIFUGO_HISTORY_SIZE", "1"),
-                ("CENTRIFUGO_HISTORY_TTL", "720h"),
-            ])
             .spawn()
             .expect("Failed to spawn child process");
 
@@ -219,8 +192,10 @@ async fn post(path: &str, auth: Option<BearerAuth>) -> HttpResponse {
         }
     }
 
-    let Ok(stream) = UnixStream::connect(socket_path!()).await else {
-        error!("cannot create unix stream {}", socket_path!());
+    let Ok(stream) =
+        UnixStream::connect(std::env::var("SOCKET_PATH").expect("SOCKET_PATH missing")).await
+    else {
+        error!("cannot create unix stream");
         return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
     };
     let Ok((mut sender, conn)) = http1::handshake(TokioIo::new(stream)).await else {
