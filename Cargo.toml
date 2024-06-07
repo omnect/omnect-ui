@@ -1,6 +1,6 @@
 [package]
 authors = ["omnect@conplement.de"]
-description = "WebService providing an API for omnect fetures."
+description = "WebService providing to access omnect device features."
 edition = "2021"
 homepage = "https://www.omnect.io/home"
 license = "MIT OR Apache-2.0"

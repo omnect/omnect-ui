@@ -10,7 +10,7 @@ Type=oneshot
 
 EnvironmentFile=-/etc/omnect/omnect-ui.env
 
-ExecStart=/bin/bash -c "docker load < /mnt/factory/omnect-ui.tar.gz; \
+ExecStart=/bin/bash -c "docker load < /mnt/factory/oci_images/omnect-ui.tar.gz; \
                         docker run -d --restart always --name omnect-ui \
                             --user 10000:10000 \
                             --mount type=bind,source=/run/omnect-device-service/api.sock,target=/socket/api.sock \

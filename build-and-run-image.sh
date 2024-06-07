@@ -1,3 +1,5 @@
+# file used for local development
+
 # local build and run
 omnect_ui_version=$(toml get --raw Cargo.toml package.version)
 rust_version="1.78.0-bookworm"
@@ -9,8 +11,9 @@ docker build \
   --progress=plain \
   -t omnect-ui:"local_${omnect_ui_version}" .
 
-# /tmp/api.sock used by omnect-device-service
-# ./temp/device_id_cert.pem and temp/device_id_cert_key.pem must exist
+# ensure presense of:
+# /tmp/api.sock (normally created by a local instance of omnect-device-service)
+# ./temp/device_id_cert.pem and temp/device_id_cert_key.pem (certificate and key file as used on device)
 docker run --rm \
   -v $(pwd)/temp:/temp \
   --mount type=bind,source=/tmp/api.sock,target=/temp/api.sock \
