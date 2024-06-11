@@ -17,6 +17,7 @@ ExecStart=/bin/bash -c "docker load < /mnt/factory/oci_images/omnect-ui.tar.gz; 
                             -v /mnt/cert/priv:/cert \
                             -p ${UI_PORT}:${UI_PORT} \
                             -p ${CENTRIFUGO_PORT}:${CENTRIFUGO_PORT} \
+                            -e UI_PORT=${UI_PORT} \
                             -e CENTRIFUGO_ALLOW_HISTORY_FOR_CLIENT=true \
                             -e CENTRIFUGO_ALLOW_SUBSCRIBE_FOR_CLIENT=true \
                             -e CENTRIFUGO_ALLOWED_ORIGINS=https://$(hostname | tr [:upper:] [:lower:]):${UI_PORT} \

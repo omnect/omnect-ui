@@ -1,6 +1,6 @@
 [
   {
-    "url": "https://localhost:8000/api/publish",
+    "url": "https://localhost:%%CENTRIFUGO_PORT%%/api/publish",
     "headers": [
       {
         "name": "Content-Type",

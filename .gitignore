@@ -3,3 +3,4 @@
 .vscode
 centrifugo
 *.tar.gz
+*.env

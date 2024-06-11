@@ -3,6 +3,8 @@
 # local build and run
 omnect_ui_version=$(toml get --raw Cargo.toml package.version)
 rust_version="1.78.0-bookworm"
+omnect_ui_port="1977"
+centrifugo_port="8000"
 
 docker build \
   --build-arg=DOCKER_NAMESPACE=omnectweucopsacr.azurecr.io \
@@ -26,7 +28,7 @@ docker run --rm \
   -e LOGIN_PASSWORD=123 \
   -e CENTRIFUGO_TOKEN_HMAC_SECRET_KEY=my-token-secret-key \
   -e CENTRIFUGO_API_KEY=my-api-key \
-  -e CENTRIFUGO_ALLOWED_ORIGINS="https://$(hostname | tr [:upper:] [:lower:]):1977 https://localhost:1977" \
+  -e CENTRIFUGO_ALLOWED_ORIGINS="https://$(hostname | tr [:upper:] [:lower:]):"${omnect_ui_port}" https://localhost:"${omnect_ui_port}"" \
   -e CENTRIFUGO_ALLOW_SUBSCRIBE_FOR_CLIENT=true \
   -e CENTRIFUGO_ALLOW_HISTORY_FOR_CLIENT=true \
   -e CENTRIFUGO_HISTORY_SIZE=1 \
@@ -37,6 +39,6 @@ docker run --rm \
   -e CENTRIFUGO_ADMIN=true \
   -e CENTRIFUGO_ADMIN_PASSWORD=123 \
   -e CENTRIFUGO_ADMIN_SECRET=123 \
-  -p 1977:1977 \
-  -p 8000:8000 \
+  -p "${omnect_ui_port}":"${omnect_ui_port}" \
+  -p "${centrifugo_port}":"${centrifugo_port}" \
   omnect-ui:"local_${omnect_ui_version}"

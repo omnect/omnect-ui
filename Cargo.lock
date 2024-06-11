@@ -1393,6 +1393,7 @@ dependencies = [
  "actix-rt",
  "actix-web",
  "actix-web-httpauth",
+ "anyhow",
  "env_logger",
  "http-body-util",
  "hyper",

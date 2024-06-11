@@ -60,6 +60,7 @@
     var subOnlineStatus;
     var subVersion;
     var subTimeout;
+    var xhr = new XMLHttpRequest();
 
     document
       .querySelector("#login")
@@ -92,7 +93,7 @@
         var creds = bytesToBase64(
           new TextEncoder().encode(user + ":" + password)
         );
-        var xhr = new XMLHttpRequest();
+
         xhr.open("Post", "token/login", true);
         xhr.setRequestHeader("Authorization", "Basic " + creds);
         xhr.onload = function () {
@@ -179,7 +180,6 @@
 
     async function getConnectionToken() {
       const response = new Promise(function (resolve, reject) {
-        var xhr = new XMLHttpRequest();
         xhr.open("Get", "token/refresh", true);
         xhr.setRequestHeader("Authorization", "Bearer " + token);
         xhr.onload = function () {
@@ -226,14 +226,12 @@
     }
 
     function reboot() {
-      var xhr = new XMLHttpRequest();
       xhr.open("POST", "reboot", true);
       xhr.setRequestHeader("Authorization", "Bearer " + token);
       xhr.send();
     }
 
     function reloadNetwork() {
-      var xhr = new XMLHttpRequest();
       xhr.open("POST", "reload-network", true);
       xhr.setRequestHeader("Authorization", "Bearer " + token);
       xhr.send();
