@@ -5,29 +5,29 @@ This module implements a web frontend and backend to provide omnect specific fea
 
 ## Install omnect-ui
 
-Since omnect-os is designed as generic OS all specific or optional applications must be provided as docker images. There are two options to install omnect-ui on a target:
+Since omnect-os is designed as generic OS, all specific or optional applications must be provided as docker images. There are two options to install omnect-ui on a target:
 1. azure iotedge deployment:
-   - deployement of omnect-ui docker image via omnect-portal to a device in field. The 
+   - deployment of omnect-ui docker image via omnect-portal to a device in field
    - device must be online (at least once) in order to receive the deployment
-   - after a factory reset the omnect-ui must be deployed again what requires a connection to azure again
+   - after a factory reset omnect-ui must be deployed again what requires a connection to azure cloud
 2. in-factory installation (check [meta-omnect](https://github.com/omnect/meta-omnect) for partition layout):
    - inject omnect-ui docker image into factory partition
    - omnect-os takes care of installation while first boot and after factory reset
 
-### iotedge deployement
+### iotedge deployment
 
-In case it is agreed the omnect takes care to provide omnect-ui as application in omnect-portal. Get into contact with support@omnect.io if interested. 
+In case it is agreed the omnect team takes care of providing omnect-ui as application in omnect-portal. Get into contact with support@omnect.io if interested. 
 
 ### Inject into omnect-os image
 
-If omnect-ui must be part of the omnect-os image, several configuration files must injected to an omnect-os firmware image:
+If omnect-ui must be part of the omnect-os image, several configuration files have to be injected into an omnect-os firmware image:
 1.  in all files in config/ folder replace all occurrences of %% *** %% with reasonable values:
     1.  %%CENTRIFUGO_API_KEY%%: the [API key](https://centrifugal.dev/docs/server/server_api#http-api) should come from a vault
     2.  %%CENTRIFUGO_TOKEN_HMAC_SECRET_KEY%%: the [HMAC key](https://centrifugal.dev/docs/server/authentication) should come from a vault
     3.  %%USER%%: user name to be matched on omnect-ui login
     4.  %PASSWORD%%: password to be matched on omnect-ui login
-2.  it might be reasonable to adapt other default config values to your needs
-3.  inject config files via [omnect-cli](https://github.com/omnect/omnect-cli) to omnect-os image
+2.  it might be appropriate to adapt other default config values to your needs
+3.  inject config files via [omnect-cli](https://github.com/omnect/omnect-cli) into omnect-os image
 ```
 # download and copy omnect-ui docker image
 omnect-cli docker inject -d omnectsharedstagingacr.azurecr.io/omnect-portal-omnect-ui:latest -e /oci_images/omnect-ui.tar.gz -i my-omnect-os-image.wic
