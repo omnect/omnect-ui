@@ -30,7 +30,7 @@ If omnect-ui must be part of the omnect-os image, several configuration files ha
 3.  inject config files via [omnect-cli](https://github.com/omnect/omnect-cli) into omnect-os image
 ```
 # download and copy omnect-ui docker image
-omnect-cli docker inject -d omnectsharedstagingacr.azurecr.io/omnect-portal-omnect-ui:latest -e /oci_images/omnect-ui.tar.gz -i my-omnect-os-image.wic
+omnect-cli docker inject -d omnectsharedprodacr.azurecr.io/omnect-portal-omnect-ui:latest -e /oci_images/omnect-ui.tar.gz -i my-omnect-os-image.wic
 
 # copy config files
 omnect-cli file copy-to-image \
@@ -46,8 +46,8 @@ omnect-cli file copy-to-image \
 # devices provisioned by x509 usually already have certs injected
 omnect-cli identity set-device-certificate \
   -d "my-device-id" \
-  -c omnect-int-ca-iotedge-staging_fullchain.pem \
-  -k omnect-int-ca-iotedge-staging.key -D 365 \
+  -c my-omnect-int-ca-fullchain.pem \
+  -k my-omnect-int-ca.key -D 365 \
   -i my-omnect-os-image.wic
 ```
 
@@ -55,7 +55,7 @@ omnect-cli identity set-device-certificate \
 
 omnect-ui can be reached at https://DeviceHostnameOrIp:1977<br>
 
-Login with the configured creadentials<br>
+Login with the configured credentials<br>
 ![login](docu/login.png)<br>
 Watch device status<br>
 ![login](docu/main.png)
