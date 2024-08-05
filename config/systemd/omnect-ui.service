@@ -11,10 +11,13 @@ Type=oneshot
 EnvironmentFile=-/etc/omnect/omnect-ui.env
 
 ExecStart=/bin/bash -c 'FULL_TAG=$(docker load < /mnt/factory/oci_images/omnect-ui.tar.gz | grep "Loaded image: " | cut -d ':' -f2-) ; \
+                        SSL_CERT_FILENAME=$(basename /var/lib/aziot/certd/certs/deviceid-*.cer) ; \
+                        SSL_KEY_FILENAME=$(basename /var/lib/aziot/keyd/keys/deviceid-*.key) ; \
                         docker run -d --restart always --name omnect-ui \
                             --user $(id -u omnect_device_socket):$(id -g omnect_device_socket) \
                             --mount type=bind,source=/run/omnect-device-service/api.sock,target=/socket/api.sock \
-                            -v /mnt/cert/priv:/cert \
+                            --mount type=bind,source=/var/lib/aziot/certd/certs/${SSL_CERT_FILENAME},target=/cert/device_id_cert.pem \
+                            --mount type=bind,source=/var/lib/aziot/keyd/keys/${SSL_KEY_FILENAME},target=/cert/device_id_cert_key.pem \
                             -p ${UI_PORT}:${UI_PORT} \
                             -p ${CENTRIFUGO_PORT}:${CENTRIFUGO_PORT} \
                             -e UI_PORT=${UI_PORT} \

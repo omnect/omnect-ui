@@ -45,20 +45,22 @@ async fn main() {
         .parse::<u64>()
         .expect("UI_PORT format");
 
-    let mut certs_file = std::io::BufReader::new(
-        std::fs::File::open(std::env::var("SSL_CERT_PATH").expect("SSL_CERT_PATH missing"))
-            .expect("read certs_file"),
-    );
-    let mut key_file = std::io::BufReader::new(
-        std::fs::File::open(std::env::var("SSL_KEY_PATH").expect("SSL_KEY_PATH missing"))
-            .expect("read key_file"),
-    );
+    let device_cert_path = std::env::var("SSL_CERT_PATH").expect("SSL_CERT_PATH missing");
+    let device_key_path = std::env::var("SSL_KEY_PATH").expect("SSL_KEY_PATH missing");
 
-    let tls_certs = rustls_pemfile::certs(&mut certs_file)
+    debug!("device cert file: {device_cert_path}");
+    debug!("device key file: {device_key_path}");
+
+    let mut tls_certs =
+        std::io::BufReader::new(std::fs::File::open(device_cert_path).expect("read certs_file"));
+    let mut tls_key =
+        std::io::BufReader::new(std::fs::File::open(device_key_path).expect("read key_file"));
+
+    let tls_certs = rustls_pemfile::certs(&mut tls_certs)
         .collect::<Result<Vec<_>, _>>()
         .expect("failed to parse cert pem");
 
-    let tls_key = rustls_pemfile::rsa_private_keys(&mut key_file)
+    let tls_key = rustls_pemfile::rsa_private_keys(&mut tls_key)
         .next()
         .expect("no keys found")
         .expect("invalid key found");
