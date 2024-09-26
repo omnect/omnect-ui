@@ -1,6 +1,6 @@
 [Unit]
 Description=omnect ui
-After=time-sync.target docker.service omnect-device-service.service
+After=docker.service omnect-device-service.service
 Before=first-boot-complete.target
 Wants=first-boot-complete.target docker.service omnect-device-service.service
 ConditionFirstBoot=yes
@@ -11,6 +11,7 @@ Type=oneshot
 EnvironmentFile=-/etc/omnect/omnect-ui.env
 
 ExecStart=/bin/bash -c 'FULL_TAG=$(docker load < /mnt/factory/oci_images/omnect-ui.tar.gz | grep "Loaded image: " | cut -d ':' -f2-) ; \
+                        docker rm -f omnect-ui || true ; \
                         docker run -d --restart always --name omnect-ui \
                             --user $(id -u omnect_device_socket):$(id -g omnect_device_socket) \
                             --mount type=bind,source=/run/omnect-device-service/api.sock,target=/socket/api.sock \
