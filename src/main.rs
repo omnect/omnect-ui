@@ -134,7 +134,7 @@ async fn index() -> actix_web::Result<NamedFile> {
     match post("/republish/v1", None).await {
         Ok(response) => response,
         Err(e) => {
-            error!("republish failed: {e}");
+            error!("republish failed: {e:#}");
             return Err(actix_web::error::ErrorInternalServerError(
                 "republish failed",
             ));
@@ -156,7 +156,7 @@ async fn login_token(auth: BasicAuth) -> impl Responder {
             HttpResponse::build(StatusCode::UNAUTHORIZED).finish()
         }
         Err(e) => {
-            error!("login_token: {e}");
+            error!("login_token: {e:#}");
             HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
         }
     }
@@ -172,7 +172,7 @@ async fn refresh_token(auth: BearerAuth) -> impl Responder {
             HttpResponse::build(StatusCode::UNAUTHORIZED).finish()
         }
         Err(e) => {
-            error!("refresh_token: {e}");
+            error!("refresh_token: {e:#}");
             HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
         }
     }
@@ -184,7 +184,7 @@ async fn factory_reset(auth: BearerAuth) -> impl Responder {
     match post("/factory-reset/v1", Some(auth)).await {
         Ok(response) => response,
         Err(e) => {
-            error!("factory_reset failed: {e}");
+            error!("factory_reset failed: {e:#}");
             HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
         }
     }
@@ -196,7 +196,7 @@ async fn reboot(auth: BearerAuth) -> impl Responder {
     match post("/reboot/v1", Some(auth)).await {
         Ok(response) => response,
         Err(e) => {
-            error!("reboot failed: {e}");
+            error!("reboot failed: {e:#}");
             HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
         }
     }
@@ -208,7 +208,7 @@ async fn reload_network(auth: BearerAuth) -> impl Responder {
     match post("/reload-network/v1", Some(auth)).await {
         Ok(response) => response,
         Err(e) => {
-            error!("reload-network failed: {e}");
+            error!("reload-network failed: {e:#}");
             HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
         }
     }
