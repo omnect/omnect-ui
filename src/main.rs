@@ -89,7 +89,6 @@ async fn main() {
                     "/static",
                     std::fs::canonicalize("static").expect("static folder not found"),
                 )
-                .show_files_listing(),
             )
     })
     .bind_rustls_0_22(format!("0.0.0.0:{ui_port}"), tls_config)
@@ -222,24 +221,13 @@ async fn post(path: &str, auth: Option<BearerAuth>) -> Result<HttpResponse> {
         }
     }
 
-    let stream = UnixStream::connect(std::env::var("SOCKET_PATH").expect("SOCKET_PATH missing"))
-        .await
-        .context("cannot create unix stream")?;
-
-    let (mut sender, conn) = http1::handshake(TokioIo::new(stream))
-        .await
-        .context("unix stream handshake failed")?;
-
-    actix_rt::spawn(async move {
-        if let Err(err) = conn.await {
-            error!("post connection failed: {:?}", err);
+    let mut sender = match sender().await {
+        Err(e) => {
+            error!("error creating request sender: {e}. socket might be broken. exit application");
+            std::process::exit(1)
         }
-    });
-
-    sender
-        .ready()
-        .await
-        .context("unix stream unexpectedly closed")?;
+        Ok(sender) => sender,
+    };
 
     let request = Request::builder()
         .uri(path)
@@ -264,6 +252,29 @@ async fn post(path: &str, auth: Option<BearerAuth>) -> Result<HttpResponse> {
     let body = String::from_utf8(body.to_bytes().to_vec()).context("get response body failed")?;
 
     Ok(HttpResponse::build(status_code).body(body))
+}
+
+async fn sender() -> Result<http1::SendRequest<Empty<Bytes>>> {
+    let stream = UnixStream::connect(std::env::var("SOCKET_PATH").expect("SOCKET_PATH missing"))
+        .await
+        .context("cannot create unix stream")?;
+
+    let (mut sender, conn) = http1::handshake(TokioIo::new(stream))
+        .await
+        .context("unix stream handshake failed")?;
+
+    actix_rt::spawn(async move {
+        if let Err(err) = conn.await {
+            error!("post connection failed: {:?}", err);
+        }
+    });
+
+    sender
+        .ready()
+        .await
+        .context("unix stream unexpectedly closed")?;
+
+    Ok(sender)
 }
 
 fn token() -> HttpResponse {
