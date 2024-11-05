@@ -13,8 +13,14 @@ use jwt_simple::prelude::*;
 use log::{debug, error, info};
 use std::io::Write;
 use tokio::{net::UnixStream, process::Command};
+use serde::Deserialize;
 
 const TOKEN_EXPIRE_HOURES: u64 = 2;
+
+#[derive(Deserialize)]
+struct FactoryResetInput {
+    preserve: Vec<String>
+}
 
 #[actix_web::main]
 async fn main() {
@@ -177,8 +183,9 @@ async fn refresh_token(auth: BearerAuth) -> impl Responder {
     }
 }
 
-async fn factory_reset(auth: BearerAuth) -> impl Responder {
+async fn factory_reset(auth: BearerAuth, preserve: web::Json<FactoryResetInput>) -> impl Responder {
     debug!("factory_reset() called");
+    debug!("Preserved keys: {}", preserve.preserve.join(","));
 
     match post("/factory-reset/v1", Some(auth)).await {
         Ok(response) => response,

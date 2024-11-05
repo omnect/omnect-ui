@@ -9,9 +9,30 @@
 <body>
   <div class="content-wrapper">
 
-    <dialog id="spinner">
-      <p class="dialog-title"></p>
-      <span class="loader"></span>
+    <dialog id="spinner" class="align-items-center prevent-esc">
+      <div class="dialog-title-bar">
+          <p class="dialog-title"></p>
+      </div>
+      <div class="dialog-content">
+          <span class="loader"></span>
+      </div>
+    </dialog>
+
+    <dialog id="factory-reset-keys">
+      <form method="dialog">
+        <div class="dialog-title-bar">
+          <p>Reset device to factory</p>
+          <button type="reset" class="close-dialog">+</button>
+        </div>
+        <section class="dialog-content">
+          <span>Please click below which settings you want to keep.</span>
+          <div id="factory-reset-key-list"></div>
+        </section>
+        <menu>
+          <button type="reset" class="close-dialog error">Close</button>
+          <button type="submit" class="primary">Submit</button>
+      </menu>
+      </form>
     </dialog>
 
     <div class="logo-container">
@@ -27,7 +48,7 @@
       <button class="btn" type="submit">login</button>
     </form>
 
-    <section>
+    <section id="stats">
       <h3>Stats</h3>
       <div class="key-value-wrapper">
         <div class="key">online:</div>
@@ -83,18 +104,19 @@
     var subSystemInfo;
     var subTimeout;
     var subNetworkStatus;
+    var subFactoryResetKeys;
     var xhr = new XMLHttpRequest();
 
     document
-      .querySelector("#login")
+      .getElementById("login")
       .addEventListener("submit", await getLoginToken);
-    document.querySelector("#factory-reset").addEventListener("click", factoryReset);
-    document.querySelector("#reboot").addEventListener("click", reboot);
+    document.getElementById("factory-reset").addEventListener("click", showFactoryResetDialog);
+    document.getElementById("reboot").addEventListener("click", reboot);
     document
-      .querySelector("#reload-network")
+      .getElementById("reload-network")
       .addEventListener("click", reloadNetwork);
       document
-      .querySelector("#logout")
+      .getElementById("logout")
       .addEventListener("click", logout);
 
     const online = document.getElementById("online");
@@ -110,6 +132,21 @@
     const networkStatus = document.getElementById("network-status");
     const dialog = document.getElementById("spinner");
     const dialogTitle = document.querySelector(".dialog-title")
+    const factoryResetDialog = document.getElementById("factory-reset-keys")
+    const factoryResetKeyList = document.getElementById("factory-reset-key-list")
+    let factoryResetKeys = ["wifi"]
+
+    factoryResetDialog.addEventListener("submit", function(e) {
+      const keep = []
+      for(const k of factoryResetKeys) {
+        const elem = document.querySelector('input[name="' + k + '"]')
+        if (elem.checked) {
+            keep.push(k)
+            elem.checked = false
+        }
+      }
+      factoryReset(keep)
+    })
 
     function bytesToBase64(bytes) {
       const binString = Array.from(bytes, (byte) =>
@@ -120,9 +157,9 @@
 
     async function logout() {
       centrifuge.disconnect()
-      document.querySelector("#login").style.display = "flex"
-      document.querySelector("#logout").style.display = "none"
-      document.querySelector("section").style.display = "none"
+      document.getElementById("login").style.display = "flex"
+      document.getElementById("logout").style.display = "none"
+      document.getElementById("stats").style.display = "none"
       networkStatus.innerHTML = "N/A"
     }
 
@@ -140,7 +177,6 @@
         xhr.onload = function () {
           var status = xhr.status;
           if (status == 200) {
-            console.log(xhr.response);
             resolve(xhr.response);
           } else {
             reject(status);
@@ -152,7 +188,6 @@
       token = await response;
 
       var centrifuge_url = "wss://" + window.location.hostname + ":8000/connection/websocket";
-      console.log(`centrifuge_url: ${centrifuge_url}`);
 
       centrifuge = new Centrifuge(
         centrifuge_url,
@@ -168,10 +203,10 @@
         })
         .on("connected", function (ctx) {
           console.log(`connected over ${ctx.transport}`);
-          document.querySelector("#login").style.display = "none"
-          document.querySelector("#logout").style.display = "inline-block"
-          document.querySelector("section").style.display = "block"
-          document.querySelector("#password").value = ""
+          document.getElementById("login").style.display = "none"
+          document.getElementById("logout").style.display = "inline-block"
+          document.getElementById("stats").style.display = "block"
+          document.getElementById("password").value = ""
           dialog.close()
         })
         .on("disconnected", function (ctx) {
@@ -215,11 +250,19 @@
         }
       });
 
+      centrifuge.history("FactoryResetKeys", { limit: 1 }).then(function (resp) {
+        console.log(resp)
+        if(0 < resp.publications.length) {
+          setFactoryResetKeys(resp.publications[0].data)
+        }
+      })
+
       subOnlineStatus = centrifuge.newSubscription("OnlineStatus");
       subFactoryResetStatus = centrifuge.newSubscription("FactoryResetStatus");
       subSystemInfo = centrifuge.newSubscription("SystemInfo");
       subTimeout = centrifuge.newSubscription("Timeouts");
       subNetworkStatus = centrifuge.newSubscription("NetworkStatus");
+      subFactoryResetKeys = centrifuge.newSubscription("FactoryResetKeys");
 
       subOnlineStatus
         .on("publication", function (ctx) {
@@ -250,6 +293,12 @@
           setNetworkStatus(ctx.data);
         })
         .subscribe();
+
+      subFactoryResetKeys
+        .on("publication", function (ctx) {
+          setFactoryResetKeys(ctx.data);
+        })
+        .subscribe();
     }
 
     async function getConnectionToken() {
@@ -259,7 +308,6 @@
         xhr.onload = function () {
           var status = xhr.status;
           if (status == 200) {
-            console.log(xhr.response);
             resolve(xhr.response);
           } else {
             reject(status);
@@ -306,6 +354,12 @@
       if (typeof data["factory_reset_status"] !== "undefined") {
         factoryResetStatus.innerHTML =
           data["factory_reset_status"];
+      }
+    }
+
+    function setFactoryResetKeys(data) {
+      if (typeof data["keys"] !== "undefined") {
+        factoryResetKeys = data["keys"];
       }
     }
 
@@ -385,12 +439,39 @@
       return keyValueWrapper
     }
 
-    function factoryReset() {
+    function showFactoryResetDialog() {
+      createFactoryResetKeyList()
+      factoryResetDialog.showModal()
+    }
+
+    function factoryReset(keep) {
       dialog.showModal()
       dialogTitle.textContent = "Please wait. Device is resetting."
       xhr.open("POST", "factory-reset", true);
       xhr.setRequestHeader("Authorization", "Bearer " + token);
-      xhr.send();
+      xhr.setRequestHeader("Content-Type", "application/json")
+      xhr.send(JSON.stringify({preserve: keep}));
+    }
+
+    function createFactoryResetKeyList() {
+      factoryResetKeyList.innerHTML = ""
+      for(const k of factoryResetKeys) {
+        const container = document.createElement("div")
+        const keyElem = document.createElement("input")
+        keyElem.setAttribute("type", "checkbox")
+        keyElem.setAttribute("name", k)
+        keyElem.setAttribute("value", k)
+        keyElem.setAttribute("id", k)
+
+        const label = document.createElement("label")
+        label.setAttribute("for", k)
+        label.innerText = k
+
+        container.appendChild(keyElem)
+        container.appendChild(label)
+
+        factoryResetKeyList.appendChild(container)
+      }
     }
 
     function reboot() {
@@ -405,6 +486,30 @@
       xhr.open("POST", "reload-network", true);
       xhr.setRequestHeader("Authorization", "Bearer " + token);
       xhr.send();
+    }
+
+    const closeDialogBtn = document.querySelectorAll(".close-dialog")
+    closeDialogBtn.forEach(x => {
+      x.addEventListener("click", (e) => {
+        closeDialog(e.target)
+      })
+    })
+
+    const preventEsc = document.querySelectorAll(".prevent-esc")
+    preventEsc.forEach(x => {
+      x.addEventListener("keydown", e => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+        }
+      })
+    })
+
+    function closeDialog(elem) {
+      if(elem?.parentElement && elem?.parentElement.localName === "dialog") {
+        elem?.parentElement.close()
+      } else if(elem?.parentElement) {
+        closeDialog(elem?.parentElement)
+      }
     }
   </script>
 </body>
