@@ -3,22 +3,28 @@ use actix_web::{http::StatusCode, web, App, HttpResponse, HttpServer, Responder}
 use actix_web_httpauth::extractors::{basic::BasicAuth, bearer::BearerAuth};
 use anyhow::{Context, Result};
 use env_logger::{Builder, Env, Target};
-use http_body_util::{BodyExt, Empty};
+use http_body_util::BodyExt;
 use hyper::{
     Request,
-    {body::Bytes, client::conn::http1},
+    client::conn::http1,
 };
 use hyper_util::rt::TokioIo;
 use jwt_simple::prelude::*;
 use log::{debug, error, info};
 use std::io::Write;
 use tokio::{net::UnixStream, process::Command};
-use serde::Deserialize;
-
+use serde::{Deserialize,Serialize};
+use serde_json::to_string;
 const TOKEN_EXPIRE_HOURES: u64 = 2;
 
 #[derive(Deserialize)]
 struct FactoryResetInput {
+    preserve: Vec<String>
+}
+
+#[derive(Serialize)]
+struct FactoryResetPayload {
+    mode: u8,
     preserve: Vec<String>
 }
 
@@ -136,7 +142,7 @@ async fn index() -> actix_web::Result<NamedFile> {
     debug!("index() called");
 
     // trigger omnect-device-service to republish
-    match post("/republish/v1", None).await {
+    match post("/republish/v1", None, None).await {
         Ok(response) => response,
         Err(e) => {
             error!("republish failed: {e:#}");
@@ -183,11 +189,23 @@ async fn refresh_token(auth: BearerAuth) -> impl Responder {
     }
 }
 
-async fn factory_reset(auth: BearerAuth, preserve: web::Json<FactoryResetInput>) -> impl Responder {
-    debug!("factory_reset() called");
-    debug!("Preserved keys: {}", preserve.preserve.join(","));
+async fn factory_reset(auth: BearerAuth, body: web::Json<FactoryResetInput>) -> impl Responder {
+    debug!("factory_reset() called with preserved keys {}", body.preserve.join(","));
 
-    match post("/factory-reset/v1", Some(auth)).await {
+    let payload = web::Json(FactoryResetPayload {
+        mode: 1,
+        preserve: body.preserve.clone()
+    });
+
+    let json = match to_string(&payload) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("factory_reset failed due to serialization error: {e:#}");
+            return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+        }
+    };
+
+    match post("/factory-reset/v1", Some(auth), Some(json)).await {
         Ok(response) => response,
         Err(e) => {
             error!("factory_reset failed: {e:#}");
@@ -199,7 +217,7 @@ async fn factory_reset(auth: BearerAuth, preserve: web::Json<FactoryResetInput>)
 async fn reboot(auth: BearerAuth) -> impl Responder {
     debug!("reboot() called");
 
-    match post("/reboot/v1", Some(auth)).await {
+    match post("/reboot/v1", Some(auth), None).await {
         Ok(response) => response,
         Err(e) => {
             error!("reboot failed: {e:#}");
@@ -211,7 +229,7 @@ async fn reboot(auth: BearerAuth) -> impl Responder {
 async fn reload_network(auth: BearerAuth) -> impl Responder {
     debug!("reload_network() called");
 
-    match post("/reload-network/v1", Some(auth)).await {
+    match post("/reload-network/v1", Some(auth), None).await {
         Ok(response) => response,
         Err(e) => {
             error!("reload-network failed: {e:#}");
@@ -220,7 +238,7 @@ async fn reload_network(auth: BearerAuth) -> impl Responder {
     }
 }
 
-async fn post(path: &str, auth: Option<BearerAuth>) -> Result<HttpResponse> {
+async fn post(path: &str, auth: Option<BearerAuth>, body: Option<String>) -> Result<HttpResponse> {
     if let Some(auth) = auth {
         if !verify_token(auth)? {
             error!("post {path} verify false");
@@ -240,7 +258,7 @@ async fn post(path: &str, auth: Option<BearerAuth>) -> Result<HttpResponse> {
         .uri(path)
         .method("POST")
         .header("Host", "localhost")
-        .body(Empty::<Bytes>::new())
+        .body(body.unwrap_or(String::new()))
         .context("build request failed")?;
 
     let res = sender
@@ -261,7 +279,7 @@ async fn post(path: &str, auth: Option<BearerAuth>) -> Result<HttpResponse> {
     Ok(HttpResponse::build(status_code).body(body))
 }
 
-async fn sender() -> Result<http1::SendRequest<Empty<Bytes>>> {
+async fn sender() -> Result<http1::SendRequest<String>> {
     let stream = UnixStream::connect(std::env::var("SOCKET_PATH").expect("SOCKET_PATH missing"))
         .await
         .context("cannot create unix stream")?;
