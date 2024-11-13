@@ -4,28 +4,25 @@ use actix_web_httpauth::extractors::{basic::BasicAuth, bearer::BearerAuth};
 use anyhow::{Context, Result};
 use env_logger::{Builder, Env, Target};
 use http_body_util::BodyExt;
-use hyper::{
-    Request,
-    client::conn::http1,
-};
+use hyper::{client::conn::http1, Request};
 use hyper_util::rt::TokioIo;
 use jwt_simple::prelude::*;
 use log::{debug, error, info};
+use serde::{Deserialize, Serialize};
+use serde_json::to_string;
 use std::io::Write;
 use tokio::{net::UnixStream, process::Command};
-use serde::{Deserialize,Serialize};
-use serde_json::to_string;
 const TOKEN_EXPIRE_HOURES: u64 = 2;
 
 #[derive(Deserialize)]
 struct FactoryResetInput {
-    preserve: Vec<String>
+    preserve: Vec<String>,
 }
 
 #[derive(Serialize)]
 struct FactoryResetPayload {
     mode: u8,
-    preserve: Vec<String>
+    preserve: Vec<String>,
 }
 
 #[actix_web::main]
@@ -96,12 +93,10 @@ async fn main() {
             .route("/reload-network", web::post().to(reload_network))
             .route("/token/login", web::post().to(login_token))
             .route("/token/refresh", web::get().to(refresh_token))
-            .service(
-                Files::new(
-                    "/static",
-                    std::fs::canonicalize("static").expect("static folder not found"),
-                )
-            )
+            .service(Files::new(
+                "/static",
+                std::fs::canonicalize("static").expect("static folder not found"),
+            ))
     })
     .bind_rustls_0_22(format!("0.0.0.0:{ui_port}"), tls_config)
     .expect("bind_rustls")
@@ -190,18 +185,21 @@ async fn refresh_token(auth: BearerAuth) -> impl Responder {
 }
 
 async fn factory_reset(auth: BearerAuth, body: web::Json<FactoryResetInput>) -> impl Responder {
-    debug!("factory_reset() called with preserved keys {}", body.preserve.join(","));
+    debug!(
+        "factory_reset() called with preserved keys {}",
+        body.preserve.join(",")
+    );
 
     let payload = web::Json(FactoryResetPayload {
         mode: 1,
-        preserve: body.preserve.clone()
+        preserve: body.preserve.clone(),
     });
 
     let json = match to_string(&payload) {
         Ok(s) => s,
         Err(e) => {
             error!("factory_reset failed due to serialization error: {e:#}");
-            return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+            return HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish();
         }
     };
 
@@ -258,7 +256,7 @@ async fn post(path: &str, auth: Option<BearerAuth>, body: Option<String>) -> Res
         .uri(path)
         .method("POST")
         .header("Host", "localhost")
-        .body(body.unwrap_or(String::new()))
+        .body(body.unwrap_or_default())
         .context("build request failed")?;
 
     let res = sender
