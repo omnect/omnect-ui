@@ -24,10 +24,7 @@ COPY Cargo.toml Cargo.toml
 
 RUN cargo build --release --locked --target-dir ./build
 
-# replace by the following as soon as bookworm is suppoted
-# curl -s https://packagecloud.io/install/repositories/FZambia/centrifugo/script.deb.sh | bash
-RUN curl -LJO https://github.com/centrifugal/centrifugo/releases/download/v5.3.2/centrifugo_5.3.2_linux_${TARGETARCH}.tar.gz && \
-    tar -xzf centrifugo_*.tar.gz
+RUN curl -s https://packagecloud.io/install/repositories/FZambia/centrifugo/script.deb.sh | bash
 
 SHELL ["/bin/bash", "-c"]
 RUN <<EOT
