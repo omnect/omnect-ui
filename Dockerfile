@@ -16,6 +16,8 @@ ARG TARGETARCH
 
 WORKDIR "/work"
 
+RUN curl -sSLf https://centrifugal.dev/install.sh | sh
+
 COPY --from=distroless /var/lib/dpkg/status.d /distroless_pkgs
 
 COPY src src
@@ -23,8 +25,6 @@ COPY Cargo.lock Cargo.lock
 COPY Cargo.toml Cargo.toml
 
 RUN cargo build --release --locked --target-dir ./build
-
-RUN curl -s https://packagecloud.io/install/repositories/FZambia/centrifugo/script.deb.sh | bash
 
 SHELL ["/bin/bash", "-c"]
 RUN <<EOT
