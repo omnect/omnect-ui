@@ -30,6 +30,7 @@ const factoryResetStatus = document.getElementById("factory-reset-status");
 const networkStatus = document.getElementById("network-status");
 const dialog = document.getElementById("spinner");
 const dialogTitle = document.querySelector(".dialog-title");
+const spinnerTitle = document.querySelector("#spinner .dialog-title");
 const factoryResetDialog = document.getElementById("factory-reset-keys");
 const factoryResetKeyList = document.getElementById("factory-reset-key-list");
 const alertDialog = document.getElementById("alert");
@@ -365,7 +366,7 @@ async function factoryReset(keep) {
 
 	if (res.ok) {
 		dialog.showModal();
-		dialogTitle.textContent = "Please wait. Device is resetting.";
+		spinnerTitle.textContent = "Please wait. Device is resetting.";
 	} else {
 		alertDialog.querySelector(".dialog-title").innerText =
 			"Factory reset failed";
@@ -407,7 +408,7 @@ async function reboot() {
 
 	if (res.ok) {
 		dialog.showModal();
-		dialogTitle.textContent = "Please wait. Device is rebooting.";
+		spinnerTitle.textContent = "Please wait. Device is rebooting.";
 	} else {
 		alertDialog.querySelector(".dialog-title").innerText = "Reboot failed";
 		alertDialog.querySelector(".dialog-content").innerText =
