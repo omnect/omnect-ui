@@ -355,7 +355,7 @@ function showFactoryResetDialog() {
 }
 
 async function factoryReset(keep) {
-	const res = await fetch("factory-reset", {
+	const res = await fetch("action/factory-reset", {
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${token}`,
@@ -398,7 +398,7 @@ function createFactoryResetKeyList() {
 }
 
 async function reboot() {
-	const res = await fetch("reboot", {
+	const res = await fetch("action/reboot", {
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${token}`,
@@ -418,7 +418,7 @@ async function reboot() {
 }
 
 async function reloadNetwork() {
-	const res = await fetch("reload-network", {
+	const res = await fetch("action/reload-network", {
 		method: "POST",
 		headers: {
 			Authorization: `Bearer ${token}`,
