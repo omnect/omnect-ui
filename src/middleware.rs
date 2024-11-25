@@ -13,7 +13,7 @@ use std::{
     rc::Rc,
 };
 
-pub const TOKEN_EXPIRE_HOURES: u64 = 2;
+pub const TOKEN_EXPIRE_HOURS: u64 = 2;
 
 pub struct Auth;
 
@@ -91,7 +91,7 @@ pub fn verify_token(auth: BearerAuth) -> Result<bool> {
     let options = VerificationOptions {
         accept_future: true,
         time_tolerance: Some(Duration::from_mins(15)),
-        max_validity: Some(Duration::from_hours(TOKEN_EXPIRE_HOURES)),
+        max_validity: Some(Duration::from_hours(TOKEN_EXPIRE_HOURS)),
         required_subject: Some("omnect-ui".to_string()),
         ..Default::default()
     };

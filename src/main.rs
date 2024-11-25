@@ -312,7 +312,7 @@ async fn sender() -> Result<http1::SendRequest<String>> {
 fn token() -> HttpResponse {
     if let Ok(key) = std::env::var("CENTRIFUGO_TOKEN_HMAC_SECRET_KEY") {
         let key = HS256Key::from_bytes(key.as_bytes());
-        let claims = Claims::create(Duration::from_hours(middleware::TOKEN_EXPIRE_HOURES))
+        let claims = Claims::create(Duration::from_hours(middleware::TOKEN_EXPIRE_HOURS))
             .with_subject("omnect-ui");
 
         if let Ok(token) = key.authenticate(claims) {
