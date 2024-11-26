@@ -1,6 +1,5 @@
 use actix_files::{Files, NamedFile};
 use actix_web::{http::StatusCode, web, App, HttpResponse, HttpServer, Responder};
-use actix_web_httpauth::extractors::{basic::BasicAuth, bearer::BearerAuth};
 use anyhow::{Context, Result};
 use env_logger::{Builder, Env, Target};
 use http_body_util::BodyExt;
@@ -87,13 +86,29 @@ async fn main() {
 
     let server = HttpServer::new(move || {
         App::new()
-            .wrap(middleware::Auth)
             .route("/", web::get().to(index))
-            .route("/action/factory-reset", web::post().to(factory_reset))
-            .route("/action/reboot", web::post().to(reboot))
-            .route("/action/reload-network", web::post().to(reload_network))
-            .route("/token/login", web::post().to(login_token))
-            .route("/token/refresh", web::get().to(refresh_token))
+            .route(
+                "/factory-reset",
+                web::post().to(factory_reset).wrap(middleware::BearerAuthMw),
+            )
+            .route(
+                "/reboot",
+                web::post().to(reboot).wrap(middleware::BearerAuthMw),
+            )
+            .route(
+                "/reload-network",
+                web::post()
+                    .to(reload_network)
+                    .wrap(middleware::BearerAuthMw),
+            )
+            .route(
+                "/token/login",
+                web::post().to(token).wrap(middleware::BasicAuthMw),
+            )
+            .route(
+                "/token/refresh",
+                web::get().to(token).wrap(middleware::BearerAuthMw),
+            )
             .service(Files::new(
                 "/static",
                 std::fs::canonicalize("static").expect("static folder not found"),
@@ -151,38 +166,6 @@ async fn index() -> actix_web::Result<NamedFile> {
     Ok(NamedFile::open(
         std::fs::canonicalize("static/index.html").expect("static/index.html not found"),
     )?)
-}
-
-async fn login_token(auth: BasicAuth) -> impl Responder {
-    debug!("login_token() called");
-
-    match verify_user(auth) {
-        Ok(true) => token(),
-        Ok(false) => {
-            error!("login_token verify false");
-            HttpResponse::build(StatusCode::UNAUTHORIZED).finish()
-        }
-        Err(e) => {
-            error!("login_token: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
-        }
-    }
-}
-
-async fn refresh_token(auth: BearerAuth) -> impl Responder {
-    debug!("refresh_token() called");
-
-    match middleware::verify_token(auth) {
-        Ok(true) => token(),
-        Ok(false) => {
-            error!("refresh_token verify false");
-            HttpResponse::build(StatusCode::UNAUTHORIZED).finish()
-        }
-        Err(e) => {
-            error!("refresh_token: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
-        }
-    }
 }
 
 async fn factory_reset(body: web::Json<FactoryResetInput>) -> impl Responder {
@@ -309,7 +292,7 @@ async fn sender() -> Result<http1::SendRequest<String>> {
     Ok(sender)
 }
 
-fn token() -> HttpResponse {
+async fn token() -> impl Responder {
     if let Ok(key) = std::env::var("CENTRIFUGO_TOKEN_HMAC_SECRET_KEY") {
         let key = HS256Key::from_bytes(key.as_bytes());
         let claims = Claims::create(Duration::from_hours(middleware::TOKEN_EXPIRE_HOURS))
@@ -325,10 +308,4 @@ fn token() -> HttpResponse {
     };
 
     HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
-}
-
-fn verify_user(auth: BasicAuth) -> Result<bool> {
-    let user = std::env::var("LOGIN_USER").context("login_token: missing user")?;
-    let password = std::env::var("LOGIN_PASSWORD").context("login_token: missing password")?;
-    Ok(auth.user_id() == user && auth.password() == Some(&password))
 }
