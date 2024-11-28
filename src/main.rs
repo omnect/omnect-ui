@@ -212,7 +212,7 @@ async fn reload_network() -> impl Responder {
     }
 }
 
-async fn post_with_json_body(path: &str, body: Option<impl Serialize>) -> Result<HttpResponse> {
+async fn post_with_json_body(path: &str, body: impl Serialize) -> Result<HttpResponse> {
     let json = match serde_json::to_value(body) {
         Ok(r) => r,
         Err(e) => {
