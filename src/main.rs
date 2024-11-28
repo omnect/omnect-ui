@@ -216,7 +216,7 @@ async fn post_with_json_body(path: &str, body: impl Serialize) -> Result<HttpRes
     let json = match serde_json::to_value(body) {
         Ok(r) => r,
         Err(e) => {
-            error!("Failed to serialize data error: {e:#}");
+            error!("failed to serialize data error: {e:#}");
             return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish());
         }
     };

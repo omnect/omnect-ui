@@ -63,7 +63,7 @@ where
             let auth = match BearerAuth::from_request(req.request(), &mut payload).await {
                 Ok(b) => b,
                 Err(_) => {
-                    error!("No auth header");
+                    error!("no auth header");
                     return Ok(unauthorized_error(req).map_into_right_body());
                 }
             };
@@ -75,7 +75,7 @@ where
                 }
                 Ok(false) => Ok(unauthorized_error(req).map_into_right_body()),
                 Err(e) => {
-                    error!("User not authorized {}", e);
+                    error!("user not authorized {}", e);
                     Ok(unauthorized_error(req).map_into_right_body())
                 }
             }
@@ -145,7 +145,7 @@ where
             let auth = match BasicAuth::from_request(req.request(), &mut payload).await {
                 Ok(b) => b,
                 Err(_) => {
-                    error!("No auth header");
+                    error!("no auth header");
                     return Ok(unauthorized_error(req).map_into_right_body());
                 }
             };
@@ -157,7 +157,7 @@ where
                 }
                 Ok(false) => Ok(unauthorized_error(req).map_into_right_body()),
                 Err(e) => {
-                    error!("User not authorized {}", e);
+                    error!("user not authorized {}", e);
                     Ok(unauthorized_error(req).map_into_right_body())
                 }
             }
