@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { useDisplay } from "vuetify";
-import OmnectLogo from "./components/OmnectLogo.vue";
+import { ref } from "vue"
+import { useDisplay } from "vuetify"
+import OmnectLogo from "./components/OmnectLogo.vue"
 
-const { lgAndUp } = useDisplay();
+const { lgAndUp } = useDisplay()
 
-const showSideBar = ref(lgAndUp.value);
+const showSideBar = ref(lgAndUp.value)
 
 const toggleSideBar = () => {
-	showSideBar.value = !showSideBar.value;
-};
+	showSideBar.value = !showSideBar.value
+}
 </script>
 
 <template>
