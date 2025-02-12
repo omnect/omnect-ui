@@ -2,6 +2,13 @@ ARG DOCKER_NAMESPACE
 ARG VERSION_RUST_CONTAINER
 
 ARG DISTROLESS_IMAGE=gcr.io/distroless/base-debian12:nonroot
+
+FROM oven/bun AS build
+WORKDIR /usr/src/app
+COPY vue .
+RUN bun install --frozen-lockfile
+RUN bun run build
+
 FROM ${DISTROLESS_IMAGE} AS distroless
 
 FROM ${DOCKER_NAMESPACE}/rust:${VERSION_RUST_CONTAINER} AS builder
@@ -75,7 +82,7 @@ COPY --from=builder /work/build/release/omnect-ui /
 COPY --from=builder /work/centrifugo /
 COPY --from=builder /copy/lib/ /lib/
 COPY --from=builder /copy/status.d /var/lib/dpkg/status.d
-COPY ./static/. /static/
+COPY --from=build /usr/src/app/dist /static/
 
 WORKDIR "/"
 
