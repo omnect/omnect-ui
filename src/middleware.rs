@@ -84,7 +84,8 @@ where
 }
 
 pub fn verify_token(auth: BearerAuth) -> Result<bool> {
-    let key = std::env::var("CENTRIFUGO_TOKEN_HMAC_SECRET_KEY").context("missing jwt secret")?;
+    let key =
+        std::env::var("CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY").context("missing jwt secret")?;
     let key = HS256Key::from_bytes(key.as_bytes());
     let options = VerificationOptions {
         accept_future: true,
