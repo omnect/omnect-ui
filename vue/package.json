@@ -8,13 +8,14 @@
 		"build": "vite build --base=/static",
 		"tsc": "vue-tsc -b",
 		"preview": "vite preview",
-		"lint": "biome check . && eslint .",
-		"lint:fix": "biome check . --write && eslint . --fix",
+		"lint": "biome check .",
+		"lint:fix": "biome check . --write",
 		"format": "biome format .",
 		"format:fix": "biome format . --write"
 	},
 	"dependencies": {
 		"@mdi/font": "^7.4.47",
+		"centrifuge": "^5.3.2",
 		"vue": "^3.5.13",
 		"vuetify": "^3.7.11"
 	},

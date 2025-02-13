@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import { ref } from "vue"
+import { type Ref, ref } from "vue"
+import { useRouter } from "vue-router"
 import { useDisplay } from "vuetify"
 import OmnectLogo from "./components/OmnectLogo.vue"
+import { useCentrifuge } from "./composables/useCentrifugo"
 
+const { token } = useCentrifuge()
 const { lgAndUp } = useDisplay()
+const router = useRouter()
 
-const showSideBar = ref(lgAndUp.value)
+const showSideBar: Ref<boolean> = ref(lgAndUp.value)
 
 const toggleSideBar = () => {
 	showSideBar.value = !showSideBar.value
+}
+
+if (!token.value) {
+	router.push("/login")
 }
 </script>
 

@@ -109,6 +109,7 @@ async fn main() {
                 "/token/refresh",
                 web::get().to(token).wrap(middleware::BearerAuthMw),
             )
+            .service(web::redirect("/login", "/"))
             .service(Files::new(
                 "/static",
                 std::fs::canonicalize("static").expect("static folder not found"),

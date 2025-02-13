@@ -1,21 +1,36 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from "vue"
+import { useRouter } from "vue-router"
+import { useCentrifuge } from "../../composables/useCentrifugo"
+
+const { token, initializeCentrifuge } = useCentrifuge()
+const router = useRouter()
 
 const username = ref("")
 const password = ref("")
 const visible = ref(false)
 
-const doLogin = (e) => {
+const doLogin = async (e: Event) => {
 	e.preventDefault()
 
 	const creds = btoa(`${username.value}:${password.value}`)
 
-	fetch("token/login", {
+	const res = await fetch("token/login", {
 		method: "POST",
 		headers: {
 			Authorization: `Basic ${creds}`
 		}
 	})
+
+	if (res.ok) {
+		const resToken = await res.text()
+		token.value = resToken
+		initializeCentrifuge()
+		router.push({
+			path: "/",
+			force: true
+		})
+	}
 }
 </script>
   

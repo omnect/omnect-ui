@@ -3,10 +3,16 @@ ARG VERSION_RUST_CONTAINER
 
 ARG DISTROLESS_IMAGE=gcr.io/distroless/base-debian12:nonroot
 
-FROM oven/bun AS build
+FROM oven/bun AS vue-install
+RUN mkdir -p /tmp
+COPY vue/package.json /tmp
+COPY vue/bun.lock /tmp
+RUN cd /tmp && bun install --frozen-lockfile
+
+FROM oven/bun AS vue-build
 WORKDIR /usr/src/app
 COPY vue .
-RUN bun install --frozen-lockfile
+COPY --from=vue-install /tmp/node_modules node_modules
 RUN bun run build
 
 FROM ${DISTROLESS_IMAGE} AS distroless
@@ -82,7 +88,7 @@ COPY --from=builder /work/build/release/omnect-ui /
 COPY --from=builder /work/centrifugo /
 COPY --from=builder /copy/lib/ /lib/
 COPY --from=builder /copy/status.d /var/lib/dpkg/status.d
-COPY --from=build /usr/src/app/dist /static/
+COPY --from=vue-build /usr/src/app/dist /static/
 
 WORKDIR "/"
 
