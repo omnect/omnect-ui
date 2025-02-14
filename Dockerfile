@@ -33,11 +33,23 @@ RUN curl -sSLf https://centrifugal.dev/install.sh | sh
 
 COPY --from=distroless /var/lib/dpkg/status.d /distroless_pkgs
 
-COPY src src
-COPY Cargo.lock Cargo.lock
-COPY Cargo.toml Cargo.toml
+RUN cargo new /work/omnect-ui
 
-RUN cargo build --release --locked --target-dir ./build
+COPY Cargo.lock ./omnect-ui/Cargo.lock
+COPY Cargo.toml ./omnect-ui/Cargo.toml
+
+#RUN cd omnect-ui && cargo build --release --locked --target-dir ./build
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry cd omnect-ui && cargo build --release --target-dir ./build
+
+COPY src/* ./omnect-ui/src/
+RUN --mount=type=cache,target=/usr/local/cargo/registry <<EOF
+  set -e
+  # update timestamps to force a new build
+  touch /work/omnect-ui/src/main.rs
+  cd omnect-ui/
+  cargo build --release --target-dir ./build
+EOF
 
 SHELL ["/bin/bash", "-c"]
 RUN <<EOT
@@ -45,7 +57,7 @@ RUN <<EOT
 
     mkdir -p /copy/status.d
 
-    executable=(build/release/omnect-ui)
+    executable=(omnect-ui/build/release/omnect-ui)
     
     mkdir -p /copy/$(dirname "${executable}")
     cp "${executable}" /copy/"${executable}"
@@ -84,7 +96,7 @@ EOT
 
 FROM ${DISTROLESS_IMAGE} AS base
 
-COPY --from=builder /work/build/release/omnect-ui /
+COPY --from=builder /work/omnect-ui/build/release/omnect-ui /
 COPY --from=builder /work/centrifugo /
 COPY --from=builder /copy/lib/ /lib/
 COPY --from=builder /copy/status.d /var/lib/dpkg/status.d
