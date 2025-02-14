@@ -3,6 +3,7 @@ import { type Ref, ref } from "vue"
 import { useRouter } from "vue-router"
 import { useDisplay } from "vuetify"
 import OmnectLogo from "./components/OmnectLogo.vue"
+import UserMenu from "./components/UserMenu.vue"
 import { useCentrifuge } from "./composables/useCentrifugo"
 
 const { token } = useCentrifuge()
@@ -29,7 +30,7 @@ if (!token.value) {
       </template>
       <template #append>
         <div class="flex gap-x-4 mr-4 items-center">
-          
+          <UserMenu />
         </div>
       </template>
     </v-app-bar>

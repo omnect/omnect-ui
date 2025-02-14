@@ -9,27 +9,34 @@ const router = useRouter()
 const username = ref("")
 const password = ref("")
 const visible = ref(false)
+const errorMsg = ref("")
 
 const doLogin = async (e: Event) => {
 	e.preventDefault()
+	try {
+		errorMsg.value = ""
 
-	const creds = btoa(`${username.value}:${password.value}`)
+		const creds = btoa(`${username.value}:${password.value}`)
 
-	const res = await fetch("token/login", {
-		method: "POST",
-		headers: {
-			Authorization: `Basic ${creds}`
-		}
-	})
-
-	if (res.ok) {
-		const resToken = await res.text()
-		token.value = resToken
-		initializeCentrifuge()
-		router.push({
-			path: "/",
-			force: true
+		const res = await fetch("token/login", {
+			method: "POST",
+			headers: {
+				Authorization: `Basic ${creds}`
+			}
 		})
+
+		if (res.ok) {
+			const resToken = await res.text()
+			token.value = resToken
+			initializeCentrifuge()
+			router.push("/")
+		}
+
+		if (res.status === 401) {
+			errorMsg.value = "Username and/or password wrong"
+		}
+	} catch (error) {
+		errorMsg.value = "Failed to login"
 	}
 }
 </script>
@@ -42,37 +49,39 @@ const doLogin = async (e: Event) => {
       rounded="lg"
     >
         <v-form @submit.prevent @submit="doLogin">
-        <v-text-field
-            label="Username"
-            density="compact"
-            placeholder="Username"
-            prepend-inner-icon="mdi-account-outline"
-            variant="outlined"
-            v-model="username"
-        ></v-text-field> 
-
-        <v-text-field
-            label="Password"
-            :append-inner-icon="visible ? 'mdi-eye-off' : 'mdi-eye'"
-            :type="visible ? 'text' : 'password'"
-            density="compact"
-            placeholder="Enter your password"
-            prepend-inner-icon="mdi-lock-outline"
-            variant="outlined"
-            @click:append-inner="visible = !visible"
-            v-model="password"
-        ></v-text-field>
-
-        <v-btn
-            class="mb-8"
-            color="secondary"
-            size="large"
-            variant="text"
-            type="submit"
-            block
-        >
-            Log In
-        </v-btn>
+            <v-text-field
+                label="Username"
+                density="compact"
+                placeholder="Username"
+                prepend-inner-icon="mdi-account-outline"
+                variant="outlined"
+                v-model="username"
+                autocomplete="username"
+                required
+            ></v-text-field> 
+            <v-text-field
+                label="Password"
+                :append-inner-icon="visible ? 'mdi-eye-off' : 'mdi-eye'"
+                :type="visible ? 'text' : 'password'"
+                density="compact"
+                placeholder="Enter your password"
+                prepend-inner-icon="mdi-lock-outline"
+                variant="outlined"
+                @click:append-inner="visible = !visible"
+                v-model="password"
+                autocomplete="current-password"
+            ></v-text-field>
+                <p style="color: rgb(var(--v-theme-error))">{{ errorMsg }}</p>
+            <v-btn
+                class="mb-8"
+                color="secondary"
+                size="large"
+                variant="text"
+                type="submit"
+                block
+            >
+                Log In
+            </v-btn>
         </v-form>
     </v-card>
 </template>
