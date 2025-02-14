@@ -12,6 +12,7 @@ version = "0.4.1"
 [dependencies]
 actix-files = { version = "0.6", default-features = false }
 actix-rt = { version = "2.10", default-features = false }
+actix-session = { version = "0.10.1", features = ["cookie-session"] }
 actix-web = { version = "4.9", default-features = false, features = [
   "macros",
   "rustls-0_23",

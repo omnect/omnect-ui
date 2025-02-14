@@ -1,9 +1,10 @@
+use actix_session::SessionExt;
 use actix_web::{
     body::EitherBody,
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     Error, FromRequest, HttpMessage, HttpResponse,
 };
-use actix_web_httpauth::extractors::{basic::BasicAuth, bearer::BearerAuth};
+use actix_web_httpauth::extractors::basic::BasicAuth;
 use anyhow::{Context, Result};
 use jwt_simple::prelude::*;
 use log::error;
@@ -54,21 +55,19 @@ where
 
     forward_ready!(service);
 
-    fn call(&self, mut req: ServiceRequest) -> Self::Future {
+    fn call(&self, req: ServiceRequest) -> Self::Future {
         let service = Rc::clone(&self.service);
 
         Box::pin(async move {
-            let mut payload = req.take_payload().take();
-
-            let auth = match BearerAuth::from_request(req.request(), &mut payload).await {
-                Ok(b) => b,
+            let token = match req.get_session().get::<String>("token") {
+                Ok(token) => token,
                 Err(_) => {
                     error!("no auth header");
                     return Ok(unauthorized_error(req).map_into_right_body());
                 }
             };
 
-            match verify_token(auth) {
+            match verify_token(token) {
                 Ok(true) => {
                     let res = service.call(req).await?;
                     Ok(res.map_into_left_body())
@@ -83,7 +82,7 @@ where
     }
 }
 
-pub fn verify_token(auth: BearerAuth) -> Result<bool> {
+pub fn verify_token(token: Option<String>) -> Result<bool> {
     let key =
         std::env::var("CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY").context("missing jwt secret")?;
     let key = HS256Key::from_bytes(key.as_bytes());
@@ -96,7 +95,7 @@ pub fn verify_token(auth: BearerAuth) -> Result<bool> {
     };
 
     Ok(key
-        .verify_token::<NoCustomClaims>(auth.token(), Some(options))
+        .verify_token::<NoCustomClaims>(&*token.unwrap(), Some(options))
         .is_ok())
 }
 

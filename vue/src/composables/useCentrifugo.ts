@@ -34,12 +34,7 @@ export function useCentrifuge() {
 	}
 
 	const getToken = async (): Promise<string> => {
-		const res = await fetch("token/refresh", {
-			method: "GET",
-			headers: {
-				Authorization: `Bearer ${token.value}`
-			}
-		})
+		const res = await fetch("token/refresh")
 
 		if (res.ok) {
 			return await res.text()
@@ -93,5 +88,5 @@ export function useCentrifuge() {
 		}
 	}
 
-	return { subscribe, unsubscribe, initializeCentrifuge, token, history, onConnected: connectedEvent.on, getToken }
+	return { subscribe, unsubscribe, initializeCentrifuge, token, history, onConnected: connectedEvent.on }
 }

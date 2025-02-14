@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { type Ref, ref } from "vue"
+import { type Ref, onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 import { useDisplay } from "vuetify"
 import OmnectLogo from "./components/OmnectLogo.vue"
 import UserMenu from "./components/UserMenu.vue"
-import { useCentrifuge } from "./composables/useCentrifugo"
 
-const { token } = useCentrifuge()
 const { lgAndUp } = useDisplay()
 const router = useRouter()
 
@@ -16,9 +14,16 @@ const toggleSideBar = () => {
 	showSideBar.value = !showSideBar.value
 }
 
-if (!token.value) {
-	router.push("/login")
-}
+onMounted(async () => {
+	try {
+		const res = await fetch("token/refresh")
+		if (!res.ok) {
+			router.push("/login")
+		}
+	} catch {
+		router.push("/login")
+	}
+})
 </script>
 
 <template>

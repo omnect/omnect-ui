@@ -9,8 +9,10 @@ import type { OnlineStatus } from "../../types/online-status"
 import type { SystemInfo } from "../../types/system-info"
 import type { Timeouts } from "../../types/timeouts"
 import DialogContent from "../DialogContent.vue"
+import { useRouter } from "vue-router"
 
-const { getToken, subscribe, history, onConnected } = useCentrifuge()
+const { subscribe, history, onConnected } = useCentrifuge()
+const router = useRouter()
 
 const online = ref(false)
 const systemInfo: Ref<SystemInfo | undefined> = ref(undefined)
@@ -102,13 +104,14 @@ const rebootDevice = async () => {
 		const res = await fetch("reboot", {
 			method: "POST",
 			headers: {
-				Authorization: `Bearer ${getToken()}`,
 				"Content-Type": "application/json"
 			}
 		})
 		if (res.ok) {
 			isRebooting.value = true
 			rebootDialog.value = false
+		} else if(res.status === 401) {
+			router.push("/login")
 		} else {
 			showError("Rebooting device failed")
 		}
@@ -125,7 +128,6 @@ const resetDevice = async () => {
 		const res = await fetch("factory-reset", {
 			method: "POST",
 			headers: {
-				Authorization: `Bearer ${getToken()}`,
 				"Content-Type": "application/json"
 			},
 			body: JSON.stringify({ preserve: selectedFactoryResetKeys.value })
@@ -133,6 +135,8 @@ const resetDevice = async () => {
 		if (res.ok) {
 			isResetting.value = true
 			factoryResetDialog.value = false
+		} else if(res.status === 401) {
+			router.push("/login")
 		} else {
 			showError("Resetting device failed")
 		}
@@ -149,12 +153,13 @@ const reloadNetwork = async () => {
 		const res = await fetch("reload-network", {
 			method: "POST",
 			headers: {
-				Authorization: `Bearer ${getToken()}`,
 				"Content-Type": "application/json"
 			}
 		})
 		if (res.ok) {
 			showSuccess("Reload network successful")
+		} else if(res.status === 401) {
+			router.push("/login")
 		} else {
 			showError("Reload network failed")
 		}
