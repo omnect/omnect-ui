@@ -109,25 +109,20 @@ async fn main() {
             .route("/", web::get().to(index))
             .route(
                 "/factory-reset",
-                web::post().to(factory_reset).wrap(middleware::BearerAuthMw),
+                web::post().to(factory_reset).wrap(middleware::AuthMw),
             )
-            .route(
-                "/reboot",
-                web::post().to(reboot).wrap(middleware::BearerAuthMw),
-            )
+            .route("/reboot", web::post().to(reboot).wrap(middleware::AuthMw))
             .route(
                 "/reload-network",
-                web::post()
-                    .to(reload_network)
-                    .wrap(middleware::BearerAuthMw),
+                web::post().to(reload_network).wrap(middleware::AuthMw),
             )
             .route(
                 "/token/login",
-                web::post().to(token).wrap(middleware::BasicAuthMw),
+                web::post().to(token).wrap(middleware::AuthMw),
             )
             .route(
                 "/token/refresh",
-                web::get().to(token).wrap(middleware::BearerAuthMw),
+                web::get().to(token).wrap(middleware::AuthMw),
             )
             .service(web::redirect("/login", "/"))
             .service(Files::new(
