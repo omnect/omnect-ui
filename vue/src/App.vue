@@ -4,25 +4,27 @@ import { useRouter } from "vue-router"
 import { useDisplay } from "vuetify"
 import OmnectLogo from "./components/OmnectLogo.vue"
 import UserMenu from "./components/UserMenu.vue"
+import { useSnackbar } from "./composables/useSnackbar"
 
+const { snackbarState } = useSnackbar()
 const { lgAndUp } = useDisplay()
 const router = useRouter()
 
 const showSideBar: Ref<boolean> = ref(lgAndUp.value)
 
 const toggleSideBar = () => {
-	showSideBar.value = !showSideBar.value
+  showSideBar.value = !showSideBar.value
 }
 
 onMounted(async () => {
-	try {
-		const res = await fetch("token/refresh")
-		if (!res.ok) {
-			router.push("/login")
-		}
-	} catch {
-		router.push("/login")
-	}
+  try {
+    const res = await fetch("token/refresh")
+    if (!res.ok) {
+      router.push("/login")
+    }
+  } catch {
+    router.push("/login")
+  }
 })
 </script>
 
@@ -42,6 +44,12 @@ onMounted(async () => {
     <v-main>
       <div class="p-y-8 p-x-20">
         <RouterView></RouterView>
+        <v-snackbar v-model="snackbarState.snackbar" :color="snackbarState.color" :timeout="snackbarState.timeout">
+          {{ snackbarState.msg }}
+          <template #actions>
+            <v-btn icon=" mdi-close" @click="snackbarState.snackbar = false"></v-btn>
+          </template>
+        </v-snackbar>
       </div>
     </v-main>
   </v-app>
@@ -78,61 +86,73 @@ body {
   border-color: var(--color-grey-30);
 }
 
-    p,ul,ol,pre {
-      margin: '1em 0';
-      line-height: 1.75;
-    }
+p,
+ul,
+ol,
+pre {
+  margin: '1em 0';
+  line-height: 1.75;
+}
 
-    blockquote {
-      margin: '1em 0';
-      padding-left: '1em';
-      font-style: 'italic';
-      border-left: '.25em solid var(--un-prose-borders)';
-    }
+blockquote {
+  margin: '1em 0';
+  padding-left: '1em';
+  font-style: 'italic';
+  border-left: '.25em solid var(--un-prose-borders)';
+}
 
-    img,video  {
-      max-width: 100%;
-    }
-    figure,picture {
-      margin: 1em 0;
-    }
-    figcaption {
-      color: var(--un-prose-captions);
-      font-size: .875em;
-    }
+img,
+video {
+  max-width: 100%;
+}
 
-    table {
-      margin: 1em 0;
-      border-collapse: collapse;
-      overflow-x: auto;
-    }
-    td,th {
-      padding: .625em 1em;
-    }
+figure,
+picture {
+  margin: 1em 0;
+}
 
-    th {
-      font-weight: 600;
-    }
+figcaption {
+  color: var(--un-prose-captions);
+  font-size: .875em;
+}
 
-    abbr {
-      cursor: help;
-    }
-    kbd {
-      color: var(--un-prose-code);
-      border: 1px solid;
-      padding: .25rem .5rem;
-      font-size: .875em;
-      border-radius: .25rem;
-    }
-    details {
-      margin: 1em 0;
-      padding: 1.25rem 1.5rem;
-      background: var(--un-prose-bg-soft);
-    }
-    summary {
-      cursor: pointer;
-      font-weight: 600;
-    }
+table {
+  margin: 1em 0;
+  border-collapse: collapse;
+  overflow-x: auto;
+}
+
+td,
+th {
+  padding: .625em 1em;
+}
+
+th {
+  font-weight: 600;
+}
+
+abbr {
+  cursor: help;
+}
+
+kbd {
+  color: var(--un-prose-code);
+  border: 1px solid;
+  padding: .25rem .5rem;
+  font-size: .875em;
+  border-radius: .25rem;
+}
+
+details {
+  margin: 1em 0;
+  padding: 1.25rem 1.5rem;
+  background: var(--un-prose-bg-soft);
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 600;
+}
 
 .v-data-table-header__content {
   font-weight: 600;
