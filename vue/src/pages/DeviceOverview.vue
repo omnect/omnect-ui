@@ -23,8 +23,8 @@ const deviceInfo: Ref<Map<string, string | number>> = computed(
 			["Boot time", systemInfo.value?.boot_time ? new Date(systemInfo.value?.boot_time).toLocaleString() : "n/a"],
 			["OS version", String(systemInfo.value?.os.version) ?? "n/a"],
 			["Wait online timeout (in seconds)", timeouts.value?.wait_online_timeout.secs ?? "n/a"],
-			["omnect device service version", systemInfo.value?.azure_sdk_version ?? "n/a"],
-			["Azure SDK version", systemInfo.value?.os.name ?? "n/a"],
+			["omnect device service version", systemInfo.value?.omnect_device_service_version ?? "n/a"],
+			["Azure SDK version", systemInfo.value?.azure_sdk_version ?? "n/a"],
 			["Factory rest status", factoryResetStatus.value]
 		])
 )
