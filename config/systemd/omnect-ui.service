@@ -16,6 +16,7 @@ ExecStart=/bin/bash -c 'FULL_TAG=$(docker load < /mnt/factory/oci_images/omnect-
                             --user $(id -u omnect_device_socket):$(id -g omnect_device_socket) \
                             -v /run/omnect-device-service:/socket \
                             -v /mnt/cert/priv:/cert \
+                            -v /var/lib/omnect-ui:/data \
                             -p ${UI_PORT}:${UI_PORT} \
                             -p ${CENTRIFUGO_PORT}:${CENTRIFUGO_PORT} \
                             -e UI_PORT=${UI_PORT} \
