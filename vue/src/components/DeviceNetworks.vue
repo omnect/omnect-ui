@@ -8,41 +8,7 @@ import { useFetch } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 import KeyValuePair from './ui-components/KeyValuePair.vue';
 
-const networkStatus: Ref<NetworkStatus | undefined> = ref({
-  network_status: [
-    {
-      ipv4: {
-        addrs: [{
-          addr: "192.168.0.2",
-          dhcp: true,
-          prefix_len: 16
-        }],
-        dns: ["192.168.0.1", "8.8.8.8", "1.1.1.1"],
-        gateways: ["192.168.0.1"]
-
-      },
-      mac: "00:88:77:ee:ff",
-      name: "test1",
-      online: false
-    },
-    {
-      ipv4: {
-        addrs: [{
-          addr: "192.168.0.2",
-          dhcp: true,
-          prefix_len: 4
-        }],
-        dns: ["192.168.0.1"],
-        gateways: ["192.168.0.1"]
-
-      },
-      mac: "00:88:77:ee:ff",
-      name: "test2",
-      online: true
-    }
-
-  ]
-})
+const networkStatus: Ref<NetworkStatus | undefined> = ref(undefined)
 const { snackbarState } = useSnackbar()
 const router = useRouter()
 const { history, subscribe } = useCentrifuge()
