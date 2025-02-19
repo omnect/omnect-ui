@@ -68,8 +68,8 @@ onMounted(() => {
 		class="align-center justify-center">
 		<div id="overlay" class="flex flex-col items-center">
 			<v-sheet class="flex flex-col gap-y-8 items-center p-8" :rounded="'lg'">
-				<div v-if="isRebooting" class="text-h4 text-center">Device is resetting</div>
-				<div v-else-if="isResetting" class="text-h4 text-center">Device is rebooting</div>
+				<div v-if="isRebooting" class="text-h4 text-center">Device is rebooting</div>
+				<div v-else-if="isResetting" class="text-h4 text-center">Device is resetting</div>
 				<v-progress-circular color="secondary" indeterminate size="100" width="5"></v-progress-circular>
 				<p v-if="isResetting" class="text-h6 m-t-4">Please have some patience, the resetting may take some time.
 				</p>
@@ -77,13 +77,13 @@ onMounted(() => {
 		</div>
 	</v-overlay>
 
-	<v-sheet border rounded class="m-20">
+	<v-sheet :border="true" rounded class="m-20">
 		<div class="grid grid-cols-[1fr_auto] gap-8 gap-x-16 m-8">
 			<div class="flex flex-col gap-y-16">
 				<DeviceInfo :deviceInfo="deviceInfo" />
 				<DeviceNetworks></DeviceNetworks>
 			</div>
-			<DeviceActions @reboot-in-progess="isResetting = true" @factory-reset-in-progress="isResetting = true">
+			<DeviceActions @reboot-in-progress="isRebooting = true" @factory-reset-in-progress="isResetting = true">
 			</DeviceActions>
 		</div>
 	</v-sheet>

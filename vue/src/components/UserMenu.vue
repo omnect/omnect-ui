@@ -1,8 +1,10 @@
 <script lang="ts" setup>
 import { ref } from "vue"
 import { useRouter } from "vue-router"
+import { useCentrifuge } from "../composables/useCentrifugo"
 import Menu from "./Menu.vue"
 
+const { unsubscribeAll } = useCentrifuge()
 const router = useRouter()
 
 const menu = ref(false)
@@ -11,6 +13,7 @@ const logOut = async () => {
 	await fetch("logout", {
 		method: "POST"
 	})
+	unsubscribeAll()
 	router.push("/login")
 }
 </script>

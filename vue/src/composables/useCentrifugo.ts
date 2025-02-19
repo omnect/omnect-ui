@@ -88,5 +88,13 @@ export function useCentrifuge() {
 		}
 	}
 
-	return { subscribe, unsubscribe, initializeCentrifuge, token, history, onConnected: connectedEvent.on }
+	const unsubscribeAll = () => {
+		if (!centrifuge?.value?.subscriptions) return
+		for (const subName of Object.keys(centrifuge.value.subscriptions())) {
+			const sub = centrifuge.value.subscriptions()[subName]
+			sub?.unsubscribe()
+		}
+	}
+
+	return { subscribe, unsubscribe, unsubscribeAll, initializeCentrifuge, token, history, onConnected: connectedEvent.on }
 }

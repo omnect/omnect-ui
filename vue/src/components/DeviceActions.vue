@@ -17,7 +17,7 @@ const rebootDialog = ref(false)
 const factoryResetKeys: Ref<FactoryResetKeys | undefined> = ref(undefined)
 
 const emit = defineEmits<{
-	(event: "rebootInProgess"): void
+	(event: "rebootInProgress"): void
 	(event: "factoryResetInProgress"): void
 }>()
 
@@ -42,8 +42,7 @@ const {
 const loading = computed(() => rebootFetching.value || resetFetching.value)
 
 onRebootSuccess(() => {
-	console.log("device is rebooting...")
-	emit("rebootInProgess")
+	emit("rebootInProgress")
 	rebootDialog.value = false
 })
 
@@ -56,7 +55,6 @@ onRebootError(() => {
 })
 
 onResetSuccess(() => {
-	console.log("device is rebooting...")
 	emit("factoryResetInProgress")
 	factoryResetDialog.value = false
 })
