@@ -1,10 +1,10 @@
 import { createRouter, createWebHistory } from "vue-router"
 
-import DeviceInfo from "../components/page/DeviceInfo.vue"
-import Login from "../components/page/Login.vue"
+import DeviceOverview from "../pages/DeviceOverview.vue"
+import Login from "../pages/Login.vue"
 
 const routes = [
-	{ path: "/", component: DeviceInfo },
+	{ path: "/", component: DeviceOverview },
 	{ path: "/login", component: Login }
 ]
 
