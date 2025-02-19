@@ -2,6 +2,7 @@
 import { ref } from "vue"
 import { useRouter } from "vue-router"
 import { useCentrifuge } from "../composables/useCentrifugo"
+import OmnectLogo from "../components/OmnectLogo.vue"
 
 const { token, initializeCentrifuge } = useCentrifuge()
 const router = useRouter()
@@ -42,7 +43,8 @@ const doLogin = async (e: Event) => {
 </script>
 
 <template>
-    <v-card class="mx-auto pa-12 pb-8" elevation="8" max-width="448" rounded="lg">
+    <v-sheet class="mx-auto pa-12 pb-8 m-t-16 flex flex-col gap-y-16" border elevation="0" max-width="448" rounded="lg">
+        <OmnectLogo></OmnectLogo>
         <v-form @submit.prevent @submit="doLogin">
             <v-text-field label="Username" density="compact" placeholder="Username"
                 prepend-inner-icon="mdi-account-outline" variant="outlined" v-model="username" autocomplete="username"
@@ -56,5 +58,5 @@ const doLogin = async (e: Event) => {
                 Log In
             </v-btn>
         </v-form>
-    </v-card>
+    </v-sheet>
 </template>

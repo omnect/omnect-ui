@@ -1,27 +1,24 @@
 <script setup lang="ts">
-import type { DeviceInfoData } from "../types"
+import { computed } from 'vue';
 
-const props = defineProps<{
-  deviceInfo: DeviceInfoData,
+const { deviceInfo } = defineProps<{
+  deviceInfo: Map<string, string | number>,
 }>()
 
+const displayItems = computed(() => Array.from(deviceInfo, ([title, value]) => ({ title, value })))
 
 </script>
 
 <template>
-  <v-list lines="one" variant="flat">
-    <v-list-item title="Online" :subtitle="props.deviceInfo.online.toString()"></v-list-item>
-    <v-list-item title="OS version" :subtitle="props.deviceInfo.systemInfo?.os?.version"></v-list-item>
-    <v-list-item title="OS name" :subtitle="props.deviceInfo.systemInfo?.os?.name"></v-list-item>
-    <v-list-item title="Wait online timeout"
-      :subtitle="`${props.deviceInfo.timeouts?.wait_online_timeout?.secs}s`"></v-list-item>
-    <v-list-item title="Omnect device service version"
-      :subtitle="props.deviceInfo.systemInfo?.omnect_device_service_version"></v-list-item>
-    <v-list-item title="Azure SDK version" :subtitle="props.deviceInfo.systemInfo?.azure_sdk_version"></v-list-item>
-    <v-list-item title="Boot time"
-      :subtitle="props.deviceInfo.systemInfo?.boot_time ? new Date(props.deviceInfo.systemInfo?.boot_time).toLocaleString() : ''"></v-list-item>
-    <v-list-item title="Factory reset status" :subtitle="props.deviceInfo.factoryResetStatus"></v-list-item>
-  </v-list>
+  <div class="flex flex-col gap-y-8">
+    <div class="text-h4 text-secondary border-b">Common Info</div>
+    <dl class="grid grid-cols-[1fr_3fr] gap-x-64 gap-y-8">
+      <div v-for="item of displayItems" class="">
+        <dt class="font-bold text-gray-900">{{ item.title }}</dt>
+        <dd class="text-gray-700 sm:col-span-2">{{ item.value }}</dd>
+      </div>
+    </dl>
+  </div>
 </template>
 
 <style scoped>

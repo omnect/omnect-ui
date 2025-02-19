@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { type Ref, onMounted, ref } from "vue"
-import { useRouter } from "vue-router"
+import { useRoute, useRouter } from "vue-router"
 import { useDisplay } from "vuetify"
 import OmnectLogo from "./components/OmnectLogo.vue"
 import UserMenu from "./components/UserMenu.vue"
@@ -9,7 +9,7 @@ import { useSnackbar } from "./composables/useSnackbar"
 const { snackbarState } = useSnackbar()
 const { lgAndUp } = useDisplay()
 const router = useRouter()
-
+const route = useRoute()
 const showSideBar: Ref<boolean> = ref(lgAndUp.value)
 
 const toggleSideBar = () => {
@@ -35,22 +35,20 @@ onMounted(async () => {
         <v-icon class="hidden-lg-and-up mr-4 cursor-pointer text-primary" @click.stop="toggleSideBar">mdi-menu</v-icon>
         <OmnectLogo class="h-12"></OmnectLogo>
       </template>
-      <template #append>
+      <template v-if="route.path !== '/login'" #append>
         <div class="flex gap-x-4 mr-4 items-center">
           <UserMenu />
         </div>
       </template>
     </v-app-bar>
     <v-main>
-      <div class="p-y-8 p-x-20">
-        <RouterView></RouterView>
-        <v-snackbar v-model="snackbarState.snackbar" :color="snackbarState.color" :timeout="snackbarState.timeout">
-          {{ snackbarState.msg }}
-          <template #actions>
-            <v-btn icon=" mdi-close" @click="snackbarState.snackbar = false"></v-btn>
-          </template>
-        </v-snackbar>
-      </div>
+      <RouterView></RouterView>
+      <v-snackbar v-model="snackbarState.snackbar" :color="snackbarState.color" :timeout="snackbarState.timeout">
+        {{ snackbarState.msg }}
+        <template #actions>
+          <v-btn icon=" mdi-close" @click="snackbarState.snackbar = false"></v-btn>
+        </template>
+      </v-snackbar>
     </v-main>
   </v-app>
 </template>
