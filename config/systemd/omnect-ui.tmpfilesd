@@ -1,1 +1,1 @@
-d /var/lib/omnect-ui 0700 omnect_device_socket omnect_device_socket -
+d /var/lib/omnect-ui 0740 omnect_device_socket omnect_device_socket -
