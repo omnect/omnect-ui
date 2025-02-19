@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, type Ref } from 'vue';
-import { useCentrifuge } from '../composables/useCentrifugo';
-import { CentrifugeSubscriptionType } from '../enums/centrifuge-subscription-type.enum';
-import type { NetworkStatus } from '../types';
-import { useSnackbar } from '../composables/useSnackbar';
-import { useFetch } from '@vueuse/core';
-import { useRouter } from 'vue-router';
-import KeyValuePair from './ui-components/KeyValuePair.vue';
+import { useFetch } from "@vueuse/core"
+import { type Ref, onMounted, ref } from "vue"
+import { useRouter } from "vue-router"
+import { useCentrifuge } from "../composables/useCentrifugo"
+import { useSnackbar } from "../composables/useSnackbar"
+import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
+import type { NetworkStatus } from "../types"
+import KeyValuePair from "./ui-components/KeyValuePair.vue"
 
 const networkStatus: Ref<NetworkStatus | undefined> = ref(undefined)
 const { snackbarState } = useSnackbar()
@@ -14,46 +14,48 @@ const router = useRouter()
 const { history, subscribe } = useCentrifuge()
 
 const showError = (errorMsg: string) => {
-  snackbarState.msg = errorMsg
-  snackbarState.color = "error"
-  snackbarState.timeout = -1
-  snackbarState.snackbar = true
+	snackbarState.msg = errorMsg
+	snackbarState.color = "error"
+	snackbarState.timeout = -1
+	snackbarState.snackbar = true
 }
 
 const showSuccess = (successMsg: string) => {
-  snackbarState.msg = successMsg
-  snackbarState.color = "success"
-  snackbarState.timeout = 2000
-  snackbarState.snackbar = true
+	snackbarState.msg = successMsg
+	snackbarState.color = "success"
+	snackbarState.timeout = 2000
+	snackbarState.snackbar = true
 }
 
-const { onFetchError: onReloadNetworkError,
-  error: reloadNetworkError,
-  statusCode: reloadNetworkStatusCode,
-  onFetchResponse: onReloadNetworkSuccess,
-  execute: reloadNetwork,
-  isFetching: reloadNetworkLoading } = useFetch("reload-network", { immediate: false }).post()
+const {
+	onFetchError: onReloadNetworkError,
+	error: reloadNetworkError,
+	statusCode: reloadNetworkStatusCode,
+	onFetchResponse: onReloadNetworkSuccess,
+	execute: reloadNetwork,
+	isFetching: reloadNetworkLoading
+} = useFetch("reload-network", { immediate: false }).post()
 
 onReloadNetworkSuccess(() => {
-  showSuccess("Reload network successful")
+	showSuccess("Reload network successful")
 })
 
 onReloadNetworkError(() => {
-  if (reloadNetworkStatusCode.value === 401) {
-    router.push('/login')
-  } else {
-    showError(`Reloading network failed: ${JSON.stringify(reloadNetworkError.value)}`)
-  }
+	if (reloadNetworkStatusCode.value === 401) {
+		router.push("/login")
+	} else {
+		showError(`Reloading network failed: ${JSON.stringify(reloadNetworkError.value)}`)
+	}
 })
 
 const updateNetworkStatus = (data: NetworkStatus) => {
-  networkStatus.value = data
+	networkStatus.value = data
 }
 
 onMounted(() => {
-  history(updateNetworkStatus, CentrifugeSubscriptionType.NetworkStatus)
+	history(updateNetworkStatus, CentrifugeSubscriptionType.NetworkStatus)
 
-  subscribe(updateNetworkStatus, CentrifugeSubscriptionType.NetworkStatus)
+	subscribe(updateNetworkStatus, CentrifugeSubscriptionType.NetworkStatus)
 })
 </script>
 

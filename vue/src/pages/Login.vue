@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue"
 import { useRouter } from "vue-router"
-import { useCentrifuge } from "../composables/useCentrifugo"
 import OmnectLogo from "../components/OmnectLogo.vue"
+import { useCentrifuge } from "../composables/useCentrifugo"
 
-const { token, initializeCentrifuge } = useCentrifuge()
+const { initializeCentrifuge } = useCentrifuge()
 const router = useRouter()
 
 const username = ref("")
@@ -13,32 +13,30 @@ const visible = ref(false)
 const errorMsg = ref("")
 
 const doLogin = async (e: Event) => {
-    e.preventDefault()
-    try {
-        errorMsg.value = ""
+	e.preventDefault()
+	try {
+		errorMsg.value = ""
 
-        const creds = btoa(`${username.value}:${password.value}`)
+		const creds = btoa(`${username.value}:${password.value}`)
 
-        const res = await fetch("token/login", {
-            method: "POST",
-            headers: {
-                Authorization: `Basic ${creds}`
-            }
-        })
+		const res = await fetch("token/login", {
+			method: "POST",
+			headers: {
+				Authorization: `Basic ${creds}`
+			}
+		})
 
-        if (res.ok) {
-            const resToken = await res.text()
-            token.value = resToken
-            initializeCentrifuge()
-            router.push("/")
-        }
+		if (res.ok) {
+			initializeCentrifuge()
+			router.push("/")
+		}
 
-        if (res.status === 401) {
-            errorMsg.value = "Username and/or password wrong"
-        }
-    } catch (error) {
-        errorMsg.value = "Failed to login"
-    }
+		if (res.status === 401) {
+			errorMsg.value = "Username and/or password wrong"
+		}
+	} catch (error) {
+		errorMsg.value = "Failed to login"
+	}
 }
 </script>
 

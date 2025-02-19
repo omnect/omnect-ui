@@ -124,6 +124,7 @@ async fn main() {
                 "/token/refresh",
                 web::get().to(token).wrap(middleware::AuthMw),
             )
+            .route("/logout", web::post().to(logout))
             .service(web::redirect("/login", "/"))
             .service(Files::new(
                 "/static",
@@ -328,4 +329,10 @@ async fn token(session: Session) -> impl Responder {
     };
 
     HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+}
+
+async fn logout(session: Session) -> impl Responder {
+    debug!("logout() called");
+    session.purge();
+    return HttpResponse::Ok();
 }

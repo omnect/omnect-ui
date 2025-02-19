@@ -1,30 +1,35 @@
 <script setup lang="ts">
-import { type Ref, onMounted, ref } from "vue"
+import { type Ref, onBeforeMount, ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useDisplay } from "vuetify"
 import OmnectLogo from "./components/OmnectLogo.vue"
 import UserMenu from "./components/UserMenu.vue"
+import { useCentrifuge } from "./composables/useCentrifugo"
 import { useSnackbar } from "./composables/useSnackbar"
 
 const { snackbarState } = useSnackbar()
+
+const { initializeCentrifuge } = useCentrifuge()
 const { lgAndUp } = useDisplay()
 const router = useRouter()
 const route = useRoute()
 const showSideBar: Ref<boolean> = ref(lgAndUp.value)
 
 const toggleSideBar = () => {
-  showSideBar.value = !showSideBar.value
+	showSideBar.value = !showSideBar.value
 }
 
-onMounted(async () => {
-  try {
-    const res = await fetch("token/refresh")
-    if (!res.ok) {
-      router.push("/login")
-    }
-  } catch {
-    router.push("/login")
-  }
+onBeforeMount(async () => {
+	try {
+		const res = await fetch("token/refresh")
+		if (!res.ok) {
+			router.push("/login")
+		} else {
+			initializeCentrifuge()
+		}
+	} catch {
+		router.push("/login")
+	}
 })
 </script>
 

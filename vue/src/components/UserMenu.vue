@@ -8,6 +8,9 @@ const router = useRouter()
 const menu = ref(false)
 
 const logOut = async () => {
+	await fetch("logout", {
+		method: "POST"
+	})
 	router.push("/login")
 }
 </script>

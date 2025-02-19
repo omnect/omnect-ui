@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { type Ref, computed, onMounted, ref } from "vue"
-import DeviceInfo from "../components/DeviceInfo.vue"
 import DeviceActions from "../components/DeviceActions.vue"
+import DeviceInfo from "../components/DeviceInfo.vue"
 import DeviceNetworks from "../components/DeviceNetworks.vue"
 import { useCentrifuge } from "../composables/useCentrifugo"
 import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
@@ -15,16 +15,18 @@ const factoryResetStatus: Ref<string> = ref("")
 const isResetting = ref(false)
 const isRebooting = ref(false)
 
-const deviceInfo: Ref<Map<string, string | number>> = computed(() => new Map([
-	['Online', String(online.value)],
-	['OS name', systemInfo.value?.os.name ?? "n/a"],
-	['Boot time', systemInfo.value?.boot_time ? new Date(systemInfo.value?.boot_time).toLocaleString() : "n/a"],
-	['OS version', String(systemInfo.value?.os.version) ?? "n/a"],
-	['Wait online timeout (in seconds)', timeouts.value?.wait_online_timeout.secs ?? "n/a"],
-	['omnect device service version', systemInfo.value?.azure_sdk_version ?? "n/a"],
-	['Azure SDK version', systemInfo.value?.os.name ?? "n/a"],
-	['Factory rest status', factoryResetStatus.value]
-])
+const deviceInfo: Ref<Map<string, string | number>> = computed(
+	() =>
+		new Map([
+			["Online", String(online.value)],
+			["OS name", systemInfo.value?.os.name ?? "n/a"],
+			["Boot time", systemInfo.value?.boot_time ? new Date(systemInfo.value?.boot_time).toLocaleString() : "n/a"],
+			["OS version", String(systemInfo.value?.os.version) ?? "n/a"],
+			["Wait online timeout (in seconds)", timeouts.value?.wait_online_timeout.secs ?? "n/a"],
+			["omnect device service version", systemInfo.value?.azure_sdk_version ?? "n/a"],
+			["Azure SDK version", systemInfo.value?.os.name ?? "n/a"],
+			["Factory rest status", factoryResetStatus.value]
+		])
 )
 
 onConnected(() => {
@@ -47,11 +49,6 @@ const updateTimeouts = (data: Timeouts) => {
 const updateFactoryResetStatus = (data: FactoryResetStatus) => {
 	factoryResetStatus.value = data.factory_reset_status
 }
-
-
-
-
-
 
 onMounted(() => {
 	history(updateOnlineStatus, CentrifugeSubscriptionType.OnlineStatus)

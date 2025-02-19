@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { useFetch } from '@vueuse/core'
+import { useFetch } from "@vueuse/core"
+import { type Ref, computed, onMounted, ref } from "vue"
+import { useRouter } from "vue-router"
 import DialogContent from "../components/DialogContent.vue"
-import { useRouter } from 'vue-router'
-import { type Ref, ref, computed, onMounted } from 'vue'
-import { useCentrifuge } from '../composables/useCentrifugo'
-import { CentrifugeSubscriptionType } from '../enums/centrifuge-subscription-type.enum'
-import type { FactoryResetKeys } from '../types'
-import { useSnackbar } from '../composables/useSnackbar'
+import { useCentrifuge } from "../composables/useCentrifugo"
+import { useSnackbar } from "../composables/useSnackbar"
+import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
+import type { FactoryResetKeys } from "../types"
 
 const { subscribe, history } = useCentrifuge()
 const { snackbarState } = useSnackbar()
@@ -14,72 +14,75 @@ const router = useRouter()
 const selectedFactoryResetKeys: Ref<string[]> = ref([])
 const factoryResetDialog = ref(false)
 const rebootDialog = ref(false)
-const reloadNetworkLoading = ref(false)
 const factoryResetKeys: Ref<FactoryResetKeys | undefined> = ref(undefined)
 
 const emit = defineEmits<{
-  (event: 'rebootInProgess'): void,
-  (event: 'factoryResetInProgress'): void
+	(event: "rebootInProgess"): void
+	(event: "factoryResetInProgress"): void
 }>()
 
-const { onFetchError: onRebootError,
-  error: rebootError,
-  statusCode: rebootStatusCode,
-  onFetchResponse: onRebootSuccess,
-  execute: reboot,
-  isFetching: rebootFetching } = useFetch("reboot", { immediate: false }).post()
+const {
+	onFetchError: onRebootError,
+	error: rebootError,
+	statusCode: rebootStatusCode,
+	onFetchResponse: onRebootSuccess,
+	execute: reboot,
+	isFetching: rebootFetching
+} = useFetch("reboot", { immediate: false }).post()
 
-const { onFetchError: onResetError,
-  error: resetError,
-  statusCode: resetStatusCode,
-  onFetchResponse: onResetSuccess,
-  execute: reset,
-  isFetching: resetFetching } = useFetch("factory-reset", { immediate: false }).post(JSON.stringify({ preserve: selectedFactoryResetKeys.value }))
+const {
+	onFetchError: onResetError,
+	error: resetError,
+	statusCode: resetStatusCode,
+	onFetchResponse: onResetSuccess,
+	execute: reset,
+	isFetching: resetFetching
+} = useFetch("factory-reset", { immediate: false }).post(JSON.stringify({ preserve: selectedFactoryResetKeys.value }))
 
 const loading = computed(() => rebootFetching.value || resetFetching.value)
 
 onRebootSuccess(() => {
-  console.log("device is rebooting...")
-  emit('rebootInProgess')
-  rebootDialog.value = false
+	console.log("device is rebooting...")
+	emit("rebootInProgess")
+	rebootDialog.value = false
 })
 
 onRebootError(() => {
-  if (rebootStatusCode.value === 401) {
-    router.push('/login')
-  } else {
-    showError(`Rebooting device failed: ${JSON.stringify(rebootError.value)}`)
-  }
+	if (rebootStatusCode.value === 401) {
+		router.push("/login")
+	} else {
+		showError(`Rebooting device failed: ${JSON.stringify(rebootError.value)}`)
+	}
 })
 
 onResetSuccess(() => {
-  console.log("device is rebooting...")
-  emit('factoryResetInProgress')
-  factoryResetDialog.value = false
+	console.log("device is rebooting...")
+	emit("factoryResetInProgress")
+	factoryResetDialog.value = false
 })
 
 onResetError(() => {
-  if (resetStatusCode.value === 401) {
-    router.push('/login')
-  } else {
-    showError(`Resetting device failed: ${JSON.stringify(resetError.value)}`)
-  }
+	if (resetStatusCode.value === 401) {
+		router.push("/login")
+	} else {
+		showError(`Resetting device failed: ${JSON.stringify(resetError.value)}`)
+	}
 })
 
 const showError = (errorMsg: string) => {
-  snackbarState.msg = errorMsg
-  snackbarState.color = "error"
-  snackbarState.timeout = -1
-  snackbarState.snackbar = true
+	snackbarState.msg = errorMsg
+	snackbarState.color = "error"
+	snackbarState.timeout = -1
+	snackbarState.snackbar = true
 }
 
 const updateFactoryResetKeys = (data: FactoryResetKeys) => {
-  factoryResetKeys.value = data
+	factoryResetKeys.value = data
 }
 
 onMounted(() => {
-  subscribe(updateFactoryResetKeys, CentrifugeSubscriptionType.FactoryResetKeys)
-  history(updateFactoryResetKeys, CentrifugeSubscriptionType.FactoryResetKeys)
+	subscribe(updateFactoryResetKeys, CentrifugeSubscriptionType.FactoryResetKeys)
+	history(updateFactoryResetKeys, CentrifugeSubscriptionType.FactoryResetKeys)
 })
 </script>
 
