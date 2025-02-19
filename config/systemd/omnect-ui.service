@@ -22,7 +22,7 @@ ExecStart=/bin/bash -c 'FULL_TAG=$(docker load < /mnt/factory/oci_images/omnect-
                             -e CENTRIFUGO_CHANNEL_WITHOUT_NAMESPACE_ALLOW_HISTORY_FOR_CLIENT=true \
                             -e CENTRIFUGO_CHANNEL_WITHOUT_NAMESPACE_ALLOW_SUBSCRIBE_FOR_CLIENT=true \
                             -e CENTRIFUGO_CLIENT_ALLOWED_ORIGINS=* \
-                            -e CENTRIFUGO_HTTP_API_KEY=${CENTRIFUGO_API_KEY} \
+                            -e CENTRIFUGO_HTTP_API_KEY=${CENTRIFUGO_HTTP_API_KEY} \
                             -e CENTRIFUGO_CHANNEL_WITHOUT_NAMESPACE_HISTORY_SIZE=1 \
                             -e CENTRIFUGO_CHANNEL_WITHOUT_NAMESPACE_HISTORY_TTL=720h \
                             -e CENTRIFUGO_HTTP_SERVER_PORT=${CENTRIFUGO_HTTP_SERVER_PORT} \

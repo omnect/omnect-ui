@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { type Ref, onMounted, ref } from "vue"
+import { useRouter } from "vue-router"
 import { useCentrifuge } from "../../composables/useCentrifugo"
 import { CentrifugeSubscriptionType } from "../../enums/centrifuge-subscription-type.enum"
 import type { FactoryResetKeys } from "../../types/factory-reset-keys"
@@ -9,9 +10,8 @@ import type { OnlineStatus } from "../../types/online-status"
 import type { SystemInfo } from "../../types/system-info"
 import type { Timeouts } from "../../types/timeouts"
 import DialogContent from "../DialogContent.vue"
-import { useRouter } from "vue-router"
 
-const { subscribe, history, onConnected } = useCentrifuge()
+const { subscribe, history, onConnected, initializeCentrifuge } = useCentrifuge()
 const router = useRouter()
 
 const online = ref(false)
@@ -110,7 +110,7 @@ const rebootDevice = async () => {
 		if (res.ok) {
 			isRebooting.value = true
 			rebootDialog.value = false
-		} else if(res.status === 401) {
+		} else if (res.status === 401) {
 			router.push("/login")
 		} else {
 			showError("Rebooting device failed")
@@ -135,7 +135,7 @@ const resetDevice = async () => {
 		if (res.ok) {
 			isResetting.value = true
 			factoryResetDialog.value = false
-		} else if(res.status === 401) {
+		} else if (res.status === 401) {
 			router.push("/login")
 		} else {
 			showError("Resetting device failed")
@@ -158,7 +158,7 @@ const reloadNetwork = async () => {
 		})
 		if (res.ok) {
 			showSuccess("Reload network successful")
-		} else if(res.status === 401) {
+		} else if (res.status === 401) {
 			router.push("/login")
 		} else {
 			showError("Reload network failed")
@@ -171,6 +171,8 @@ const reloadNetwork = async () => {
 }
 
 onMounted(() => {
+	initializeCentrifuge()
+
 	history(updateOnlineStatus, CentrifugeSubscriptionType.OnlineStatus)
 	history(updateSystemInfo, CentrifugeSubscriptionType.SystemInfo)
 	history(updateTimeouts, CentrifugeSubscriptionType.Timeouts)
