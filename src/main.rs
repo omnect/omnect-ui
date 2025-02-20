@@ -1,4 +1,5 @@
 use actix_files::{Files, NamedFile};
+use actix_multipart::form::{tempfile::TempFile, MultipartForm};
 use actix_session::{
     config::{BrowserSession, CookieContentSecurity},
     storage::CookieSessionStore,
@@ -31,6 +32,11 @@ struct FactoryResetInput {
 struct FactoryResetPayload {
     mode: u8,
     preserve: Vec<String>,
+}
+
+#[derive(MultipartForm)]
+struct UploadFormSingleFile {
+    file: TempFile,
 }
 
 #[actix_web::main]
@@ -125,11 +131,12 @@ async fn main() {
                 web::get().to(token).wrap(middleware::AuthMw),
             )
             .route("/logout", web::post().to(logout))
-            .service(web::redirect("/login", "/"))
+            .route("/update/file", web::post().to(save_file))
             .service(Files::new(
                 "/static",
                 std::fs::canonicalize("static").expect("static folder not found"),
             ))
+            .default_service(web::route().to(index))
             .wrap(session_middleware())
     })
     .bind_rustls_0_23(format!("0.0.0.0:{ui_port}"), tls_config)
@@ -335,4 +342,18 @@ async fn logout(session: Session) -> impl Responder {
     debug!("logout() called");
     session.purge();
     return HttpResponse::Ok();
+}
+
+async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>) -> impl Responder {
+    debug!("save_file() called");
+
+    if !form.file.file_name.is_some() {
+        HttpResponse::BadRequest().body("Update file is missing")
+    } else {
+        let path = format!("/data/{}", form.file.file_name.unwrap());
+        match form.file.file.persist(path) {
+            Ok(_) => return HttpResponse::Ok().finish(),
+            Err(_) => return HttpResponse::InternalServerError().finish(),
+        }
+    }
 }
