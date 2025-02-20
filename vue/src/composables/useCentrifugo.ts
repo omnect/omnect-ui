@@ -4,10 +4,10 @@ import type { CentrifugeSubscriptionType } from "../enums/centrifuge-subscriptio
 import { useEventHook } from "./useEventHook"
 
 const centrifuge: Ref<Centrifuge | undefined> = ref(undefined)
+const connectedEvent = useEventHook()
 
 export function useCentrifuge() {
 	const centrifuge_url = `wss://${window.location.hostname}:8000/connection/websocket`
-	const connectedEvent = useEventHook()
 	const token = ref("")
 
 	const initializeCentrifuge = () => {
