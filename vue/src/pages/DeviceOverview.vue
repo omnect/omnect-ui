@@ -87,8 +87,6 @@ onMounted(() => {
 			</DeviceActions>
 		</div>
 	</v-sheet>
-
-
 </template>
 
 <style scoped>

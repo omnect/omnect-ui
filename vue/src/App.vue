@@ -2,6 +2,7 @@
 import { type Ref, onBeforeMount, ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useDisplay } from "vuetify"
+import BaseSideBar from "./components/BaseSideBar.vue"
 import OmnectLogo from "./components/OmnectLogo.vue"
 import UserMenu from "./components/UserMenu.vue"
 import { useCentrifuge } from "./composables/useCentrifugo"
@@ -17,6 +18,10 @@ const showSideBar: Ref<boolean> = ref(lgAndUp.value)
 
 const toggleSideBar = () => {
 	showSideBar.value = !showSideBar.value
+}
+
+const updateSidebarVisibility = (visible: boolean) => {
+	showSideBar.value = visible
 }
 
 onBeforeMount(async () => {
@@ -46,6 +51,7 @@ onBeforeMount(async () => {
         </div>
       </template>
     </v-app-bar>
+    <BaseSideBar v-if="route.path !== '/login'" :showSideBar="showSideBar" @drawerVisibiltyChanged="updateSidebarVisibility"></BaseSideBar>
     <v-main>
       <RouterView></RouterView>
       <v-snackbar v-model="snackbarState.snackbar" :color="snackbarState.color" :timeout="snackbarState.timeout">
