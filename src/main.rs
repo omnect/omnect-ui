@@ -34,6 +34,16 @@ struct FactoryResetPayload {
     preserve: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize)]
+struct LoadUpdatePayload {
+    update_file_path: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct RunUpdatePayload {
+    validate_iothub_connection: bool,
+}
+
 #[derive(MultipartForm)]
 struct UploadFormSingleFile {
     file: TempFile,
@@ -123,6 +133,18 @@ async fn main() {
                 web::post().to(reload_network).wrap(middleware::AuthMw),
             )
             .route(
+                "/update/file",
+                web::post().to(save_file).wrap(middleware::AuthMw),
+            )
+            .route(
+                "/update/load",
+                web::post().to(load_update).wrap(middleware::AuthMw),
+            )
+            .route(
+                "/update/run",
+                web::post().to(run_update).wrap(middleware::AuthMw),
+            )
+            .route(
                 "/token/login",
                 web::post().to(token).wrap(middleware::AuthMw),
             )
@@ -131,7 +153,6 @@ async fn main() {
                 web::get().to(token).wrap(middleware::AuthMw),
             )
             .route("/logout", web::post().to(logout))
-            .route("/update/file", web::post().to(save_file))
             .service(Files::new(
                 "/static",
                 std::fs::canonicalize("static").expect("static folder not found"),
@@ -354,6 +375,36 @@ async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>) -> 
         match form.file.file.persist(path) {
             Ok(_) => return HttpResponse::Ok().finish(),
             Err(_) => return HttpResponse::InternalServerError().finish(),
+        }
+    }
+}
+
+async fn load_update(body: web::Json<LoadUpdatePayload>) -> impl Responder {
+    debug!(
+        "load_update() called with path {}",
+        body.update_file_path.clone()
+    );
+
+    match post_with_json_body("/fwupdate/load/v1", Some(body)).await {
+        Ok(response) => response,
+        Err(e) => {
+            error!("factory_reset failed: {e:#}");
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+        }
+    }
+}
+
+async fn run_update(body: web::Json<RunUpdatePayload>) -> impl Responder {
+    debug!(
+        "run_update() called with validate_iothub_connection {}",
+        body.validate_iothub_connection.clone()
+    );
+
+    match post_with_json_body("/fwupdate/run/v1", Some(body)).await {
+        Ok(response) => response,
+        Err(e) => {
+            error!("factory_reset failed: {e:#}");
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
         }
     }
 }
