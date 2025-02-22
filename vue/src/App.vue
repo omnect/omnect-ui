@@ -4,17 +4,25 @@ import { useRoute, useRouter } from "vue-router"
 import { useDisplay } from "vuetify"
 import BaseSideBar from "./components/BaseSideBar.vue"
 import OmnectLogo from "./components/OmnectLogo.vue"
+import OverlaySpinner from "./components/OverlaySpinner.vue"
 import UserMenu from "./components/UserMenu.vue"
 import { useCentrifuge } from "./composables/useCentrifugo"
+import { useOverlaySpinner } from "./composables/useOverlaySpinner"
 import { useSnackbar } from "./composables/useSnackbar"
 
 const { snackbarState } = useSnackbar()
-
-const { initializeCentrifuge } = useCentrifuge()
+const { overlaySpinnerState } = useOverlaySpinner()
+const { initializeCentrifuge, onConnected } = useCentrifuge()
 const { lgAndUp } = useDisplay()
 const router = useRouter()
 const route = useRoute()
 const showSideBar: Ref<boolean> = ref(lgAndUp.value)
+
+onConnected(() => {
+	overlaySpinnerState.overlay = false
+	overlaySpinnerState.title = ""
+	overlaySpinnerState.text = ""
+})
 
 const toggleSideBar = () => {
 	showSideBar.value = !showSideBar.value
@@ -60,6 +68,7 @@ onBeforeMount(async () => {
           <v-btn icon=" mdi-close" @click="snackbarState.snackbar = false"></v-btn>
         </template>
       </v-snackbar>
+      <OverlaySpinner :overlay="overlaySpinnerState.overlay" :title="overlaySpinnerState.title" :text="overlaySpinnerState.text" />
     </v-main>
   </v-app>
 </template>
