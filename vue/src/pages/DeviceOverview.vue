@@ -4,16 +4,17 @@ import DeviceActions from "../components/DeviceActions.vue"
 import DeviceInfo from "../components/DeviceInfo.vue"
 import DeviceNetworks from "../components/DeviceNetworks.vue"
 import { useCentrifuge } from "../composables/useCentrifugo"
+import { useOverlaySpinner } from "../composables/useOverlaySpinner"
 import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
 import type { FactoryResetStatus, OnlineStatus, SystemInfo, Timeouts } from "../types"
-const { subscribe, history, onConnected } = useCentrifuge()
+
+const { subscribe, history } = useCentrifuge()
+const { overlaySpinnerState } = useOverlaySpinner()
 
 const online = ref(false)
 const systemInfo: Ref<SystemInfo | undefined> = ref(undefined)
 const timeouts: Ref<Timeouts | undefined> = ref(undefined)
 const factoryResetStatus: Ref<string> = ref("")
-const isResetting = ref(false)
-const isRebooting = ref(false)
 
 const deviceInfo: Ref<Map<string, string | number>> = computed(
 	() =>
@@ -29,10 +30,16 @@ const deviceInfo: Ref<Map<string, string | number>> = computed(
 		])
 )
 
-onConnected(() => {
-	isResetting.value = false
-	isRebooting.value = false
-})
+const showIsRebooting = () => {
+	overlaySpinnerState.title = "Device is rebooting"
+	overlaySpinnerState.overlay = true
+}
+
+const showIsResetting = () => {
+	overlaySpinnerState.title = "Device is resetting"
+	overlaySpinnerState.text = "Please have some patience, the resetting may take some time."
+	overlaySpinnerState.overlay = true
+}
 
 const updateOnlineStatus = (data: OnlineStatus) => {
 	online.value = data.iothub
@@ -64,26 +71,13 @@ onMounted(() => {
 </script>
 
 <template>
-	<v-overlay :persistent="true" :model-value="isResetting || isRebooting" z-index="1000"
-		class="align-center justify-center">
-		<div id="overlay" class="flex flex-col items-center">
-			<v-sheet class="flex flex-col gap-y-8 items-center p-8" :rounded="'lg'">
-				<div v-if="isRebooting" class="text-h4 text-center">Device is rebooting</div>
-				<div v-else-if="isResetting" class="text-h4 text-center">Device is resetting</div>
-				<v-progress-circular color="secondary" indeterminate size="100" width="5"></v-progress-circular>
-				<p v-if="isResetting" class="text-h6 m-t-4">Please have some patience, the resetting may take some time.
-				</p>
-			</v-sheet>
-		</div>
-	</v-overlay>
-
 	<v-sheet :border="true" rounded class="m-20">
 		<div class="grid grid-cols-[1fr_auto] gap-8 gap-x-16 m-8">
 			<div class="flex flex-col gap-y-16">
 				<DeviceInfo :deviceInfo="deviceInfo" />
 				<DeviceNetworks></DeviceNetworks>
 			</div>
-			<DeviceActions @reboot-in-progress="isRebooting = true" @factory-reset-in-progress="isResetting = true">
+			<DeviceActions @reboot-in-progress="showIsRebooting" @factory-reset-in-progress="showIsResetting">
 			</DeviceActions>
 		</div>
 	</v-sheet>

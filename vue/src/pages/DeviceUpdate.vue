@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { useFetch } from "@vueuse/core"
+import { ref } from "vue"
 import UpdateFileUpload from "../components/UpdateFileUpload.vue"
 import UpdateInfo from "../components/UpdateInfo.vue"
 import { useSnackbar } from "../composables/useSnackbar"
 import router from "../plugins/router"
+
+const loadUpdatePayload = ref({
+	update_file_path: ""
+})
 
 const { snackbarState } = useSnackbar()
 const {
@@ -14,7 +19,7 @@ const {
 	isFetching: loadUpdateFetching,
 	response,
 	data
-} = useFetch("update/load", { immediate: false }).post().json()
+} = useFetch("update/load", { immediate: false }).post(loadUpdatePayload).json()
 
 onLoadUpdateError(async () => {
 	if (loadUpdateStatusCode.value === 401) {
@@ -30,13 +35,20 @@ const showError = (errorMsg: string) => {
 	snackbarState.timeout = -1
 	snackbarState.snackbar = true
 }
+
+const loadUpdateData = (filename: string) => {
+	loadUpdatePayload.value = {
+		update_file_path: filename
+	}
+	loadUpdate(false)
+}
 </script>
 
 <template>
     <v-sheet :border="true" rounded class="m-20">
 		<v-row class="m-8">
 			<v-col sm="12" md="6">
-				<UpdateFileUpload @file-uploaded="loadUpdate(false)" />
+				<UpdateFileUpload @file-uploaded="loadUpdateData" />
 			</v-col>
 			<v-col sm="12" md="6">
 				<UpdateInfo :update-manifest="data" :load-update-fetching="loadUpdateFetching" @reload-update-info="loadUpdate(false)" />

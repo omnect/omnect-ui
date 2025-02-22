@@ -18,7 +18,7 @@ use hyper_util::rt::TokioIo;
 use jwt_simple::prelude::*;
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
-use std::io::Write;
+use std::{fs, io::Write};
 use tokio::{net::UnixStream, process::Command};
 
 mod middleware;
@@ -108,6 +108,8 @@ async fn main() {
             .expect("invalid tls config"),
         _ => panic!("unexpected item found in key pem file"),
     };
+
+    fs::exists("/data").expect("Data dir /data is missing");
 
     fn session_middleware() -> SessionMiddleware<CookieSessionStore> {
         SessionMiddleware::builder(CookieSessionStore::default(), Key::from(&[0; 64]))
@@ -365,16 +367,39 @@ async fn logout(session: Session) -> impl Responder {
     return HttpResponse::Ok();
 }
 
+async fn clear_data_folder() -> Result<bool> {
+    for entry in fs::read_dir("/data")? {
+        let entry = entry?;
+        fs::remove_file(entry.path())?;
+    }
+
+    Ok(true)
+}
+
 async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>) -> impl Responder {
     debug!("save_file() called");
 
     if !form.file.file_name.is_some() {
         HttpResponse::BadRequest().body("Update file is missing")
     } else {
-        let path = format!("/data/{}", form.file.file_name.unwrap());
-        match form.file.file.persist(path) {
-            Ok(_) => return HttpResponse::Ok().finish(),
-            Err(_) => return HttpResponse::InternalServerError().finish(),
+        let _ = clear_data_folder().await;
+
+        let filename = form.file.file_name.unwrap();
+        let tmp_path = format!("/tmp/{}", filename);
+        let data_path = format!("/data/{}", filename);
+
+        match form.file.file.persist(&tmp_path) {
+            Ok(_) => match fs::copy(tmp_path, data_path) {
+                Ok(_) => return HttpResponse::Ok().finish(),
+                Err(err) => {
+                    error!("Store file failed: {:?}", err);
+                    HttpResponse::InternalServerError().finish()
+                }
+            },
+            Err(err) => {
+                error!("Store file failed: {:?}", err);
+                HttpResponse::InternalServerError().finish()
+            }
         }
     }
 }

@@ -18,6 +18,7 @@ docker build \
 # ./temp/device_id_cert.pem and temp/device_id_cert_key.pem (certificate and key file as used on device)
 docker run --rm \
   -v $(pwd)/temp:/temp \
+  -v $(pwd)/temp/data:/data \
   --mount type=bind,source=/tmp/api.sock,target=/temp/api.sock \
   -u $(id -u):$(id -g) \
   -e RUST_LOG=debug \

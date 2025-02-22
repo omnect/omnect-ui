@@ -1,9 +1,9 @@
 export type UpdateManifest = {
-	update_id: UpdateId
-	is_deployable: boolean
+	updateId: UpdateId
+	isDeployable: boolean
 	compatibility: Compatibility[]
-	created_date_time: string
-	manifest_version: string
+	createdDateTime: string
+	manifestVersion: string
 }
 
 export type UpdateId = {

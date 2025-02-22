@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { useFetch } from "@vueuse/core"
-import { type Ref, ref } from "vue"
+import { ref } from "vue"
 import { useSnackbar } from "../composables/useSnackbar"
 import router from "../plugins/router"
 
 const { snackbarState } = useSnackbar()
 
-const emit = defineEmits<(event: "fileUploaded") => void>()
+const emit = defineEmits<(e: "fileUploaded", filename: string) => void>()
 
-const updateFile: Ref<File | undefined> = ref(undefined)
+const updateFile = ref<File | undefined>(undefined)
+
 const formData = new FormData()
 
 const {
@@ -30,9 +31,11 @@ onUploadError(async () => {
 })
 
 onUploadSuccess(() => {
-	emit("fileUploaded")
-	updateFile.value = undefined
-	formData.delete("file")
+	if (updateFile.value) {
+		emit("fileUploaded", updateFile.value.name)
+		updateFile.value = undefined
+		formData.delete("file")
+	}
 })
 
 const uploadFile = async () => {
