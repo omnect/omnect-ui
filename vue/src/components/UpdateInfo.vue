@@ -63,6 +63,11 @@ const showError = (errorMsg: string) => {
             <KeyValuePair title="Provider">{{ updateManifest.updateId.provider }}</KeyValuePair>
             <KeyValuePair title="Variant">{{ updateManifest.updateId.name }}</KeyValuePair>
             <KeyValuePair title="Version">{{ updateManifest.updateId.version }}</KeyValuePair>
+			<KeyValuePair title="Manufacturer">{{ updateManifest.compatibility[0].manufacturer }}</KeyValuePair>
+			<KeyValuePair title="Model">{{ updateManifest.compatibility[0].model }}</KeyValuePair>
+			<KeyValuePair title="Compatibility Id">{{ updateManifest.compatibility[0].compatibilityid }}</KeyValuePair>
+			<KeyValuePair title="Created">{{ updateManifest.createdDateTime ? new Date(updateManifest.createdDateTime).toLocaleString() : "" }}</KeyValuePair>
+			<KeyValuePair title="Update bootloader">{{ false }}</KeyValuePair>
         </dl>
     </div>
     <v-btn v-if="updateManifest" :loading="runUpdateFetching" class="justify-end" prepend-icon="mdi-update" variant="text" @click="runUpdate(false)">Install update</v-btn>
