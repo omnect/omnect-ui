@@ -72,7 +72,7 @@ where
                 }
             {
                 let res = service.call(req).await?;
-                return Ok(res.map_into_left_body());
+                Ok(res.map_into_left_body())
             } else {
                 let mut payload = req.take_payload().take();
 
@@ -113,7 +113,7 @@ pub fn verify_token(token: Option<String>) -> Result<bool> {
     };
 
     Ok(key
-        .verify_token::<NoCustomClaims>(&*token.unwrap(), Some(options))
+        .verify_token::<NoCustomClaims>(&token.unwrap(), Some(options))
         .is_ok())
 }
 
