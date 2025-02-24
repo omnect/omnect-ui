@@ -3,6 +3,7 @@ mod middleware;
 mod socket_client;
 
 use actix_files::Files;
+use actix_multipart::form::MultipartFormConfig;
 use actix_session::{
     config::{BrowserSession, CookieContentSecurity},
     storage::CookieSessionStore,
@@ -17,6 +18,9 @@ use env_logger::{Builder, Env, Target};
 use log::{debug, info};
 use std::{fs, io::Write};
 use tokio::process::Command;
+
+const UPLOAD_LIMIT: usize = 250 * 1024 * 1024;
+const MEMORY_LIMIT: usize = 10 * 1024 * 1024;
 
 #[actix_web::main]
 async fn main() {
@@ -93,6 +97,12 @@ async fn main() {
 
     let server = HttpServer::new(move || {
         App::new()
+            .wrap(session_middleware())
+            .app_data(
+                MultipartFormConfig::default()
+                    .total_limit(UPLOAD_LIMIT)
+                    .memory_limit(MEMORY_LIMIT),
+            )
             .route("/", web::get().to(api::index))
             .route(
                 "/factory-reset",
@@ -132,7 +142,6 @@ async fn main() {
                 std::fs::canonicalize("static").expect("static folder not found"),
             ))
             .default_service(web::route().to(api::index))
-            .wrap(session_middleware())
     })
     .bind_rustls_0_23(format!("0.0.0.0:{ui_port}"), tls_config)
     .expect("bind_rustls")
