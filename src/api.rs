@@ -176,7 +176,7 @@ pub async fn load_update(mut body: web::Json<LoadUpdatePayload>) -> impl Respond
 
     let update_os_path = std::env::var("UPDATE_PATH").expect("UPDATE_PATH missing");
 
-    body.update_file_path = format!("{update_os_path}{}", body.update_file_path);
+    body.update_file_path = format!("{update_os_path}/{}", body.update_file_path);
 
     match post_with_json_body("/fwupdate/load/v1", Some(body)).await {
         Ok(response) => response,
