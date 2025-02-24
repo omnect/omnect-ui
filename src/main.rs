@@ -82,7 +82,7 @@ async fn main() {
         _ => panic!("unexpected item found in key pem file"),
     };
 
-    fs::exists("/data").expect("Data dir /data is missing");
+    fs::exists("/data").expect("data dir /data is missing");
 
     fn session_middleware() -> SessionMiddleware<CookieSessionStore> {
         SessionMiddleware::builder(CookieSessionStore::default(), Key::from(&[0; 64]))

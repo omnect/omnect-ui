@@ -128,7 +128,7 @@ pub async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>)
     debug!("save_file() called");
 
     if !form.file.file_name.is_some() {
-        HttpResponse::BadRequest().body("Update file is missing")
+        HttpResponse::BadRequest().body("update file is missing")
     } else {
         let _ = clear_data_folder().await;
 
@@ -149,19 +149,19 @@ pub async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>)
 
                     match fs::set_permissions(&data_path, perm) {
                         Ok(_) => return HttpResponse::Ok().finish(),
-                        Err(err) => {
-                            error!("Store file failed: {:?}", err);
+                        Err(e) => {
+                            error!("save_file failed: {e:#}");
                             HttpResponse::InternalServerError().finish()
                         }
                     }
                 }
-                Err(err) => {
-                    error!("Store file failed: {:?}", err);
+                Err(e) => {
+                    error!("save_file failed: {e:#}");
                     HttpResponse::InternalServerError().finish()
                 }
             },
-            Err(err) => {
-                error!("Store file failed: {:?}", err);
+            Err(e) => {
+                error!("save_file failed: {e:#}");
                 HttpResponse::InternalServerError().finish()
             }
         }
@@ -181,7 +181,7 @@ pub async fn load_update(mut body: web::Json<LoadUpdatePayload>) -> impl Respond
     match post_with_json_body("/fwupdate/load/v1", Some(body)).await {
         Ok(response) => response,
         Err(e) => {
-            error!("factory_reset failed: {e:#}");
+            error!("load_update failed: {e:#}");
             HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
         }
     }
@@ -196,7 +196,7 @@ pub async fn run_update(body: web::Json<RunUpdatePayload>) -> impl Responder {
     match post_with_json_body("/fwupdate/run/v1", Some(body)).await {
         Ok(response) => response,
         Err(e) => {
-            error!("factory_reset failed: {e:#}");
+            error!("run_update failed: {e:#}");
             HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
         }
     }

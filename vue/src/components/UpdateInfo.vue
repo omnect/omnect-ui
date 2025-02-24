@@ -28,7 +28,7 @@ const {
 	execute: runUpdate,
 	isFetching: runUpdateFetching,
 	response
-} = useFetch("update/load", { immediate: false }).post(runUpdatePayload)
+} = useFetch("update/run", { immediate: false }).post(runUpdatePayload)
 
 onRunUpdateError(async () => {
 	if (runUpdateStatusCode.value === 401) {
@@ -69,5 +69,5 @@ const showError = (errorMsg: string) => {
 			<KeyValuePair title="Created">{{ updateManifest.createdDateTime ? new Date(updateManifest.createdDateTime).toLocaleString() : "" }}</KeyValuePair>
         </dl>
     </div>
-    <v-btn v-if="updateManifest" :loading="runUpdateFetching" class="justify-end" prepend-icon="mdi-update" variant="text" @click="runUpdate(false)">Install update</v-btn>
+    <v-btn v-if="updateManifest" :loading="runUpdateFetching" class="mt-4" prepend-icon="mdi-update" variant="text" @click="runUpdate(false)">Install update</v-btn>
 </template>
