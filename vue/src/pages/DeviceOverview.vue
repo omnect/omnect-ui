@@ -15,6 +15,7 @@ const online = ref(false)
 const systemInfo: Ref<SystemInfo | undefined> = ref(undefined)
 const timeouts: Ref<Timeouts | undefined> = ref(undefined)
 const factoryResetStatus: Ref<string> = ref("")
+const updateStatus: Ref<string> = ref("")
 
 const deviceInfo: Ref<Map<string, string | number>> = computed(
 	() =>
@@ -26,7 +27,8 @@ const deviceInfo: Ref<Map<string, string | number>> = computed(
 			["Wait online timeout (in seconds)", timeouts.value?.wait_online_timeout.secs ?? "n/a"],
 			["omnect device service version", systemInfo.value?.omnect_device_service_version ?? "n/a"],
 			["Azure SDK version", systemInfo.value?.azure_sdk_version ?? "n/a"],
-			["Factory rest status", factoryResetStatus.value]
+			["Factory rest status", factoryResetStatus.value],
+			["Update status", updateStatus.value]
 		])
 )
 
@@ -57,16 +59,22 @@ const updateFactoryResetStatus = (data: FactoryResetStatus) => {
 	factoryResetStatus.value = data.factory_reset_status
 }
 
+const updateUpdateStatus = (data: string) => {
+	updateStatus.value = data
+}
+
 onMounted(() => {
 	history(updateOnlineStatus, CentrifugeSubscriptionType.OnlineStatus)
 	history(updateSystemInfo, CentrifugeSubscriptionType.SystemInfo)
 	history(updateTimeouts, CentrifugeSubscriptionType.Timeouts)
 	history(updateFactoryResetStatus, CentrifugeSubscriptionType.FactoryResetStatus)
+	history(updateUpdateStatus, CentrifugeSubscriptionType.UpdateStatus)
 
 	subscribe(updateOnlineStatus, CentrifugeSubscriptionType.OnlineStatus)
 	subscribe(updateSystemInfo, CentrifugeSubscriptionType.SystemInfo)
 	subscribe(updateTimeouts, CentrifugeSubscriptionType.Timeouts)
 	subscribe(updateFactoryResetStatus, CentrifugeSubscriptionType.FactoryResetStatus)
+	subscribe(updateUpdateStatus, CentrifugeSubscriptionType.UpdateStatus)
 })
 </script>
 
