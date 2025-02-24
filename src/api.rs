@@ -7,7 +7,7 @@ use actix_web::{http::StatusCode, web, HttpResponse, Responder};
 use anyhow::Result;
 use jwt_simple::prelude::*;
 use log::{debug, error};
-use std::fs;
+use std::{fs, os::unix::fs::PermissionsExt};
 
 #[derive(Deserialize)]
 pub struct FactoryResetInput {
@@ -137,8 +137,24 @@ pub async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>)
         let data_path = format!("/data/{filename}");
 
         match form.file.file.persist(&tmp_path) {
-            Ok(_) => match fs::copy(tmp_path, data_path) {
-                Ok(_) => return HttpResponse::Ok().finish(),
+            Ok(_) => match fs::copy(tmp_path, &data_path) {
+                Ok(_) => {
+                    let metadata = fs::metadata(&data_path);
+                    if metadata.is_err() {
+                        return HttpResponse::InternalServerError().finish();
+                    }
+
+                    let mut perm = metadata.unwrap().permissions();
+                    perm.set_mode(0o750);
+
+                    match fs::set_permissions(&data_path, perm) {
+                        Ok(_) => return HttpResponse::Ok().finish(),
+                        Err(err) => {
+                            error!("Store file failed: {:?}", err);
+                            HttpResponse::InternalServerError().finish()
+                        }
+                    }
+                }
                 Err(err) => {
                     error!("Store file failed: {:?}", err);
                     HttpResponse::InternalServerError().finish()
@@ -152,11 +168,15 @@ pub async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>)
     }
 }
 
-pub async fn load_update(body: web::Json<LoadUpdatePayload>) -> impl Responder {
+pub async fn load_update(mut body: web::Json<LoadUpdatePayload>) -> impl Responder {
     debug!(
         "load_update() called with path {}",
         body.update_file_path.clone()
     );
+
+    let update_os_path = std::env::var("UPDATE_PATH").expect("UPDATE_PATH missing");
+
+    body.update_file_path = format!("{update_os_path}{}", body.update_file_path);
 
     match post_with_json_body("/fwupdate/load/v1", Some(body)).await {
         Ok(response) => response,

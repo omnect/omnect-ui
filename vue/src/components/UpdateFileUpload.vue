@@ -27,6 +27,8 @@ onUploadError(async () => {
 		router.push("/login")
 	} else {
 		showError(`Uploading file failed: ${(await response.value?.text()) ?? uploadError.value}`)
+		updateFile.value = undefined
+		formData.delete("file")
 	}
 })
 
