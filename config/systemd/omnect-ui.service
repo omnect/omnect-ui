@@ -36,6 +36,7 @@ ExecStart=/bin/bash -c 'FULL_TAG=$(docker load < /mnt/factory/oci_images/omnect-
                             -e SOCKET_PATH=/socket/api.sock \
                             -e SSL_CERT_PATH=/cert/device_id_cert.pem \
                             -e SSL_KEY_PATH=/cert/device_id_cert_key.pem \
+                            -e UPDATE_PATH=/var/lib/omnect-ui \
                         $${FULL_TAG}'
 
 RemainAfterExit=true
