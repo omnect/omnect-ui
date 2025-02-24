@@ -28,12 +28,15 @@ const doLogin = async (e: Event) => {
 
 		if (res.ok) {
 			initializeCentrifuge()
-			router.push("/")
+			await router.push("/")
 		}
 
 		if (res.status === 401) {
 			errorMsg.value = "Username and/or password wrong"
+			return
 		}
+
+		errorMsg.value = "Something went wrong while logging you in."
 	} catch (error) {
 		errorMsg.value = "Failed to login"
 	}
