@@ -1,53 +1,22 @@
-use actix_files::{Files, NamedFile};
-use actix_multipart::form::{tempfile::TempFile, MultipartForm};
+mod api;
+mod middleware;
+mod socket_client;
+
+use actix_files::Files;
 use actix_session::{
     config::{BrowserSession, CookieContentSecurity},
     storage::CookieSessionStore,
-    Session, SessionMiddleware,
+    SessionMiddleware,
 };
 use actix_web::{
     cookie::{Key, SameSite},
-    http::StatusCode,
-    web, App, HttpResponse, HttpServer, Responder,
+    web, App, HttpServer,
 };
-use anyhow::{Context, Result};
+use anyhow::Result;
 use env_logger::{Builder, Env, Target};
-use http_body_util::BodyExt;
-use hyper::{client::conn::http1, Request};
-use hyper_util::rt::TokioIo;
-use jwt_simple::prelude::*;
-use log::{debug, error, info};
-use serde::{Deserialize, Serialize};
+use log::{debug, info};
 use std::{fs, io::Write};
-use tokio::{net::UnixStream, process::Command};
-
-mod middleware;
-
-#[derive(Deserialize)]
-struct FactoryResetInput {
-    preserve: Vec<String>,
-}
-
-#[derive(Serialize)]
-struct FactoryResetPayload {
-    mode: u8,
-    preserve: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct LoadUpdatePayload {
-    update_file_path: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct RunUpdatePayload {
-    validate_iothub_connection: bool,
-}
-
-#[derive(MultipartForm)]
-struct UploadFormSingleFile {
-    file: TempFile,
-}
+use tokio::process::Command;
 
 #[actix_web::main]
 async fn main() {
@@ -124,42 +93,45 @@ async fn main() {
 
     let server = HttpServer::new(move || {
         App::new()
-            .route("/", web::get().to(index))
+            .route("/", web::get().to(api::index))
             .route(
                 "/factory-reset",
-                web::post().to(factory_reset).wrap(middleware::AuthMw),
+                web::post().to(api::factory_reset).wrap(middleware::AuthMw),
             )
-            .route("/reboot", web::post().to(reboot).wrap(middleware::AuthMw))
+            .route(
+                "/reboot",
+                web::post().to(api::reboot).wrap(middleware::AuthMw),
+            )
             .route(
                 "/reload-network",
-                web::post().to(reload_network).wrap(middleware::AuthMw),
+                web::post().to(api::reload_network).wrap(middleware::AuthMw),
             )
             .route(
                 "/update/file",
-                web::post().to(save_file).wrap(middleware::AuthMw),
+                web::post().to(api::save_file).wrap(middleware::AuthMw),
             )
             .route(
                 "/update/load",
-                web::post().to(load_update).wrap(middleware::AuthMw),
+                web::post().to(api::load_update).wrap(middleware::AuthMw),
             )
             .route(
                 "/update/run",
-                web::post().to(run_update).wrap(middleware::AuthMw),
+                web::post().to(api::run_update).wrap(middleware::AuthMw),
             )
             .route(
                 "/token/login",
-                web::post().to(token).wrap(middleware::AuthMw),
+                web::post().to(api::token).wrap(middleware::AuthMw),
             )
             .route(
                 "/token/refresh",
-                web::get().to(token).wrap(middleware::AuthMw),
+                web::get().to(api::token).wrap(middleware::AuthMw),
             )
-            .route("/logout", web::post().to(logout))
+            .route("/logout", web::post().to(api::logout))
             .service(Files::new(
                 "/static",
                 std::fs::canonicalize("static").expect("static folder not found"),
             ))
-            .default_service(web::route().to(index))
+            .default_service(web::route().to(api::index))
             .wrap(session_middleware())
     })
     .bind_rustls_0_23(format!("0.0.0.0:{ui_port}"), tls_config)
@@ -195,241 +167,4 @@ async fn main() {
     }
 
     debug!("good bye");
-}
-
-async fn index() -> actix_web::Result<NamedFile> {
-    debug!("index() called");
-
-    // trigger omnect-device-service to republish
-    match post_with_empty_body("/republish/v1").await {
-        Ok(response) => response,
-        Err(e) => {
-            error!("republish failed: {e:#}");
-            return Err(actix_web::error::ErrorInternalServerError(
-                "republish failed",
-            ));
-        }
-    };
-
-    Ok(NamedFile::open(
-        std::fs::canonicalize("static/index.html").expect("static/index.html not found"),
-    )?)
-}
-
-async fn factory_reset(body: web::Json<FactoryResetInput>) -> impl Responder {
-    debug!(
-        "factory_reset() called with preserved keys {}",
-        body.preserve.join(",")
-    );
-
-    let payload = FactoryResetPayload {
-        mode: 1,
-        preserve: body.preserve.clone(),
-    };
-
-    match post_with_json_body("/factory-reset/v1", Some(payload)).await {
-        Ok(response) => response,
-        Err(e) => {
-            error!("factory_reset failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
-        }
-    }
-}
-
-async fn reboot() -> impl Responder {
-    debug!("reboot() called");
-
-    match post_with_empty_body("/reboot/v1").await {
-        Ok(response) => response,
-        Err(e) => {
-            error!("reboot failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
-        }
-    }
-}
-
-async fn reload_network() -> impl Responder {
-    debug!("reload_network() called");
-
-    match post_with_empty_body("/reload-network/v1").await {
-        Ok(response) => response,
-        Err(e) => {
-            error!("reload-network failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
-        }
-    }
-}
-
-async fn post_with_json_body(path: &str, body: impl Serialize) -> Result<HttpResponse> {
-    let json = match serde_json::to_value(body) {
-        Ok(r) => r,
-        Err(e) => {
-            error!("failed to serialize data error: {e:#}");
-            return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish());
-        }
-    };
-
-    let request = Request::builder()
-        .uri(path)
-        .method("POST")
-        .header("Host", "localhost")
-        .body(serde_json::to_string(&json).unwrap_or_default())
-        .context("build request failed")?;
-
-    post(request).await
-}
-
-async fn post_with_empty_body(path: &str) -> Result<HttpResponse> {
-    let request = Request::builder()
-        .uri(path)
-        .method("POST")
-        .header("Host", "localhost")
-        .body(String::new())
-        .context("build request failed")?;
-
-    post(request).await
-}
-
-async fn post(request: Request<String>) -> Result<HttpResponse> {
-    let mut sender = match sender().await {
-        Err(e) => {
-            error!("error creating request sender: {e}. socket might be broken. exit application");
-            std::process::exit(1)
-        }
-        Ok(sender) => sender,
-    };
-
-    let res = sender
-        .send_request(request)
-        .await
-        .context("send request failed")?;
-
-    let status_code =
-        StatusCode::from_u16(res.status().as_u16()).context("get status code failed")?;
-
-    let body = res
-        .collect()
-        .await
-        .context("collect response body failed")?;
-
-    let body = String::from_utf8(body.to_bytes().to_vec()).context("get response body failed")?;
-
-    Ok(HttpResponse::build(status_code).body(body))
-}
-
-async fn sender() -> Result<http1::SendRequest<String>> {
-    let stream = UnixStream::connect(std::env::var("SOCKET_PATH").expect("SOCKET_PATH missing"))
-        .await
-        .context("cannot create unix stream")?;
-
-    let (mut sender, conn) = http1::handshake(TokioIo::new(stream))
-        .await
-        .context("unix stream handshake failed")?;
-
-    actix_rt::spawn(async move {
-        if let Err(err) = conn.await {
-            error!("post connection failed: {:?}", err);
-        }
-    });
-
-    sender
-        .ready()
-        .await
-        .context("unix stream unexpectedly closed")?;
-
-    Ok(sender)
-}
-
-async fn token(session: Session) -> impl Responder {
-    if let Ok(key) = std::env::var("CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY") {
-        let key = HS256Key::from_bytes(key.as_bytes());
-        let claims = Claims::create(Duration::from_hours(middleware::TOKEN_EXPIRE_HOURS))
-            .with_subject("omnect-ui");
-
-        if let Ok(token) = key.authenticate(claims) {
-            match session.insert("token", token.clone()) {
-                Ok(_) => return HttpResponse::Ok().body(token),
-                Err(_) => return HttpResponse::InternalServerError().body("Error."),
-            }
-        } else {
-            error!("token: cannot create token");
-        };
-    } else {
-        error!("token: missing secret key");
-    };
-
-    HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
-}
-
-async fn logout(session: Session) -> impl Responder {
-    debug!("logout() called");
-    session.purge();
-    return HttpResponse::Ok();
-}
-
-async fn clear_data_folder() -> Result<bool> {
-    for entry in fs::read_dir("/data")? {
-        let entry = entry?;
-        fs::remove_file(entry.path())?;
-    }
-
-    Ok(true)
-}
-
-async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>) -> impl Responder {
-    debug!("save_file() called");
-
-    if !form.file.file_name.is_some() {
-        HttpResponse::BadRequest().body("Update file is missing")
-    } else {
-        let _ = clear_data_folder().await;
-
-        let filename = form.file.file_name.unwrap();
-        let tmp_path = format!("/tmp/{}", filename);
-        let data_path = format!("/data/{}", filename);
-
-        match form.file.file.persist(&tmp_path) {
-            Ok(_) => match fs::copy(tmp_path, data_path) {
-                Ok(_) => return HttpResponse::Ok().finish(),
-                Err(err) => {
-                    error!("Store file failed: {:?}", err);
-                    HttpResponse::InternalServerError().finish()
-                }
-            },
-            Err(err) => {
-                error!("Store file failed: {:?}", err);
-                HttpResponse::InternalServerError().finish()
-            }
-        }
-    }
-}
-
-async fn load_update(body: web::Json<LoadUpdatePayload>) -> impl Responder {
-    debug!(
-        "load_update() called with path {}",
-        body.update_file_path.clone()
-    );
-
-    match post_with_json_body("/fwupdate/load/v1", Some(body)).await {
-        Ok(response) => response,
-        Err(e) => {
-            error!("factory_reset failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
-        }
-    }
-}
-
-async fn run_update(body: web::Json<RunUpdatePayload>) -> impl Responder {
-    debug!(
-        "run_update() called with validate_iothub_connection {}",
-        body.validate_iothub_connection.clone()
-    );
-
-    match post_with_json_body("/fwupdate/run/v1", Some(body)).await {
-        Ok(response) => response,
-        Err(e) => {
-            error!("factory_reset failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
-        }
-    }
 }
