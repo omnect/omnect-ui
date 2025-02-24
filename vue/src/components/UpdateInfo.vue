@@ -67,7 +67,6 @@ const showError = (errorMsg: string) => {
 			<KeyValuePair title="Model">{{ updateManifest.compatibility[0].model }}</KeyValuePair>
 			<KeyValuePair title="Compatibility Id">{{ updateManifest.compatibility[0].compatibilityid }}</KeyValuePair>
 			<KeyValuePair title="Created">{{ updateManifest.createdDateTime ? new Date(updateManifest.createdDateTime).toLocaleString() : "" }}</KeyValuePair>
-			<KeyValuePair title="Update bootloader">{{ false }}</KeyValuePair>
         </dl>
     </div>
     <v-btn v-if="updateManifest" :loading="runUpdateFetching" class="justify-end" prepend-icon="mdi-update" variant="text" @click="runUpdate(false)">Install update</v-btn>
