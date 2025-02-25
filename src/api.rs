@@ -25,7 +25,7 @@ pub struct LoadUpdatePayload {
     update_file_path: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct RunUpdatePayload {
     validate_iothub_connection: bool,
 }
@@ -127,44 +127,32 @@ pub async fn logout(session: Session) -> impl Responder {
 pub async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>) -> impl Responder {
     debug!("save_file() called");
 
-    if form.file.file_name.is_none() {
+    let tmp_filename = &form.file.file_name;
+
+    if tmp_filename.is_none() {
         HttpResponse::BadRequest().body("update file is missing")
     } else {
         let _ = clear_data_folder().await;
 
-        let filename = form.file.file_name.unwrap();
-        let tmp_path = format!("/tmp/{filename}");
-        let data_path = format!("/data/{filename}");
+        if let Some(filename) = &form.file.file_name {
+            let tmp_path = format!("/tmp/{filename}");
+            let data_path = format!("/data/{filename}");
 
-        match form.file.file.persist(&tmp_path) {
-            Ok(_) => match fs::copy(tmp_path, &data_path) {
-                Ok(_) => {
-                    let metadata = fs::metadata(&data_path);
-                    if metadata.is_err() {
+            if persist_uploaded_file(form.file, tmp_path, data_path.clone())
+                .await
+                .is_ok()
+            {
+                match set_file_permission(data_path).await {
+                    Ok(_) => return HttpResponse::Ok().finish(),
+                    Err(e) => {
+                        error!("save_file failed: {e:#}");
                         return HttpResponse::InternalServerError().finish();
                     }
-
-                    let mut perm = metadata.unwrap().permissions();
-                    perm.set_mode(0o750);
-
-                    match fs::set_permissions(&data_path, perm) {
-                        Ok(_) => HttpResponse::Ok().finish(),
-                        Err(e) => {
-                            error!("save_file failed: {e:#}");
-                            HttpResponse::InternalServerError().finish()
-                        }
-                    }
                 }
-                Err(e) => {
-                    error!("save_file failed: {e:#}");
-                    HttpResponse::InternalServerError().finish()
-                }
-            },
-            Err(e) => {
-                error!("save_file failed: {e:#}");
-                HttpResponse::InternalServerError().finish()
             }
         }
+
+        HttpResponse::InternalServerError().finish()
     }
 }
 
@@ -187,13 +175,14 @@ pub async fn load_update(mut body: web::Json<LoadUpdatePayload>) -> impl Respond
     }
 }
 
-pub async fn run_update(body: web::Json<RunUpdatePayload>) -> impl Responder {
-    debug!(
-        "run_update() called with validate_iothub_connection {}",
-        body.validate_iothub_connection.clone()
-    );
+pub async fn run_update() -> impl Responder {
+    debug!("run_update() called with validate_iothub_connection");
 
-    match post_with_json_body("/fwupdate/run/v1", Some(body)).await {
+    let run_update_payload = RunUpdatePayload {
+        validate_iothub_connection: false,
+    };
+
+    match post_with_json_body("/fwupdate/run/v1", Some(run_update_payload)).await {
         Ok(response) => response,
         Err(e) => {
             error!("run_update failed: {e:#}");
@@ -210,4 +199,39 @@ async fn clear_data_folder() -> Result<bool> {
     }
 
     Ok(true)
+}
+
+async fn persist_uploaded_file(
+    tmp_file: TempFile,
+    temp_path: String,
+    data_path: String,
+) -> Result<()> {
+    debug!("persist_uploaded_file() called");
+
+    match tmp_file.file.persist(&temp_path) {
+        Ok(_) => match fs::copy(temp_path, &data_path) {
+            Ok(_) => Ok(()),
+            Err(e) => anyhow::bail!("filed to save file to data. {e:#}"),
+        },
+        Err(e) => anyhow::bail!("failed to save temp file. {e:#}"),
+    }
+}
+
+async fn set_file_permission(file_path: String) -> Result<()> {
+    debug!("set_file_permission() called");
+
+    match fs::metadata(&file_path) {
+        Ok(metadata) => {
+            let mut perm = metadata.permissions();
+            perm.set_mode(0o750);
+
+            match fs::set_permissions(file_path, perm) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    anyhow::bail!("failed to set file permission. {e:#}")
+                }
+            }
+        }
+        Err(e) => anyhow::bail!("failed to get file metadata. {e:#}"),
+    }
 }
