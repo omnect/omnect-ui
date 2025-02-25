@@ -136,6 +136,7 @@ async fn main() {
                 "/token/refresh",
                 web::get().to(api::token).wrap(middleware::AuthMw),
             )
+            .route("/version", web::get().to(api::version))
             .route("/logout", web::post().to(api::logout))
             .service(Files::new(
                 "/static",

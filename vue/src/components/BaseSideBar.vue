@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-import { ref } from "vue"
+import { useFetch } from "@vueuse/core"
+import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 import { useDisplay } from "vuetify"
 
@@ -13,6 +14,18 @@ const router = useRouter()
 const routes = router.getRoutes()
 const sidebarRoutes = ref(routes.filter((route: any) => !!route.meta.text))
 const { lgAndUp } = useDisplay()
+
+const version = ref<string>()
+
+const { onFetchResponse: onGotResponse, execute: getVersion } = useFetch("/version", { immediate: false }).get()
+
+onMounted(async () => {
+	getVersion(false)
+})
+
+onGotResponse(async (res) => {
+	version.value = await res.text()
+})
 </script>
 
 <template>
@@ -26,8 +39,7 @@ const { lgAndUp } = useDisplay()
 		</v-list>
 		<template v-slot:append>
 			<div class="flex flex-col items-center mb-4">
-				<div class="text-center w-40 text-sm lowercase">(v.0.4.0)</div>
-
+				<div class="text-center w-40 text-sm lowercase">(v.{{ version }})</div>
 				<a :class="`text-white hover:underline-white`" class="decoration-underline"  href="https://www.conplement.de/en/impressum-legal-notice" target="_blank">Imprint</a>
 			</div>
 		</template>

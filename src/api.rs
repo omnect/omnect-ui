@@ -124,6 +124,10 @@ pub async fn logout(session: Session) -> impl Responder {
     HttpResponse::Ok()
 }
 
+pub async fn version() -> impl Responder {
+    HttpResponse::Ok().body(env!("CARGO_PKG_VERSION"))
+}
+
 pub async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>) -> impl Responder {
     debug!("save_file() called");
 
