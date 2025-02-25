@@ -121,13 +121,13 @@ pub async fn token(session: Session) -> impl Responder {
 pub async fn logout(session: Session) -> impl Responder {
     debug!("logout() called");
     session.purge();
-    return HttpResponse::Ok();
+    HttpResponse::Ok()
 }
 
 pub async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>) -> impl Responder {
     debug!("save_file() called");
 
-    if !form.file.file_name.is_some() {
+    if form.file.file_name.is_none() {
         HttpResponse::BadRequest().body("update file is missing")
     } else {
         let _ = clear_data_folder().await;
@@ -148,7 +148,7 @@ pub async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>)
                     perm.set_mode(0o750);
 
                     match fs::set_permissions(&data_path, perm) {
-                        Ok(_) => return HttpResponse::Ok().finish(),
+                        Ok(_) => HttpResponse::Ok().finish(),
                         Err(e) => {
                             error!("save_file failed: {e:#}");
                             HttpResponse::InternalServerError().finish()
