@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useFetch } from "@vueuse/core"
-import { ref, toRef } from "vue"
+import { toRef } from "vue"
 import { useOverlaySpinner } from "../composables/useOverlaySpinner"
 import { useSnackbar } from "../composables/useSnackbar"
 import router from "../plugins/router"
@@ -18,17 +18,14 @@ const props = defineProps<{
 defineEmits<(event: "reloadUpdateInfo") => void>()
 
 const updateManifest = toRef(props, "updateManifest")
-const runUpdatePayload = ref({ validate_iothub_connection: true })
 
 const {
 	onFetchError: onRunUpdateError,
 	error: runUpdateError,
 	statusCode: runUpdateStatusCode,
-	onFetchResponse: onRunUpdateSuccess,
 	execute: runUpdate,
-	isFetching: runUpdateFetching,
 	response
-} = useFetch("update/run", { immediate: false }).post(runUpdatePayload)
+} = useFetch("update/run", { immediate: false }).post()
 
 onRunUpdateError(async () => {
 	if (runUpdateStatusCode.value === 401) {
@@ -38,13 +35,16 @@ onRunUpdateError(async () => {
 	}
 })
 
-onRunUpdateSuccess(() => {
+const triggerUpdate = () => {
+	runUpdate(false)
 	overlaySpinnerState.title = "Installing update"
 	overlaySpinnerState.text = "Please have some patience, the update may take some time."
 	overlaySpinnerState.overlay = true
-})
+}
 
 const showError = (errorMsg: string) => {
+	overlaySpinnerState.overlay = false
+
 	snackbarState.msg = errorMsg
 	snackbarState.color = "error"
 	snackbarState.timeout = -1
@@ -69,5 +69,5 @@ const showError = (errorMsg: string) => {
 			<KeyValuePair title="Created">{{ updateManifest.createdDateTime ? new Date(updateManifest.createdDateTime).toLocaleString() : "" }}</KeyValuePair>
         </dl>
     </div>
-    <v-btn v-if="updateManifest" :loading="runUpdateFetching" class="mt-4" prepend-icon="mdi-update" variant="text" @click="runUpdate(false)">Install update</v-btn>
+    <v-btn v-if="updateManifest" class="mt-4" prepend-icon="mdi-update" variant="text" @click="triggerUpdate()">Install update</v-btn>
 </template>
