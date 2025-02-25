@@ -59,18 +59,26 @@ where
         let service = Rc::clone(&self.service);
 
         Box::pin(async move {
-            if let Some(token) = req.get_session().get::<String>("token").unwrap_or_default() {
-                match verify_token(token) {
-                    Ok(true) => {
-                        let res = service.call(req).await?;
-                        Ok(res.map_into_left_body())
-                    }
-                    Ok(false) => Ok(unauthorized_error(req).map_into_right_body()),
+            let token = match req.get_session().get::<String>("token") {
+                Ok(token) => token.unwrap_or_default(),
+                Err(e) => {
+                    error!("failed to get session. {e:#}");
+                    String::new()
+                }
+            };
+
+            if !token.is_empty()
+                && match verify_token(token) {
+                    Ok(true) => true,
+                    Ok(false) => false,
                     Err(e) => {
                         error!("user not authorized {}", e);
-                        Ok(unauthorized_error(req).map_into_right_body())
+                        false
                     }
                 }
+            {
+                let res = service.call(req).await?;
+                Ok(res.map_into_left_body())
             } else {
                 let mut payload = req.take_payload().take();
 
