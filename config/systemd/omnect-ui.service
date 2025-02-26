@@ -13,10 +13,10 @@ EnvironmentFile=-/etc/omnect/omnect-ui.env
 ExecStart=/bin/bash -c 'FULL_TAG=$(docker load < /mnt/factory/oci_images/omnect-ui.tar.gz | grep "Loaded image: " | cut -d ':' -f2-) ; \
                         docker rm -f omnect-ui || true ; \
                         docker run -d --restart always --name omnect-ui \
-                            --user $(id -u omnect_device_socket):$(id -g omnect_device_socket) \
+                            --user $(id -u omnect_device_service_client):$(id -g omnect_device_service_client) \
                             -v /run/omnect-device-service:/socket \
                             -v /mnt/cert/priv:/cert \
-                            -v /var/lib/omnect-ui:/data \
+                            -v ${UPDATE_PATH}:/data \
                             -p ${UI_PORT}:${UI_PORT} \
                             -p ${CENTRIFUGO_HTTP_SERVER_PORT}:${CENTRIFUGO_HTTP_SERVER_PORT} \
                             -e UI_PORT=${UI_PORT} \
