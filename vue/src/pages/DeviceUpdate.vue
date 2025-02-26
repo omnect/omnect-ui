@@ -3,9 +3,14 @@ import { useFetch } from "@vueuse/core"
 import { ref } from "vue"
 import UpdateFileUpload from "../components/UpdateFileUpload.vue"
 import UpdateInfo from "../components/UpdateInfo.vue"
+import { useCentrifuge } from "../composables/useCentrifugo"
 import { useSnackbar } from "../composables/useSnackbar"
+import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
 import router from "../plugins/router"
+import type { SystemInfo } from "../types"
 
+const { history } = useCentrifuge()
+const currentVersion = ref<string>()
 const loadUpdatePayload = ref({
 	update_file_path: ""
 })
@@ -42,6 +47,10 @@ const loadUpdateData = (filename: string) => {
 	}
 	loadUpdate(false)
 }
+
+history((data: SystemInfo) => {
+	currentVersion.value = data.os.version
+}, CentrifugeSubscriptionType.SystemInfo)
 </script>
 
 <template>
@@ -51,7 +60,7 @@ const loadUpdateData = (filename: string) => {
 				<UpdateFileUpload @file-uploaded="loadUpdateData" />
 			</v-col>
 			<v-col sm="12" md="6">
-				<UpdateInfo :update-manifest="data" :load-update-fetching="loadUpdateFetching" @reload-update-info="loadUpdate(false)" />
+				<UpdateInfo :update-manifest="data" :load-update-fetching="loadUpdateFetching" :current-version="currentVersion" @reload-update-info="loadUpdate(false)" />
 			</v-col>
 		</v-row>
     </v-sheet>
