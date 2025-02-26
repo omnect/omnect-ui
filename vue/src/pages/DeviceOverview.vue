@@ -20,7 +20,7 @@ const updateStatus: Ref<string> = ref("")
 const deviceInfo: Ref<Map<string, string | number>> = computed(
 	() =>
 		new Map([
-			["Online", String(online.value)],
+			["omnect Cloud Connection", online.value ? "connected" : "disconnected"],
 			["OS name", systemInfo.value?.os.name ?? "n/a"],
 			["Boot time", systemInfo.value?.boot_time ? new Date(systemInfo.value?.boot_time).toLocaleString() : "n/a"],
 			["OS version", String(systemInfo.value?.os.version) ?? "n/a"],
