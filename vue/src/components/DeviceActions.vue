@@ -16,6 +16,12 @@ const factoryResetDialog = ref(false)
 const rebootDialog = ref(false)
 const factoryResetKeys: Ref<FactoryResetKeys | undefined> = ref(undefined)
 
+const factoryResetPayload = computed(() => {
+	return {
+		preserve: selectedFactoryResetKeys.value
+	}
+})
+
 const emit = defineEmits<{
 	(event: "rebootInProgress"): void
 	(event: "factoryResetInProgress"): void
@@ -37,7 +43,7 @@ const {
 	onFetchResponse: onResetSuccess,
 	execute: reset,
 	isFetching: resetFetching
-} = useFetch("factory-reset", { immediate: false }).post(JSON.stringify({ preserve: selectedFactoryResetKeys.value }))
+} = useFetch("factory-reset", { immediate: false }).post(factoryResetPayload)
 
 const loading = computed(() => rebootFetching.value || resetFetching.value)
 
