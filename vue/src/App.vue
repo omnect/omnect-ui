@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import axios from "axios"
 import { type Ref, onBeforeMount, ref } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useDisplay } from "vuetify"
@@ -9,6 +10,8 @@ import UserMenu from "./components/UserMenu.vue"
 import { useCentrifuge } from "./composables/useCentrifugo"
 import { useOverlaySpinner } from "./composables/useOverlaySpinner"
 import { useSnackbar } from "./composables/useSnackbar"
+
+axios.defaults.validateStatus = (_) => true
 
 const { snackbarState } = useSnackbar()
 const { overlaySpinnerState } = useOverlaySpinner()
@@ -59,7 +62,8 @@ onBeforeMount(async () => {
         </div>
       </template>
     </v-app-bar>
-    <BaseSideBar v-if="route.path !== '/login'" :showSideBar="showSideBar" @drawerVisibiltyChanged="updateSidebarVisibility"></BaseSideBar>
+    <BaseSideBar v-if="route.path !== '/login'" :showSideBar="showSideBar"
+      @drawerVisibiltyChanged="updateSidebarVisibility"></BaseSideBar>
     <v-main>
       <RouterView></RouterView>
       <v-snackbar v-model="snackbarState.snackbar" :color="snackbarState.color" :timeout="snackbarState.timeout">
@@ -68,7 +72,8 @@ onBeforeMount(async () => {
           <v-btn icon=" mdi-close" @click="snackbarState.snackbar = false"></v-btn>
         </template>
       </v-snackbar>
-      <OverlaySpinner :overlay="overlaySpinnerState.overlay" :title="overlaySpinnerState.title" :text="overlaySpinnerState.text" />
+      <OverlaySpinner :overlay="overlaySpinnerState.overlay" :title="overlaySpinnerState.title"
+        :text="overlaySpinnerState.text" />
     </v-main>
   </v-app>
 </template>

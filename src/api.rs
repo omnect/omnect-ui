@@ -25,7 +25,7 @@ pub struct LoadUpdatePayload {
     update_file_path: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct RunUpdatePayload {
     validate_iothub_connection: bool,
 }
@@ -142,17 +142,15 @@ pub async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>)
             let tmp_path = format!("/tmp/{filename}");
             let data_path = format!("/data/{filename}");
 
-            if persist_uploaded_file(form.file, tmp_path, data_path.clone())
-                .await
-                .is_ok()
-            {
-                match set_file_permission(data_path).await {
+            match persist_uploaded_file(form.file, tmp_path, data_path.clone()).await {
+                Ok(_) => match set_file_permission(data_path).await {
                     Ok(_) => return HttpResponse::Ok().finish(),
                     Err(e) => {
                         error!("save_file failed: {e:#}");
                         return HttpResponse::InternalServerError().body(format!("{e}"));
                     }
-                }
+                },
+                Err(e) => return HttpResponse::InternalServerError().body(format!("{e}")),
             }
         }
 
@@ -179,14 +177,13 @@ pub async fn load_update(mut body: web::Json<LoadUpdatePayload>) -> impl Respond
     }
 }
 
-pub async fn run_update() -> impl Responder {
-    debug!("run_update() called with validate_iothub_connection");
+pub async fn run_update(body: web::Json<RunUpdatePayload>) -> impl Responder {
+    debug!(
+        "run_update() called with validate_iothub_connection: {}",
+        body.validate_iothub_connection.clone()
+    );
 
-    let run_update_payload = RunUpdatePayload {
-        validate_iothub_connection: false,
-    };
-
-    match post_with_json_body("/fwupdate/run/v1", Some(run_update_payload)).await {
+    match post_with_json_body("/fwupdate/run/v1", Some(body)).await {
         Ok(response) => response,
         Err(e) => {
             error!("run_update failed: {e:#}");
@@ -215,9 +212,15 @@ async fn persist_uploaded_file(
     match tmp_file.file.persist(&temp_path) {
         Ok(_) => match fs::copy(temp_path, &data_path) {
             Ok(_) => Ok(()),
-            Err(e) => anyhow::bail!("filed to save file to data. {e:#}"),
+            Err(e) => {
+                error!("failed to copy file {e:#}");
+                anyhow::bail!("failed to save file to data directory. {e:#}")
+            }
         },
-        Err(e) => anyhow::bail!("failed to save temp file. {e:#}"),
+        Err(e) => {
+            error!("failed to persist file {e:#}");
+            anyhow::bail!("failed to save temp file. {e:#}")
+        }
     }
 }
 

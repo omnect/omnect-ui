@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import axios from "axios"
+import axios, { AxiosError } from "axios"
 import { ref, watch } from "vue"
 import { useSnackbar } from "../composables/useSnackbar"
 import router from "../plugins/router"
@@ -32,19 +32,23 @@ const uploadFile = async () => {
 
 	uploadFetching.value = true
 
-	const res = await axios.post("update/file", formData, {
-		onUploadProgress({ progress }) {
-			progressPercentage.value = progress ? Math.ceil(progress * 100) : 0
-		},
-		responseType: "text"
-	})
+	try {
+		const res = await axios.post("update/file", formData, {
+			onUploadProgress({ progress }) {
+				progressPercentage.value = progress ? Math.ceil(progress * 100) : 0
+			},
+			responseType: "text"
+		})
 
-	if (res.status < 300) {
-		emit("fileUploaded", updateFile.value.name)
-	} else if (res.status === 401) {
-		router.push("/login")
-	} else {
-		showError(`Uploading file failed: ${res.data}`)
+		if (res.status < 300) {
+			emit("fileUploaded", updateFile.value.name)
+		} else if (res.status === 401) {
+			router.push("/login")
+		} else {
+			showError(`Uploading file failed: ${res.data}`)
+		}
+	} catch (err) {
+		showError(`Uploading file failed: ${err as AxiosError}`)
 	}
 
 	formData.delete("file")

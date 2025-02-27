@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useFetch } from "@vueuse/core"
-import { toRef } from "vue"
+import { ref, toRef } from "vue"
 import { useOverlaySpinner } from "../composables/useOverlaySpinner"
 import { useSnackbar } from "../composables/useSnackbar"
 import router from "../plugins/router"
@@ -19,6 +19,7 @@ const props = defineProps<{
 defineEmits<(event: "reloadUpdateInfo") => void>()
 
 const updateManifest = toRef(props, "updateManifest")
+const runUpdatePayload = ref<{ validate_iothub_connection: boolean }>({ validate_iothub_connection: false })
 
 const {
 	onFetchError: onRunUpdateError,
@@ -26,7 +27,7 @@ const {
 	statusCode: runUpdateStatusCode,
 	execute: runUpdate,
 	response
-} = useFetch("update/run", { immediate: false }).post()
+} = useFetch("update/run", { immediate: false }).post(runUpdatePayload)
 
 onRunUpdateError(async () => {
 	if (runUpdateStatusCode.value === 401) {
@@ -51,6 +52,13 @@ const showError = (errorMsg: string) => {
 	snackbarState.timeout = -1
 	snackbarState.snackbar = true
 }
+
+const toggleEnforceConnect = (v: boolean | null) => {
+	if (!v) return
+	runUpdatePayload.value = {
+		validate_iothub_connection: v
+	}
+}
 </script>
 
 <template>
@@ -72,6 +80,12 @@ const showError = (errorMsg: string) => {
 				Date(updateManifest.createdDateTime).toLocaleString() : "" }}</KeyValuePair>
 		</dl>
 	</div>
-	<v-btn v-if="updateManifest" class="mt-4" prepend-icon="mdi-update" variant="text" @click="triggerUpdate()">Install
-		update</v-btn>
+	<div v-if="updateManifest" class="flex flex-col mt-4 items-start">
+		<v-checkbox v-bind="props" v-model:model-value="runUpdatePayload.validate_iothub_connection"
+			@update:model-value="toggleEnforceConnect" label="Enforce omnect cloud connection"
+			hint="If checkbox is enabled, an update will be considered successful only if afterward the device is able to establish a connection to the omnect cloud (Azure IoT Hub)."
+			persistent-hint density="compact"></v-checkbox>
+		<v-btn class="mt-4" prepend-icon="mdi-update" variant="text" @click="triggerUpdate()">Install
+			update</v-btn>
+	</div>
 </template>
