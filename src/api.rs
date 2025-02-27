@@ -68,7 +68,7 @@ pub async fn factory_reset(body: web::Json<FactoryResetInput>) -> impl Responder
         Ok(response) => response,
         Err(e) => {
             error!("factory_reset failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(format!("{e}"))
         }
     }
 }
@@ -80,7 +80,7 @@ pub async fn reboot() -> impl Responder {
         Ok(response) => response,
         Err(e) => {
             error!("reboot failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(format!("{e}"))
         }
     }
 }
@@ -92,7 +92,7 @@ pub async fn reload_network() -> impl Responder {
         Ok(response) => response,
         Err(e) => {
             error!("reload-network failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(format!("{e}"))
         }
     }
 }
@@ -106,7 +106,7 @@ pub async fn token(session: Session) -> impl Responder {
         if let Ok(token) = key.authenticate(claims) {
             match session.insert("token", token.clone()) {
                 Ok(_) => return HttpResponse::Ok().body(token),
-                Err(_) => return HttpResponse::InternalServerError().body("Error."),
+                Err(e) => return HttpResponse::InternalServerError().body(format!("{e}")),
             }
         } else {
             error!("token: cannot create token");
@@ -150,13 +150,13 @@ pub async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>)
                     Ok(_) => return HttpResponse::Ok().finish(),
                     Err(e) => {
                         error!("save_file failed: {e:#}");
-                        return HttpResponse::InternalServerError().finish();
+                        return HttpResponse::InternalServerError().body(format!("{e}"));
                     }
                 }
             }
         }
 
-        HttpResponse::InternalServerError().finish()
+        HttpResponse::InternalServerError().body("filename is missing")
     }
 }
 
@@ -174,7 +174,7 @@ pub async fn load_update(mut body: web::Json<LoadUpdatePayload>) -> impl Respond
         Ok(response) => response,
         Err(e) => {
             error!("load_update failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(format!("{e}"))
         }
     }
 }
@@ -190,7 +190,7 @@ pub async fn run_update() -> impl Responder {
         Ok(response) => response,
         Err(e) => {
             error!("run_update failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(format!("{e}"))
         }
     }
 }
