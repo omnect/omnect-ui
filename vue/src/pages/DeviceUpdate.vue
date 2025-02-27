@@ -54,14 +54,15 @@ history((data: SystemInfo) => {
 </script>
 
 <template>
-    <v-sheet :border="true" rounded class="m-20">
+	<v-sheet :border="true" rounded class="m-20">
 		<v-row class="m-8">
 			<v-col sm="12" md="6">
 				<UpdateFileUpload @file-uploaded="loadUpdateData" />
 			</v-col>
 			<v-col sm="12" md="6">
-				<UpdateInfo :update-manifest="data" :load-update-fetching="loadUpdateFetching" :current-version="currentVersion" @reload-update-info="loadUpdate(false)" />
+				<UpdateInfo :update-manifest="data" :load-update-fetching="loadUpdateFetching"
+					:current-version="currentVersion" @reload-update-info="loadUpdate(false)" />
 			</v-col>
 		</v-row>
-    </v-sheet>
+	</v-sheet>
 </template>

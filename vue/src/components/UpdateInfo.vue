@@ -54,22 +54,24 @@ const showError = (errorMsg: string) => {
 </script>
 
 <template>
-    <div class="flex flex-col gap-y-8">
-        <div class="flex border-b gap-x-4 items-center">
-            <div class="text-h4 text-secondary">Update Info</div>
-                <v-btn prepend-icon="mdi-reload" :disabled="!updateManifest" :loading="loadUpdateFetching" @click="$emit('reloadUpdateInfo')"
-                variant="text">Load update Info</v-btn>
-        </div>
-        <dl v-if="updateManifest" class="grid grid-cols-[1fr_3fr] gap-x-64 gap-y-8">
-            <KeyValuePair title="Provider">{{ updateManifest.updateId.provider }}</KeyValuePair>
-            <KeyValuePair title="Variant">{{ updateManifest.updateId.name }}</KeyValuePair>
-            <KeyValuePair title="Current version">{{ props.currentVersion }}</KeyValuePair>
+	<div class="flex flex-col gap-y-8">
+		<div class="flex border-b gap-x-4 items-center">
+			<div class="text-h4 text-secondary">Update Info</div>
+			<v-btn prepend-icon="mdi-reload" :disabled="!updateManifest" :loading="loadUpdateFetching"
+				@click="$emit('reloadUpdateInfo')" variant="text">Load update Info</v-btn>
+		</div>
+		<dl v-if="updateManifest" class="grid grid-cols-[1fr_3fr] gap-x-64 gap-y-8">
+			<KeyValuePair title="Provider">{{ updateManifest.updateId.provider }}</KeyValuePair>
+			<KeyValuePair title="Variant">{{ updateManifest.updateId.name }}</KeyValuePair>
+			<KeyValuePair title="Current version">{{ props.currentVersion }}</KeyValuePair>
 			<KeyValuePair title="Update version">{{ updateManifest.updateId.version }}</KeyValuePair>
 			<KeyValuePair title="Manufacturer">{{ updateManifest.compatibility[0].manufacturer }}</KeyValuePair>
 			<KeyValuePair title="Model">{{ updateManifest.compatibility[0].model }}</KeyValuePair>
 			<KeyValuePair title="Compatibility Id">{{ updateManifest.compatibility[0].compatibilityid }}</KeyValuePair>
-			<KeyValuePair title="Created">{{ updateManifest.createdDateTime ? new Date(updateManifest.createdDateTime).toLocaleString() : "" }}</KeyValuePair>
-        </dl>
-    </div>
-    <v-btn v-if="updateManifest" class="mt-4" prepend-icon="mdi-update" variant="text" @click="triggerUpdate()">Install update</v-btn>
+			<KeyValuePair title="Created">{{ updateManifest.createdDateTime ? new
+				Date(updateManifest.createdDateTime).toLocaleString() : "" }}</KeyValuePair>
+		</dl>
+	</div>
+	<v-btn v-if="updateManifest" class="mt-4" prepend-icon="mdi-update" variant="text" @click="triggerUpdate()">Install
+		update</v-btn>
 </template>
