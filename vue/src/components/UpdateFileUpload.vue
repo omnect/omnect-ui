@@ -4,7 +4,7 @@ import { ref, watch } from "vue"
 import { useSnackbar } from "../composables/useSnackbar"
 import router from "../plugins/router"
 
-const { snackbarState } = useSnackbar()
+const { showError } = useSnackbar()
 
 const emit = defineEmits<(e: "fileUploaded", filename: string) => void>()
 
@@ -53,13 +53,6 @@ const uploadFile = async () => {
 
 	formData.delete("file")
 	uploadFetching.value = false
-}
-
-const showError = (errorMsg: string) => {
-	snackbarState.msg = errorMsg
-	snackbarState.color = "error"
-	snackbarState.timeout = -1
-	snackbarState.snackbar = true
 }
 </script>
 

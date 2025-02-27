@@ -38,18 +38,10 @@ RUN cargo new /work/omnect-ui
 COPY Cargo.lock ./omnect-ui/Cargo.lock
 COPY Cargo.toml ./omnect-ui/Cargo.toml
 
-#RUN cd omnect-ui && cargo build --release --locked --target-dir ./build
-
 RUN --mount=type=cache,target=/usr/local/cargo/registry cd omnect-ui && cargo build --release --target-dir ./build
 
 COPY src/* ./omnect-ui/src/
-RUN --mount=type=cache,target=/usr/local/cargo/registry <<EOF
-  set -e
-  # update timestamps to force a new build
-  touch /work/omnect-ui/src/main.rs
-  cd omnect-ui/
-  cargo build --release --target-dir ./build
-EOF
+RUN --mount=type=cache,target=/usr/local/cargo/registry cd omnect-ui && cargo build --release --target-dir ./build
 
 SHELL ["/bin/bash", "-c"]
 RUN <<EOT

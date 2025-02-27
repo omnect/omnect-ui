@@ -12,7 +12,7 @@ pub async fn post_with_json_body(path: &str, body: impl Serialize) -> Result<Htt
         Ok(r) => r,
         Err(e) => {
             error!("failed to serialize data error: {e:#}");
-            return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish());
+            return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(format!("{e}")));
         }
     };
 

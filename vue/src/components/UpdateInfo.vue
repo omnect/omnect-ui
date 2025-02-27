@@ -7,8 +7,8 @@ import router from "../plugins/router"
 import type { UpdateManifest } from "../types/update-manifest"
 import KeyValuePair from "./ui-components/KeyValuePair.vue"
 
-const { snackbarState } = useSnackbar()
-const { overlaySpinnerState } = useOverlaySpinner()
+const { showError: snackbarShowError } = useSnackbar()
+const { overlaySpinnerState, reset: resetOverlay } = useOverlaySpinner()
 
 const props = defineProps<{
 	updateManifest: UpdateManifest | undefined
@@ -42,15 +42,12 @@ const triggerUpdate = () => {
 	overlaySpinnerState.title = "Installing update"
 	overlaySpinnerState.text = "Please have some patience, the update may take some time."
 	overlaySpinnerState.overlay = true
+	overlaySpinnerState.isUpdateRunning = true
 }
 
 const showError = (errorMsg: string) => {
-	overlaySpinnerState.overlay = false
-
-	snackbarState.msg = errorMsg
-	snackbarState.color = "error"
-	snackbarState.timeout = -1
-	snackbarState.snackbar = true
+	resetOverlay()
+	snackbarShowError(errorMsg)
 }
 
 const toggleEnforceConnect = (v: boolean | null) => {

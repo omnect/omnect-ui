@@ -9,7 +9,7 @@ import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-typ
 import type { FactoryResetKeys } from "../types"
 
 const { subscribe, history } = useCentrifuge()
-const { snackbarState } = useSnackbar()
+const { showError } = useSnackbar()
 const router = useRouter()
 const selectedFactoryResetKeys: Ref<string[]> = ref([])
 const factoryResetDialog = ref(false)
@@ -72,13 +72,6 @@ onResetError(() => {
 		showError(`Resetting device failed: ${JSON.stringify(resetError.value)}`)
 	}
 })
-
-const showError = (errorMsg: string) => {
-	snackbarState.msg = errorMsg
-	snackbarState.color = "error"
-	snackbarState.timeout = -1
-	snackbarState.snackbar = true
-}
 
 const updateFactoryResetKeys = (data: FactoryResetKeys) => {
 	factoryResetKeys.value = data

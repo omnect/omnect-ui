@@ -14,7 +14,7 @@ import { useSnackbar } from "./composables/useSnackbar"
 axios.defaults.validateStatus = (_) => true
 
 const { snackbarState } = useSnackbar()
-const { overlaySpinnerState } = useOverlaySpinner()
+const { overlaySpinnerState, reset } = useOverlaySpinner()
 const { initializeCentrifuge, onConnected } = useCentrifuge()
 const { lgAndUp } = useDisplay()
 const router = useRouter()
@@ -22,9 +22,9 @@ const route = useRoute()
 const showSideBar: Ref<boolean> = ref(lgAndUp.value)
 
 onConnected(() => {
-	overlaySpinnerState.overlay = false
-	overlaySpinnerState.title = ""
-	overlaySpinnerState.text = ""
+	if (!overlaySpinnerState.isUpdateRunning) {
+		reset()
+	}
 })
 
 const toggleSideBar = () => {

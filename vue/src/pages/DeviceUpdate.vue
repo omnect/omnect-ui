@@ -1,21 +1,24 @@
 <script setup lang="ts">
 import { useFetch } from "@vueuse/core"
-import { ref } from "vue"
+import { onMounted, ref } from "vue"
 import UpdateFileUpload from "../components/UpdateFileUpload.vue"
 import UpdateInfo from "../components/UpdateInfo.vue"
 import { useCentrifuge } from "../composables/useCentrifugo"
+import { useOverlaySpinner } from "../composables/useOverlaySpinner"
 import { useSnackbar } from "../composables/useSnackbar"
 import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
 import router from "../plugins/router"
 import type { SystemInfo } from "../types"
+import type { UpdateValidationStatus } from "../types/update-validation-status"
 
-const { history } = useCentrifuge()
+const { overlaySpinnerState, reset } = useOverlaySpinner()
+const { showError } = useSnackbar()
+const { history, subscribe } = useCentrifuge()
 const currentVersion = ref<string>()
 const loadUpdatePayload = ref({
 	update_file_path: ""
 })
 
-const { snackbarState } = useSnackbar()
 const {
 	onFetchError: onLoadUpdateError,
 	error: loadUpdateError,
@@ -34,13 +37,6 @@ onLoadUpdateError(async () => {
 	}
 })
 
-const showError = (errorMsg: string) => {
-	snackbarState.msg = errorMsg
-	snackbarState.color = "error"
-	snackbarState.timeout = -1
-	snackbarState.snackbar = true
-}
-
 const loadUpdateData = (filename: string) => {
 	loadUpdatePayload.value = {
 		update_file_path: filename
@@ -48,9 +44,16 @@ const loadUpdateData = (filename: string) => {
 	loadUpdate(false)
 }
 
-history((data: SystemInfo) => {
-	currentVersion.value = data.os.version
-}, CentrifugeSubscriptionType.SystemInfo)
+onMounted(() => {
+	history((data: SystemInfo) => {
+		currentVersion.value = data.os.version
+	}, CentrifugeSubscriptionType.SystemInfo)
+	subscribe((data: UpdateValidationStatus) => {
+		if (overlaySpinnerState.isUpdateRunning && (data.status === "Succeeded" || data.status === "Recovered")) {
+			reset()
+		}
+	}, CentrifugeSubscriptionType.UpdateStatus)
+})
 </script>
 
 <template>

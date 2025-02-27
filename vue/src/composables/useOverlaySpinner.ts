@@ -5,8 +5,16 @@ export const useOverlaySpinner = createGlobalState(() => {
 	const overlaySpinnerState = reactive({
 		overlay: false,
 		title: "",
-		text: ""
+		text: "",
+		isUpdateRunning: false
 	})
 
-	return { overlaySpinnerState }
+	const reset = () => {
+		overlaySpinnerState.overlay = false
+		overlaySpinnerState.text = ""
+		overlaySpinnerState.title = ""
+		overlaySpinnerState.isUpdateRunning = false
+	}
+
+	return { overlaySpinnerState, reset }
 })
