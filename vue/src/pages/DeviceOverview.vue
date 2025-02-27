@@ -7,6 +7,7 @@ import { useCentrifuge } from "../composables/useCentrifugo"
 import { useOverlaySpinner } from "../composables/useOverlaySpinner"
 import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
 import type { FactoryResetStatus, OnlineStatus, SystemInfo, Timeouts } from "../types"
+import type { UpdateValidationStatus } from "../types/update-validation-status"
 
 const { subscribe, history } = useCentrifuge()
 const { overlaySpinnerState } = useOverlaySpinner()
@@ -59,8 +60,8 @@ const updateFactoryResetStatus = (data: FactoryResetStatus) => {
 	factoryResetStatus.value = data.factory_reset_status
 }
 
-const updateUpdateStatus = (data: string) => {
-	updateStatus.value = data
+const updateUpdateStatus = (data: UpdateValidationStatus) => {
+	updateStatus.value = data.status
 }
 
 onMounted(() => {
