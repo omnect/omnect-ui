@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import axios from "axios"
-import { ref } from "vue"
+import { ref, watch } from "vue"
 import { useSnackbar } from "../composables/useSnackbar"
 import router from "../plugins/router"
 
@@ -11,6 +11,10 @@ const emit = defineEmits<(e: "fileUploaded", filename: string) => void>()
 const updateFile = ref<File>()
 const progressPercentage = ref<number | undefined>(0)
 const uploadFetching = ref(false)
+
+watch(updateFile, () => {
+	progressPercentage.value = 0
+})
 
 const uploadFile = async () => {
 	if (!updateFile.value) {
@@ -30,7 +34,7 @@ const uploadFile = async () => {
 
 	const res = await axios.post("update/file", formData, {
 		onUploadProgress({ progress }) {
-			progressPercentage.value = progress ? Math.round(progress * 100) : 0
+			progressPercentage.value = progress ? Math.ceil(progress * 100) : 0
 		},
 		responseType: "text"
 	})
@@ -43,7 +47,6 @@ const uploadFile = async () => {
 		showError(`Uploading file failed: ${res.data}`)
 	}
 
-	progressPercentage.value = 0
 	formData.delete("file")
 	uploadFetching.value = false
 }
@@ -61,7 +64,7 @@ const showError = (errorMsg: string) => {
 		<v-file-upload icon="mdi-file-upload" v-model="updateFile" clearable density="default"
 			:disabled="uploadFetching">
 			<template #item="{ file }">
-				<v-file-upload-item>
+				<v-file-upload-item @click:remove="updateFile = undefined">
 					<template #title>
 						<div class="flex justify-between">
 							<div>{{ file.name }}</div>
@@ -70,13 +73,14 @@ const showError = (errorMsg: string) => {
 					</template>
 					<template #subtitle>
 						<v-progress-linear v-if="uploadFetching || progressPercentage === 100" class="mt-1"
-							:model-value="progressPercentage" striped color="secondary"
+							:model-value="progressPercentage" :striped="uploadFetching"
+							:color="progressPercentage === 100 ? 'success' : 'secondary'"
 							:height="10"></v-progress-linear>
 					</template>
 				</v-file-upload-item>
 			</template>
 		</v-file-upload>
-		<v-btn type="submit" prepend-icon="mdi-file-upload-outline" variant="text" :loading="uploadFetching"
-			:disabled="!updateFile" class="mt-4">Upload</v-btn>
+		<v-btn type="submit" prepend-icon="mdi-file-upload-outline" variant="text"
+			:disabled="!updateFile || uploadFetching" class="mt-4">Upload</v-btn>
 	</v-form>
 </template>
