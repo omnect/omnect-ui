@@ -10,42 +10,54 @@ import UserMenu from "./components/UserMenu.vue"
 import { useCentrifuge } from "./composables/useCentrifugo"
 import { useOverlaySpinner } from "./composables/useOverlaySpinner"
 import { useSnackbar } from "./composables/useSnackbar"
+import { CentrifugeSubscriptionType } from "./enums/centrifuge-subscription-type.enum"
+import type { UpdateValidationStatus } from "./types/update-validation-status"
 
 axios.defaults.validateStatus = (_) => true
 
 const { snackbarState } = useSnackbar()
 const { overlaySpinnerState, reset } = useOverlaySpinner()
-const { initializeCentrifuge, onConnected } = useCentrifuge()
+const { initializeCentrifuge, onConnected, history, subscribe } = useCentrifuge()
 const { lgAndUp } = useDisplay()
 const router = useRouter()
 const route = useRoute()
 const showSideBar: Ref<boolean> = ref(lgAndUp.value)
 
 onConnected(() => {
-	if (!overlaySpinnerState.isUpdateRunning) {
-		reset()
-	}
+  if (!overlaySpinnerState.isUpdateRunning) {
+    reset()
+    return
+  }
+
+  history(checkUpdateState, CentrifugeSubscriptionType.UpdateStatus)
+  subscribe(checkUpdateState, CentrifugeSubscriptionType.UpdateStatus)
 })
 
+const checkUpdateState = (data: UpdateValidationStatus) => {
+  if (overlaySpinnerState.isUpdateRunning && (data.status === "Succeeded" || data.status === "Recovered")) {
+    reset()
+  }
+}
+
 const toggleSideBar = () => {
-	showSideBar.value = !showSideBar.value
+  showSideBar.value = !showSideBar.value
 }
 
 const updateSidebarVisibility = (visible: boolean) => {
-	showSideBar.value = visible
+  showSideBar.value = visible
 }
 
 onBeforeMount(async () => {
-	try {
-		const res = await fetch("token/refresh")
-		if (!res.ok) {
-			router.push("/login")
-		} else {
-			initializeCentrifuge()
-		}
-	} catch {
-		router.push("/login")
-	}
+  try {
+    const res = await fetch("token/refresh")
+    if (!res.ok) {
+      router.push("/login")
+    } else {
+      initializeCentrifuge()
+    }
+  } catch {
+    router.push("/login")
+  }
 })
 </script>
 

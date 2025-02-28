@@ -4,16 +4,13 @@ import { onMounted, ref } from "vue"
 import UpdateFileUpload from "../components/UpdateFileUpload.vue"
 import UpdateInfo from "../components/UpdateInfo.vue"
 import { useCentrifuge } from "../composables/useCentrifugo"
-import { useOverlaySpinner } from "../composables/useOverlaySpinner"
 import { useSnackbar } from "../composables/useSnackbar"
 import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
 import router from "../plugins/router"
 import type { SystemInfo } from "../types"
-import type { UpdateValidationStatus } from "../types/update-validation-status"
 
-const { overlaySpinnerState, reset } = useOverlaySpinner()
 const { showError } = useSnackbar()
-const { history, subscribe } = useCentrifuge()
+const { history } = useCentrifuge()
 const currentVersion = ref<string>()
 const loadUpdatePayload = ref({
 	update_file_path: ""
@@ -48,11 +45,6 @@ onMounted(() => {
 	history((data: SystemInfo) => {
 		currentVersion.value = data.os.version
 	}, CentrifugeSubscriptionType.SystemInfo)
-	subscribe((data: UpdateValidationStatus) => {
-		if (overlaySpinnerState.isUpdateRunning && (data.status === "Succeeded" || data.status === "Recovered")) {
-			reset()
-		}
-	}, CentrifugeSubscriptionType.UpdateStatus)
 })
 </script>
 
