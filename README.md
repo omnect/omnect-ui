@@ -39,7 +39,6 @@ omnect-cli file copy-to-image \
 	-f publish_endpoints.json,factory:/etc/omnect/publish_endpoints.json \
 	-f omnect-ui.service,factory:/etc/systemd/system/omnect-ui.service \
 	-f create-fs-links.txt,factory:/etc/omnect/create-fs-links.txt \
-	-f omnect-ui.tmpfilesd,rootA:/usr/lib/tmpfiles.d/omnect-ui.conf \
 	-i my-omnect-os-image.wic
 
 # copy certificates
