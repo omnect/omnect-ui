@@ -7,7 +7,8 @@ const props = defineProps<{
 </script>
 
 <template>
-	<v-overlay :persistent="true" :model-value="props.overlay" class="align-center justify-center">
+	<v-overlay :persistent="true" :model-value="props.overlay" :no-click-animation="true"
+		class="align-center justify-center">
 		<div id="overlay" class="flex flex-col items-center">
 			<v-sheet class="flex flex-col gap-y-8 items-center p-8" :rounded="'lg'">
 				<div class="text-h4 text-center">{{ props.title }}</div>

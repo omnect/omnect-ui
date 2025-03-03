@@ -1,7 +1,10 @@
 import { createGlobalState } from "@vueuse/core"
 import { reactive } from "vue"
+import { useEventHook } from "./useEventHook"
 
 export const useOverlaySpinner = createGlobalState(() => {
+	const updateDone = useEventHook()
+
 	const overlaySpinnerState = reactive({
 		overlay: false,
 		title: "",
@@ -16,5 +19,5 @@ export const useOverlaySpinner = createGlobalState(() => {
 		overlaySpinnerState.isUpdateRunning = false
 	}
 
-	return { overlaySpinnerState, reset }
+	return { overlaySpinnerState, reset, updateDone }
 })

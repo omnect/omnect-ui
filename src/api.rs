@@ -164,7 +164,7 @@ pub async fn load_update(mut body: web::Json<LoadUpdatePayload>) -> impl Respond
         body.update_file_path.clone()
     );
 
-    let update_os_path = std::env::var("DATA_DIR_PATH").expect("DATA_DIR_PATH missing");
+    let update_os_path = std::env::var("DATA_DIR_PATH").unwrap_or("/var/lib/omnect-ui".to_string());
 
     body.update_file_path = format!("{update_os_path}/{}", body.update_file_path);
 

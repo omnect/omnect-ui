@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import axios, { AxiosError } from "axios"
-import { ref, watch } from "vue"
+import { onMounted, ref, watch } from "vue"
+import { useOverlaySpinner } from "../composables/useOverlaySpinner"
 import { useSnackbar } from "../composables/useSnackbar"
 import router from "../plugins/router"
 
 const { showError } = useSnackbar()
-
+const { updateDone } = useOverlaySpinner()
 const emit = defineEmits<(e: "fileUploaded", filename: string) => void>()
 
 const updateFile = ref<File>()
@@ -54,6 +55,12 @@ const uploadFile = async () => {
 	formData.delete("file")
 	uploadFetching.value = false
 }
+
+onMounted(() => {
+	updateDone.on(() => {
+		updateFile.value = undefined
+	})
+})
 </script>
 
 <template>
