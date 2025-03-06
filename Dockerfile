@@ -41,7 +41,12 @@ COPY Cargo.toml ./omnect-ui/Cargo.toml
 RUN --mount=type=cache,target=/usr/local/cargo/registry cd omnect-ui && cargo build --release --target-dir ./build
 
 COPY src/* ./omnect-ui/src/
-RUN --mount=type=cache,target=/usr/local/cargo/registry cd omnect-ui && cargo build --release --target-dir ./build
+RUN --mount=type=cache,target=/usr/local/cargo/registry <<EOF
+    set -e
+    touch /work/omnect-ui/src/main.rs
+    cd omnect-ui/
+    cargo build --release --target-dir ./build
+EOF
 
 SHELL ["/bin/bash", "-c"]
 RUN <<EOT

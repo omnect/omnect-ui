@@ -89,10 +89,10 @@ onMounted(() => {
 	</v-dialog>
 	<v-sheet :border="true" rounded class="m-20">
 		<v-row class="m-8">
-			<v-col sm="12" md="6">
+			<v-col sm="12" xl="6">
 				<UpdateFileUpload @file-uploaded="loadUpdateData" />
 			</v-col>
-			<v-col sm="12" md="6">
+			<v-col sm="12" xl="6">
 				<UpdateInfo :update-manifest="data" :load-update-fetching="loadUpdateFetching"
 					:current-version="currentVersion" @reload-update-info="loadUpdate(false)" />
 			</v-col>
