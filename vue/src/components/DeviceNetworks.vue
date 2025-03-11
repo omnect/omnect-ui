@@ -14,41 +14,41 @@ const router = useRouter()
 const { history, subscribe } = useCentrifuge()
 
 const showSuccess = (successMsg: string) => {
-  snackbarState.msg = successMsg
-  snackbarState.color = "success"
-  snackbarState.timeout = 2000
-  snackbarState.snackbar = true
+	snackbarState.msg = successMsg
+	snackbarState.color = "success"
+	snackbarState.timeout = 2000
+	snackbarState.snackbar = true
 }
 
 const {
-  onFetchError: onReloadNetworkError,
-  error: reloadNetworkError,
-  statusCode: reloadNetworkStatusCode,
-  onFetchResponse: onReloadNetworkSuccess,
-  execute: reloadNetwork,
-  isFetching: reloadNetworkLoading
+	onFetchError: onReloadNetworkError,
+	error: reloadNetworkError,
+	statusCode: reloadNetworkStatusCode,
+	onFetchResponse: onReloadNetworkSuccess,
+	execute: reloadNetwork,
+	isFetching: reloadNetworkLoading
 } = useFetch("reload-network", { immediate: false }).post()
 
 onReloadNetworkSuccess(() => {
-  showSuccess("Reload network successful.")
+	showSuccess("Reload network successful.")
 })
 
 onReloadNetworkError(() => {
-  if (reloadNetworkStatusCode.value === 401) {
-    router.push("/login")
-  } else {
-    showError(`Reloading network failed: ${JSON.stringify(reloadNetworkError.value)}`)
-  }
+	if (reloadNetworkStatusCode.value === 401) {
+		router.push("/login")
+	} else {
+		showError(`Reloading network failed: ${JSON.stringify(reloadNetworkError.value)}`)
+	}
 })
 
 const updateNetworkStatus = (data: NetworkStatus) => {
-  networkStatus.value = data
+	networkStatus.value = data
 }
 
 onMounted(() => {
-  history(updateNetworkStatus, CentrifugeSubscriptionType.NetworkStatus)
+	history(updateNetworkStatus, CentrifugeSubscriptionType.NetworkStatus)
 
-  subscribe(updateNetworkStatus, CentrifugeSubscriptionType.NetworkStatus)
+	subscribe(updateNetworkStatus, CentrifugeSubscriptionType.NetworkStatus)
 })
 </script>
 

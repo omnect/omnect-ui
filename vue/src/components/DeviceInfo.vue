@@ -2,7 +2,7 @@
 import { computed } from "vue"
 
 const { deviceInfo } = defineProps<{
-  deviceInfo: Map<string, string | number>
+	deviceInfo: Map<string, string | number>
 }>()
 
 const displayItems = computed(() => Array.from(deviceInfo, ([title, value]) => ({ title, value })))
