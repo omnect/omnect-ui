@@ -39,7 +39,7 @@ const showIsRebooting = () => {
 }
 
 const showIsResetting = () => {
-	overlaySpinnerState.title = "Device is resetting"
+	overlaySpinnerState.title = "The device is being reset"
 	overlaySpinnerState.text = "Please have some patience, the resetting may take some time."
 	overlaySpinnerState.overlay = true
 }

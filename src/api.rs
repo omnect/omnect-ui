@@ -4,10 +4,30 @@ use actix_files::NamedFile;
 use actix_multipart::form::{tempfile::TempFile, MultipartForm};
 use actix_session::Session;
 use actix_web::{http::StatusCode, web, HttpResponse, Responder};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use jwt_simple::prelude::*;
 use log::{debug, error};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{fs, os::unix::fs::PermissionsExt};
+
+macro_rules! update_os_path {
+    () => {{
+        static DATA_DIR_PATH_DEFAULT: &'static str = "/var/lib/omnect-ui";
+        std::env::var("DATA_DIR_PATH").unwrap_or(DATA_DIR_PATH_DEFAULT.to_string())
+    }};
+}
+
+macro_rules! data_path {
+    ($filename:expr) => {{
+        format!(r"/data/{}", $filename)
+    }};
+}
+
+macro_rules! tmp_path {
+    ($filename:expr) => {{
+        format!(r"/tmp/{}", $filename)
+    }};
+}
 
 #[derive(Deserialize)]
 pub struct FactoryResetInput {
@@ -16,7 +36,7 @@ pub struct FactoryResetInput {
 
 #[derive(Serialize)]
 pub struct FactoryResetPayload {
-    mode: u8,
+    mode: FactoryResetMode,
     preserve: Vec<String>,
 }
 
@@ -35,18 +55,24 @@ pub struct UploadFormSingleFile {
     file: TempFile,
 }
 
+#[derive(Clone, Debug, Deserialize_repr, PartialEq, Serialize_repr)]
+#[repr(u8)]
+pub enum FactoryResetMode {
+    Mode1 = 1,
+    Mode2 = 2,
+    Mode3 = 3,
+    Mode4 = 4,
+}
+
 pub async fn index() -> actix_web::Result<NamedFile> {
     debug!("index() called");
 
-    match post_with_empty_body("/republish/v1").await {
-        Ok(response) => response,
-        Err(e) => {
-            error!("republish failed: {e:#}");
-            return Err(actix_web::error::ErrorInternalServerError(
-                "republish failed",
-            ));
-        }
-    };
+    if let Err(e) = post_with_empty_body("/republish/v1").await {
+        error!("republish failed: {e:#}");
+        return Err(actix_web::error::ErrorInternalServerError(
+            "republish failed",
+        ));
+    }
 
     Ok(NamedFile::open(
         std::fs::canonicalize("static/index.html").expect("static/index.html not found"),
@@ -60,11 +86,11 @@ pub async fn factory_reset(body: web::Json<FactoryResetInput>) -> impl Responder
     );
 
     let payload = FactoryResetPayload {
-        mode: 1,
+        mode: FactoryResetMode::Mode1,
         preserve: body.preserve.clone(),
     };
 
-    match post_with_json_body("/factory-reset/v1", Some(payload)).await {
+    match post_with_json_body("/factory-reset/v1", payload).await {
         Ok(response) => response,
         Err(e) => {
             error!("factory_reset failed: {e:#}");
@@ -131,31 +157,25 @@ pub async fn version() -> impl Responder {
 pub async fn save_file(MultipartForm(form): MultipartForm<UploadFormSingleFile>) -> impl Responder {
     debug!("save_file() called");
 
-    let tmp_filename = &form.file.file_name;
+    let Some(filename) = form.file.file_name.clone() else {
+        return HttpResponse::BadRequest().body("update file is missing");
+    };
 
-    if tmp_filename.is_none() {
-        HttpResponse::BadRequest().body("update file is missing")
-    } else {
-        let _ = clear_data_folder().await;
+    let _ = clear_data_folder().await;
 
-        if let Some(filename) = &form.file.file_name {
-            let tmp_path = format!("/tmp/{filename}");
-            let data_path = format!("/data/{filename}");
-
-            match persist_uploaded_file(form.file, tmp_path, data_path.clone()).await {
-                Ok(_) => match set_file_permission(data_path).await {
-                    Ok(_) => return HttpResponse::Ok().finish(),
-                    Err(e) => {
-                        error!("save_file failed: {e:#}");
-                        return HttpResponse::InternalServerError().body(format!("{e}"));
-                    }
-                },
-                Err(e) => return HttpResponse::InternalServerError().body(format!("{e}")),
-            }
-        }
-
-        HttpResponse::InternalServerError().body("filename is missing")
+    if let Err(e) =
+        persist_uploaded_file(form.file, tmp_path!(filename), data_path!(filename)).await
+    {
+        error!("save_file() failed: {e:#}");
+        return HttpResponse::InternalServerError().body(format!("{e}"));
     }
+
+    if let Err(e) = set_file_permission(data_path!(filename)).await {
+        error!("save_file() failed: {e:#}");
+        return HttpResponse::InternalServerError().body(format!("{e}"));
+    }
+
+    HttpResponse::Ok().finish()
 }
 
 pub async fn load_update(mut body: web::Json<LoadUpdatePayload>) -> impl Responder {
@@ -164,11 +184,9 @@ pub async fn load_update(mut body: web::Json<LoadUpdatePayload>) -> impl Respond
         body.update_file_path.clone()
     );
 
-    let update_os_path = std::env::var("DATA_DIR_PATH").unwrap_or("/var/lib/omnect-ui".to_string());
+    body.update_file_path = format!("{}/{}", update_os_path!(), body.update_file_path);
 
-    body.update_file_path = format!("{update_os_path}/{}", body.update_file_path);
-
-    match post_with_json_body("/fwupdate/load/v1", Some(body)).await {
+    match post_with_json_body("/fwupdate/load/v1", body).await {
         Ok(response) => response,
         Err(e) => {
             error!("load_update failed: {e:#}");
@@ -183,7 +201,7 @@ pub async fn run_update(body: web::Json<RunUpdatePayload>) -> impl Responder {
         body.validate_iothub_connection.clone()
     );
 
-    match post_with_json_body("/fwupdate/run/v1", Some(body)).await {
+    match post_with_json_body("/fwupdate/run/v1", body).await {
         Ok(response) => response,
         Err(e) => {
             error!("run_update failed: {e:#}");
@@ -192,14 +210,14 @@ pub async fn run_update(body: web::Json<RunUpdatePayload>) -> impl Responder {
     }
 }
 
-async fn clear_data_folder() -> Result<bool> {
+async fn clear_data_folder() -> Result<()> {
     debug!("clear_data_folder() called");
     for entry in fs::read_dir("/data")? {
         let entry = entry?;
         fs::remove_file(entry.path())?;
     }
 
-    Ok(true)
+    Ok(())
 }
 
 async fn persist_uploaded_file(
@@ -209,36 +227,23 @@ async fn persist_uploaded_file(
 ) -> Result<()> {
     debug!("persist_uploaded_file() called");
 
-    match tmp_file.file.persist(&temp_path) {
-        Ok(_) => match fs::copy(temp_path, &data_path) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                error!("failed to copy file {e:#}");
-                anyhow::bail!("failed to save file to data directory. {e:#}")
-            }
-        },
-        Err(e) => {
-            error!("failed to persist file {e:#}");
-            anyhow::bail!("failed to save temp file. {e:#}")
-        }
-    }
+    tmp_file
+        .file
+        .persist(&temp_path)
+        .context("failed to persist tmp file")?;
+
+    fs::copy(temp_path, &data_path).context("failed to copy file to data dir")?;
+
+    Ok(())
 }
 
 async fn set_file_permission(file_path: String) -> Result<()> {
     debug!("set_file_permission() called");
 
-    match fs::metadata(&file_path) {
-        Ok(metadata) => {
-            let mut perm = metadata.permissions();
-            perm.set_mode(0o750);
+    let metadata = fs::metadata(&file_path).context("failed to get file metadata")?;
+    let mut perm = metadata.permissions();
+    perm.set_mode(0o750);
+    fs::set_permissions(file_path, perm).context("failed to set file permission")?;
 
-            match fs::set_permissions(file_path, perm) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    anyhow::bail!("failed to set file permission. {e:#}")
-                }
-            }
-        }
-        Err(e) => anyhow::bail!("failed to get file metadata. {e:#}"),
-    }
+    Ok(())
 }

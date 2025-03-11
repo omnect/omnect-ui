@@ -32,13 +32,13 @@ const doLogin = async (e: Event) => {
 		}
 
 		if (res.status === 401) {
-			errorMsg.value = "Username and/or password wrong"
+			errorMsg.value = "Username and/or password wrong."
 			return
 		}
 
 		errorMsg.value = "Something went wrong while logging you in."
 	} catch (error) {
-		errorMsg.value = "Failed to login"
+		errorMsg.value = "Failed to login."
 	}
 }
 </script>

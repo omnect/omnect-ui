@@ -19,8 +19,8 @@ use log::{debug, info};
 use std::{fs, io::Write};
 use tokio::process::Command;
 
-const UPLOAD_LIMIT: usize = 250 * 1024 * 1024;
-const MEMORY_LIMIT: usize = 10 * 1024 * 1024;
+const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
+const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
 
 #[actix_web::main]
 async fn main() {
@@ -100,8 +100,8 @@ async fn main() {
             .wrap(session_middleware())
             .app_data(
                 MultipartFormConfig::default()
-                    .total_limit(UPLOAD_LIMIT)
-                    .memory_limit(MEMORY_LIMIT),
+                    .total_limit(UPLOAD_LIMIT_BYTES)
+                    .memory_limit(MEMORY_LIMIT_BYTES),
             )
             .route("/", web::get().to(api::index))
             .route(

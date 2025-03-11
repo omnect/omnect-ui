@@ -67,27 +67,14 @@ where
                 }
             };
 
-            if !token.is_empty()
-                && match verify_token(token) {
-                    Ok(true) => true,
-                    Ok(false) => false,
-                    Err(e) => {
-                        error!("user not authorized {}", e);
-                        false
-                    }
-                }
-            {
+            if !token.is_empty() && verify_token(token).is_ok_and(|res| res) {
                 let res = service.call(req).await?;
                 Ok(res.map_into_left_body())
             } else {
                 let mut payload = req.take_payload().take();
 
-                let auth = match BasicAuth::from_request(req.request(), &mut payload).await {
-                    Ok(b) => b,
-                    Err(_) => {
-                        error!("no auth header");
-                        return Ok(unauthorized_error(req).map_into_right_body());
-                    }
+                let Ok(auth) = BasicAuth::from_request(req.request(), &mut payload).await else {
+                    return Ok(unauthorized_error(req).map_into_right_body());
                 };
 
                 match verify_user(auth) {

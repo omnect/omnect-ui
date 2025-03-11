@@ -19,12 +19,12 @@ watch(updateFile, () => {
 
 const uploadFile = async () => {
 	if (!updateFile.value) {
-		showError("Select an update file")
+		showError("Select an update file.")
 		return
 	}
 
 	if (updateFile.value.type !== "application/x-tar") {
-		showError("Wrong file type. Only tar archives are allowed")
+		showError("Wrong file type. Only tar archives are allowed.")
 		return
 	}
 
