@@ -67,8 +67,8 @@ onMounted(() => {
 	<v-form @submit.prevent="uploadFile" enctype="multipart/form-data">
 		<v-file-upload icon="mdi-file-upload" v-model="updateFile" clearable density="default"
 			:disabled="uploadFetching">
-			<template #item="{ file }">
-				<v-file-upload-item @click:remove="updateFile = undefined">
+			<template #item="{ file, props }">
+				<v-file-upload-item v-bind="props">
 					<template #title>
 						<div class="flex justify-between">
 							<div>{{ file.name }}</div>
