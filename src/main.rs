@@ -5,9 +5,11 @@ use actix_session::{
     Session, SessionMiddleware,
 };
 use actix_web::{
+    body::MessageBody,
     cookie::{Key, SameSite},
     http::StatusCode,
-    web, App, HttpResponse, HttpServer, Responder,
+    web::{self},
+    App, HttpResponse, HttpServer, Responder,
 };
 use anyhow::{Context, Result};
 use env_logger::{Builder, Env, Target};
@@ -17,7 +19,9 @@ use hyper_util::rt::TokioIo;
 use jwt_simple::prelude::*;
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
+use std::fs::File;
 use std::io::Write;
+use std::sync::LazyLock;
 use tokio::{net::UnixStream, process::Command};
 
 mod middleware;
@@ -32,6 +36,51 @@ struct FactoryResetPayload {
     mode: u8,
     preserve: Vec<String>,
 }
+
+#[derive(Serialize)]
+struct CreateCertPayload {
+    #[serde(rename = "commonName")]
+    common_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrivateKey {
+    #[serde(rename = "type")]
+    #[allow(dead_code)]
+    type_name: String,
+    bytes: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateCertResponse {
+    #[serde(rename = "privateKey")]
+    private_key: PrivateKey,
+    certificate: String,
+    #[allow(dead_code)]
+    expiration: String,
+}
+
+const CERT_PATH: &str = "/cert/cert.pem";
+const KEY_PATH: &str = "/cert/key.pem";
+
+static ODS_SOCKET_PATH: LazyLock<String> =
+    LazyLock::new(|| std::env::var("SOCKET_PATH").expect("SOCKET_PATH missing"));
+
+static IOTEDGE_DEVICEID: LazyLock<String> =
+    LazyLock::new(|| std::env::var("IOTEDGE_DEVICEID").expect("IOTEDGE_DEVICEID missing"));
+
+static IOTEDGE_MODULEGENERATIONID: LazyLock<String> = LazyLock::new(|| {
+    std::env::var("IOTEDGE_MODULEGENERATIONID").expect("IOTEDGE_MODULEGENERATIONID missing")
+});
+
+static IOTEDGE_MODULEID: LazyLock<String> =
+    LazyLock::new(|| std::env::var("IOTEDGE_MODULEID").expect("IOTEDGE_MODULEID missing"));
+
+static IOTEDGE_WORKLOADURI: LazyLock<String> =
+    LazyLock::new(|| std::env::var("IOTEDGE_WORKLOADURI").expect("IOTEDGE_WORKLOADURI missing"));
+
+static IOTEDGE_APIVERSION: LazyLock<String> =
+    LazyLock::new(|| std::env::var("IOTEDGE_APIVERSION").expect("IOTEDGE_APIVERSION missing"));
 
 #[actix_web::main]
 async fn main() {
@@ -62,16 +111,14 @@ async fn main() {
         .parse::<u64>()
         .expect("UI_PORT format");
 
-    let device_cert_path = std::env::var("SSL_CERT_PATH").expect("SSL_CERT_PATH missing");
-    let device_key_path = std::env::var("SSL_KEY_PATH").expect("SSL_KEY_PATH missing");
-
-    info!("device cert file: {device_cert_path}");
-    info!("device key file: {device_key_path}");
+    if !cfg!(feature = "mock") {
+        create_module_certificate().await;
+    }
 
     let mut tls_certs =
-        std::io::BufReader::new(std::fs::File::open(device_cert_path).expect("read certs_file"));
+        std::io::BufReader::new(std::fs::File::open(CERT_PATH).expect("read certs_file"));
     let mut tls_key =
-        std::io::BufReader::new(std::fs::File::open(device_key_path).expect("read key_file"));
+        std::io::BufReader::new(std::fs::File::open(KEY_PATH).expect("read key_file"));
 
     let tls_certs = rustls_pemfile::certs(&mut tls_certs)
         .collect::<Result<Vec<_>, _>>()
@@ -140,6 +187,9 @@ async fn main() {
     let server_handle = server.handle();
     let server_task = tokio::spawn(server);
 
+    std::env::set_var("CENTRIFUGO_HTTP_SERVER_TLS_CERT_PEM", CERT_PATH);
+    std::env::set_var("CENTRIFUGO_HTTP_SERVER_TLS_KEY_PEM", KEY_PATH);
+
     let mut centrifugo =
         Command::new(std::fs::canonicalize("centrifugo").expect("centrifugo not found"))
             .spawn()
@@ -167,11 +217,47 @@ async fn main() {
     debug!("good bye");
 }
 
+async fn create_module_certificate() -> impl Responder {
+    info!("create_module_certificate()");
+
+    let payload = CreateCertPayload {
+        common_name: format!("{}", *IOTEDGE_DEVICEID),
+    };
+    let path = format!(
+        "/modules/{}/genid/{}/certificate/server?api-version={}",
+        *IOTEDGE_MODULEID, *IOTEDGE_MODULEGENERATIONID, *IOTEDGE_APIVERSION
+    );
+    let ori_socket_path = format!("{}", *IOTEDGE_WORKLOADURI);
+    let socket_path = ori_socket_path.strip_prefix("unix://").unwrap();
+
+    match post_with_json_body(&path, Some(payload), socket_path).await {
+        Ok(response) => {
+            let body = response.into_body();
+            let body_bytes = body.try_into_bytes().unwrap();
+            let cert_response: CreateCertResponse = serde_json::from_slice(&body_bytes).unwrap();
+
+            let mut file = File::create(CERT_PATH).unwrap();
+            file.write_all(&cert_response.certificate.as_bytes())
+                .unwrap();
+
+            let mut file = File::create(KEY_PATH).unwrap();
+            file.write_all(&cert_response.private_key.bytes.as_bytes())
+                .unwrap();
+
+            HttpResponse::build(StatusCode::OK).finish()
+        }
+        Err(e) => {
+            error!("create_module_certificate failed: {e:#}");
+            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+        }
+    }
+}
+
 async fn index() -> actix_web::Result<NamedFile> {
     debug!("index() called");
 
     // trigger omnect-device-service to republish
-    match post_with_empty_body("/republish/v1").await {
+    match post_with_empty_body("/republish/v1", &ODS_SOCKET_PATH).await {
         Ok(response) => response,
         Err(e) => {
             error!("republish failed: {e:#}");
@@ -197,7 +283,7 @@ async fn factory_reset(body: web::Json<FactoryResetInput>) -> impl Responder {
         preserve: body.preserve.clone(),
     };
 
-    match post_with_json_body("/factory-reset/v1", Some(payload)).await {
+    match post_with_json_body("/factory-reset/v1", Some(payload), &ODS_SOCKET_PATH).await {
         Ok(response) => response,
         Err(e) => {
             error!("factory_reset failed: {e:#}");
@@ -209,7 +295,7 @@ async fn factory_reset(body: web::Json<FactoryResetInput>) -> impl Responder {
 async fn reboot() -> impl Responder {
     debug!("reboot() called");
 
-    match post_with_empty_body("/reboot/v1").await {
+    match post_with_empty_body("/reboot/v1", &ODS_SOCKET_PATH).await {
         Ok(response) => response,
         Err(e) => {
             error!("reboot failed: {e:#}");
@@ -221,7 +307,7 @@ async fn reboot() -> impl Responder {
 async fn reload_network() -> impl Responder {
     debug!("reload_network() called");
 
-    match post_with_empty_body("/reload-network/v1").await {
+    match post_with_empty_body("/reload-network/v1", &ODS_SOCKET_PATH).await {
         Ok(response) => response,
         Err(e) => {
             error!("reload-network failed: {e:#}");
@@ -230,7 +316,11 @@ async fn reload_network() -> impl Responder {
     }
 }
 
-async fn post_with_json_body(path: &str, body: impl Serialize) -> Result<HttpResponse> {
+async fn post_with_json_body(
+    path: &str,
+    body: impl Serialize,
+    socket_path: &str,
+) -> Result<HttpResponse> {
     let json = match serde_json::to_value(body) {
         Ok(r) => r,
         Err(e) => {
@@ -246,10 +336,10 @@ async fn post_with_json_body(path: &str, body: impl Serialize) -> Result<HttpRes
         .body(serde_json::to_string(&json).unwrap_or_default())
         .context("build request failed")?;
 
-    post(request).await
+    post(request, socket_path).await
 }
 
-async fn post_with_empty_body(path: &str) -> Result<HttpResponse> {
+async fn post_with_empty_body(path: &str, socket_path: &str) -> Result<HttpResponse> {
     let request = Request::builder()
         .uri(path)
         .method("POST")
@@ -257,11 +347,11 @@ async fn post_with_empty_body(path: &str) -> Result<HttpResponse> {
         .body(String::new())
         .context("build request failed")?;
 
-    post(request).await
+    post(request, socket_path).await
 }
 
-async fn post(request: Request<String>) -> Result<HttpResponse> {
-    let mut sender = match sender().await {
+async fn post(request: Request<String>, socket_path: &str) -> Result<HttpResponse> {
+    let mut sender = match sender(socket_path).await {
         Err(e) => {
             error!("error creating request sender: {e}. socket might be broken. exit application");
             std::process::exit(1)
@@ -287,8 +377,8 @@ async fn post(request: Request<String>) -> Result<HttpResponse> {
     Ok(HttpResponse::build(status_code).body(body))
 }
 
-async fn sender() -> Result<http1::SendRequest<String>> {
-    let stream = UnixStream::connect(std::env::var("SOCKET_PATH").expect("SOCKET_PATH missing"))
+async fn sender(socket_path: &str) -> Result<http1::SendRequest<String>> {
+    let stream = UnixStream::connect(socket_path)
         .await
         .context("cannot create unix stream")?;
 
