@@ -228,15 +228,16 @@ async fn create_module_certificate() -> impl Responder {
         Ok(response) => {
             let body = response.into_body();
             let body_bytes = body.try_into_bytes().unwrap();
-            let cert_response: CreateCertResponse = serde_json::from_slice(&body_bytes).unwrap();
+            let cert_response: CreateCertResponse =
+                serde_json::from_slice(&body_bytes).expect("CreateCertResponse not possible");
 
-            let mut file = File::create(CERT_PATH).unwrap();
+            let mut file = File::create(CERT_PATH).expect("CERT_PATH could not be created");
             file.write_all(&cert_response.certificate.as_bytes())
-                .unwrap();
+                .expect("write to CERT_PATH not possible");
 
-            let mut file = File::create(KEY_PATH).unwrap();
+            let mut file = File::create(KEY_PATH).expect("KEY_PATH could not be created");
             file.write_all(&cert_response.private_key.bytes.as_bytes())
-                .unwrap();
+                .expect("write to KEY_PATH not possible");
 
             HttpResponse::build(StatusCode::OK).finish()
         }
