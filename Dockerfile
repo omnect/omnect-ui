@@ -1,6 +1,5 @@
 ARG DOCKER_NAMESPACE
 ARG VERSION_RUST_CONTAINER
-ARG OMNECT_UI_BUILD_ARG=""
 
 ARG DISTROLESS_IMAGE=gcr.io/distroless/base-debian12:nonroot
 
@@ -27,7 +26,7 @@ RUN apt-get update && \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ARG TARGETARCH
-ARG OMNECT_UI_BUILD_ARG
+ARG OMNECT_UI_BUILD_ARG=""
 WORKDIR "/work"
 
 RUN curl -sSLf https://centrifugal.dev/install.sh | sh
