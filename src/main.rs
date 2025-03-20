@@ -239,11 +239,11 @@ async fn create_module_certificate() -> impl Responder {
             file.write_all(&cert_response.private_key.bytes.as_bytes())
                 .expect("write to KEY_PATH not possible");
 
-            HttpResponse::build(StatusCode::OK).finish()
+            HttpResponse::Ok().finish()
         }
         Err(e) => {
             error!("create_module_certificate failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+            HttpResponse::InternalServerError().finish()
         }
     }
 }
@@ -282,7 +282,7 @@ async fn factory_reset(body: web::Json<FactoryResetInput>) -> impl Responder {
         Ok(response) => response,
         Err(e) => {
             error!("factory_reset failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+            HttpResponse::InternalServerError().finish()
         }
     }
 }
@@ -294,7 +294,7 @@ async fn reboot() -> impl Responder {
         Ok(response) => response,
         Err(e) => {
             error!("reboot failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+            HttpResponse::InternalServerError().finish()
         }
     }
 }
@@ -306,7 +306,7 @@ async fn reload_network() -> impl Responder {
         Ok(response) => response,
         Err(e) => {
             error!("reload-network failed: {e:#}");
-            HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+            HttpResponse::InternalServerError().finish()
         }
     }
 }
@@ -320,7 +320,7 @@ async fn post_with_json_body(
         Ok(r) => r,
         Err(e) => {
             error!("failed to serialize data error: {e:#}");
-            return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish());
+            return Ok(HttpResponse::InternalServerError().finish());
         }
     };
 
@@ -413,7 +413,7 @@ async fn token(session: Session) -> impl Responder {
         error!("token: missing secret key");
     };
 
-    HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+    HttpResponse::InternalServerError().finish()
 }
 
 async fn logout(session: Session) -> impl Responder {
