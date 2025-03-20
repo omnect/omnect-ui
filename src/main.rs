@@ -215,13 +215,13 @@ async fn create_module_certificate() -> impl Responder {
         std::env::var("IOTEDGE_WORKLOADURI").expect("IOTEDGE_WORKLOADURI missing");
 
     let payload = CreateCertPayload {
-        common_name: format!("{}", iotedge_deviceid),
+        common_name: iotedge_deviceid.to_string(),
     };
     let path = format!(
         "/modules/{}/genid/{}/certificate/server?api-version={}",
         iotedge_moduleid, iotedge_modulegenerationid, iotedge_apiversion
     );
-    let ori_socket_path = format!("{}", iotedge_workloaduri);
+    let ori_socket_path = iotedge_workloaduri.to_string();
     let socket_path = ori_socket_path.strip_prefix("unix://").unwrap();
 
     match post_with_json_body(&path, Some(payload), socket_path).await {
@@ -232,11 +232,11 @@ async fn create_module_certificate() -> impl Responder {
                 serde_json::from_slice(&body_bytes).expect("CreateCertResponse not possible");
 
             let mut file = File::create(CERT_PATH).expect("CERT_PATH could not be created");
-            file.write_all(&cert_response.certificate.as_bytes())
+            file.write_all(cert_response.certificate.as_bytes())
                 .expect("write to CERT_PATH not possible");
 
             let mut file = File::create(KEY_PATH).expect("KEY_PATH could not be created");
-            file.write_all(&cert_response.private_key.bytes.as_bytes())
+            file.write_all(cert_response.private_key.bytes.as_bytes())
                 .expect("write to KEY_PATH not possible");
 
             HttpResponse::Ok().finish()
