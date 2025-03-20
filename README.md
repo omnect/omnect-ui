@@ -12,10 +12,6 @@ Since omnect-os is designed as generic OS, all specific or optional applications
 - device must be online (at least once) in order to receive the deployment
 - after a factory reset omnect-ui must be deployed again what requires a connection to azure cloud
 
-### iotedge deployment
-
-In case it is agreed, the omnect team takes care of providing omnect-ui as application in omnect-portal. Get into contact with <support@omnect.io> if interested.
-
 ## Access omnect-ui
 
 omnect-ui can be reached at <https://DeviceHostnameOrIp:1977><br>
@@ -30,6 +26,7 @@ Reset device and choose options to keep<br>
 # License
 
 Licensed under either of
+
 - Apache License, Version 2.0, (./LICENSE-APACHE or <http://www.apache.org/licenses/LICENSE-2.0>)
 - MIT license (./LICENSE-MIT or <http://opensource.org/licenses/MIT>)
 
