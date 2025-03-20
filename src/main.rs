@@ -95,9 +95,7 @@ async fn main() {
         .parse::<u64>()
         .expect("UI_PORT format");
 
-    if !cfg!(feature = "mock") {
-        create_module_certificate().await;
-    }
+    create_module_certificate().await;
 
     let mut tls_certs =
         std::io::BufReader::new(std::fs::File::open(CERT_PATH).expect("read certs_file"));
@@ -201,6 +199,12 @@ async fn main() {
     debug!("good bye");
 }
 
+#[cfg(feature = "mock")]
+async fn create_module_certificate() -> impl Responder {
+    HttpResponse::Ok().finish()
+}
+
+#[cfg(not(feature = "mock"))]
 async fn create_module_certificate() -> impl Responder {
     info!("create_module_certificate()");
 
