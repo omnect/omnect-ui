@@ -66,22 +66,6 @@ const KEY_PATH: &str = "/cert/key.pem";
 static ODS_SOCKET_PATH: LazyLock<String> =
     LazyLock::new(|| std::env::var("SOCKET_PATH").expect("SOCKET_PATH missing"));
 
-static IOTEDGE_DEVICEID: LazyLock<String> =
-    LazyLock::new(|| std::env::var("IOTEDGE_DEVICEID").expect("IOTEDGE_DEVICEID missing"));
-
-static IOTEDGE_MODULEGENERATIONID: LazyLock<String> = LazyLock::new(|| {
-    std::env::var("IOTEDGE_MODULEGENERATIONID").expect("IOTEDGE_MODULEGENERATIONID missing")
-});
-
-static IOTEDGE_MODULEID: LazyLock<String> =
-    LazyLock::new(|| std::env::var("IOTEDGE_MODULEID").expect("IOTEDGE_MODULEID missing"));
-
-static IOTEDGE_WORKLOADURI: LazyLock<String> =
-    LazyLock::new(|| std::env::var("IOTEDGE_WORKLOADURI").expect("IOTEDGE_WORKLOADURI missing"));
-
-static IOTEDGE_APIVERSION: LazyLock<String> =
-    LazyLock::new(|| std::env::var("IOTEDGE_APIVERSION").expect("IOTEDGE_APIVERSION missing"));
-
 #[actix_web::main]
 async fn main() {
     log_panics::init();
@@ -220,14 +204,24 @@ async fn main() {
 async fn create_module_certificate() -> impl Responder {
     info!("create_module_certificate()");
 
+    let iotedge_moduleid = std::env::var("IOTEDGE_MODULEID").expect("IOTEDGE_MODULEID missing");
+    let iotedge_deviceid = std::env::var("IOTEDGE_DEVICEID").expect("IOTEDGE_DEVICEID missing");
+    let iotedge_modulegenerationid =
+        std::env::var("IOTEDGE_MODULEGENERATIONID").expect("IOTEDGE_MODULEGENERATIONID missing");
+    let iotedge_apiversion =
+        std::env::var("IOTEDGE_APIVERSION").expect("IOTEDGE_APIVERSION missing");
+
+    let iotedge_workloaduri =
+        std::env::var("IOTEDGE_WORKLOADURI").expect("IOTEDGE_WORKLOADURI missing");
+
     let payload = CreateCertPayload {
-        common_name: format!("{}", *IOTEDGE_DEVICEID),
+        common_name: format!("{}", iotedge_deviceid),
     };
     let path = format!(
         "/modules/{}/genid/{}/certificate/server?api-version={}",
-        *IOTEDGE_MODULEID, *IOTEDGE_MODULEGENERATIONID, *IOTEDGE_APIVERSION
+        iotedge_moduleid, iotedge_modulegenerationid, iotedge_apiversion
     );
-    let ori_socket_path = format!("{}", *IOTEDGE_WORKLOADURI);
+    let ori_socket_path = format!("{}", iotedge_workloaduri);
     let socket_path = ori_socket_path.strip_prefix("unix://").unwrap();
 
     match post_with_json_body(&path, Some(payload), socket_path).await {
