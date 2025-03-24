@@ -59,27 +59,22 @@ where
         let service = Rc::clone(&self.service);
 
         Box::pin(async move {
-            if let Some(token) = req.get_session().get::<String>("token").unwrap_or_default() {
-                match verify_token(token) {
-                    Ok(true) => {
-                        let res = service.call(req).await?;
-                        Ok(res.map_into_left_body())
-                    }
-                    Ok(false) => Ok(unauthorized_error(req).map_into_right_body()),
-                    Err(e) => {
-                        error!("user not authorized {}", e);
-                        Ok(unauthorized_error(req).map_into_right_body())
-                    }
+            let token = match req.get_session().get::<String>("token") {
+                Ok(token) => token.unwrap_or_default(),
+                Err(e) => {
+                    error!("failed to get session. {e:#}");
+                    String::new()
                 }
+            };
+
+            if !token.is_empty() && verify_token(token).is_ok_and(|res| res) {
+                let res = service.call(req).await?;
+                Ok(res.map_into_left_body())
             } else {
                 let mut payload = req.take_payload().take();
 
-                let auth = match BasicAuth::from_request(req.request(), &mut payload).await {
-                    Ok(b) => b,
-                    Err(_) => {
-                        error!("no auth header");
-                        return Ok(unauthorized_error(req).map_into_right_body());
-                    }
+                let Ok(auth) = BasicAuth::from_request(req.request(), &mut payload).await else {
+                    return Ok(unauthorized_error(req).map_into_right_body());
                 };
 
                 match verify_user(auth) {
