@@ -10,17 +10,48 @@ use actix_session::{
     SessionMiddleware,
 };
 use actix_web::{
+    body::MessageBody,
     cookie::{Key, SameSite},
-    web, App, HttpServer,
+    web::{self},
+    App, HttpResponse, HttpServer, Responder,
 };
 use anyhow::Result;
 use env_logger::{Builder, Env, Target};
-use log::{debug, info};
-use std::{fs, io::Write};
+use log::{debug, error, info};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::fs::File;
+use std::io::Write;
 use tokio::process::Command;
 
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
 const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
+
+#[derive(Serialize)]
+struct CreateCertPayload {
+    #[serde(rename = "commonName")]
+    common_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrivateKey {
+    #[serde(rename = "type")]
+    #[allow(dead_code)]
+    type_name: String,
+    bytes: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateCertResponse {
+    #[serde(rename = "privateKey")]
+    private_key: PrivateKey,
+    certificate: String,
+    #[allow(dead_code)]
+    expiration: String,
+}
+
+const CERT_PATH: &str = "/cert/cert.pem";
+const KEY_PATH: &str = "/cert/key.pem";
 
 #[actix_web::main]
 async fn main() {
@@ -51,16 +82,12 @@ async fn main() {
         .parse::<u64>()
         .expect("UI_PORT format");
 
-    let device_cert_path = std::env::var("SSL_CERT_PATH").expect("SSL_CERT_PATH missing");
-    let device_key_path = std::env::var("SSL_KEY_PATH").expect("SSL_KEY_PATH missing");
-
-    info!("device cert file: {device_cert_path}");
-    info!("device key file: {device_key_path}");
+    create_module_certificate().await;
 
     let mut tls_certs =
-        std::io::BufReader::new(std::fs::File::open(device_cert_path).expect("read certs_file"));
+        std::io::BufReader::new(std::fs::File::open(CERT_PATH).expect("read certs_file"));
     let mut tls_key =
-        std::io::BufReader::new(std::fs::File::open(device_key_path).expect("read key_file"));
+        std::io::BufReader::new(std::fs::File::open(KEY_PATH).expect("read key_file"));
 
     let tls_certs = rustls_pemfile::certs(&mut tls_certs)
         .collect::<Result<Vec<_>, _>>()
@@ -152,6 +179,9 @@ async fn main() {
     let server_handle = server.handle();
     let server_task = tokio::spawn(server);
 
+    std::env::set_var("CENTRIFUGO_HTTP_SERVER_TLS_CERT_PEM", CERT_PATH);
+    std::env::set_var("CENTRIFUGO_HTTP_SERVER_TLS_KEY_PEM", KEY_PATH);
+
     let mut centrifugo =
         Command::new(std::fs::canonicalize("centrifugo").expect("centrifugo not found"))
             .spawn()
@@ -177,4 +207,59 @@ async fn main() {
     }
 
     debug!("good bye");
+}
+
+#[cfg(feature = "mock")]
+async fn create_module_certificate() -> impl Responder {
+    HttpResponse::Ok().finish()
+}
+
+#[cfg(not(feature = "mock"))]
+async fn create_module_certificate() -> impl Responder {
+    info!("create_module_certificate()");
+
+    let iotedge_moduleid = std::env::var("IOTEDGE_MODULEID").expect("IOTEDGE_MODULEID missing");
+    let iotedge_deviceid = std::env::var("IOTEDGE_DEVICEID").expect("IOTEDGE_DEVICEID missing");
+    let iotedge_modulegenerationid =
+        std::env::var("IOTEDGE_MODULEGENERATIONID").expect("IOTEDGE_MODULEGENERATIONID missing");
+    let iotedge_apiversion =
+        std::env::var("IOTEDGE_APIVERSION").expect("IOTEDGE_APIVERSION missing");
+
+    let iotedge_workloaduri =
+        std::env::var("IOTEDGE_WORKLOADURI").expect("IOTEDGE_WORKLOADURI missing");
+
+    let payload = CreateCertPayload {
+        common_name: iotedge_deviceid.to_string(),
+    };
+    let path = format!(
+        "/modules/{}/genid/{}/certificate/server?api-version={}",
+        iotedge_moduleid, iotedge_modulegenerationid, iotedge_apiversion
+    );
+    let ori_socket_path = iotedge_workloaduri.to_string();
+    let socket_path = ori_socket_path.strip_prefix("unix://").unwrap();
+
+    match socket_client::post_with_json_body(&path, payload, socket_path).await {
+        Ok(response) => {
+            let body = response.into_body();
+            let body_bytes = body.try_into_bytes().unwrap();
+            let cert_response: CreateCertResponse =
+                serde_json::from_slice(&body_bytes).expect("CreateCertResponse not possible");
+
+            let mut file = File::create(CERT_PATH)
+                .unwrap_or_else(|_| panic!("{CERT_PATH} could not be created"));
+            file.write_all(cert_response.certificate.as_bytes())
+                .unwrap_or_else(|_| panic!("write to {CERT_PATH} not possible"));
+
+            let mut file = File::create(KEY_PATH)
+                .unwrap_or_else(|_| panic!("{KEY_PATH} could not be created"));
+            file.write_all(cert_response.private_key.bytes.as_bytes())
+                .unwrap_or_else(|_| panic!("write to {KEY_PATH} not possible"));
+
+            HttpResponse::Ok().finish()
+        }
+        Err(e) => {
+            error!("create_module_certificate failed: {e:#}");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
 }

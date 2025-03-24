@@ -26,7 +26,7 @@ RUN apt-get update && \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ARG TARGETARCH
-
+ARG OMNECT_UI_BUILD_ARG=""
 WORKDIR "/work"
 
 RUN curl -sSLf https://centrifugal.dev/install.sh | sh
@@ -38,14 +38,15 @@ RUN cargo new /work/omnect-ui
 COPY Cargo.lock ./omnect-ui/Cargo.lock
 COPY Cargo.toml ./omnect-ui/Cargo.toml
 
-RUN --mount=type=cache,target=/usr/local/cargo/registry cd omnect-ui && cargo build --release --target-dir ./build
+RUN --mount=type=cache,target=/usr/local/cargo/registry cd omnect-ui && cargo build ${OMNECT_UI_BUILD_ARG} --release --target-dir ./build
 
 COPY src/* ./omnect-ui/src/
 RUN --mount=type=cache,target=/usr/local/cargo/registry <<EOF
-    set -e
-    touch /work/omnect-ui/src/main.rs
-    cd omnect-ui/
-    cargo build --release --target-dir ./build
+  set -e
+  # update timestamps to force a new build
+  touch /work/omnect-ui/src/main.rs
+  cd omnect-ui/
+  cargo build ${OMNECT_UI_BUILD_ARG} --release --target-dir ./build
 EOF
 
 SHELL ["/bin/bash", "-c"]
@@ -55,7 +56,7 @@ RUN <<EOT
     mkdir -p /copy/status.d
 
     executable=(omnect-ui/build/release/omnect-ui)
-    
+
     mkdir -p /copy/$(dirname "${executable}")
     cp "${executable}" /copy/"${executable}"
 
@@ -91,8 +92,10 @@ RUN <<EOT
     done
 EOT
 
-FROM ${DISTROLESS_IMAGE} AS base
+RUN mkdir /cert
 
+FROM ${DISTROLESS_IMAGE} AS base
+COPY --from=builder --chown=10000:10000 /cert /cert
 COPY --from=builder /work/omnect-ui/build/release/omnect-ui /
 COPY --from=builder /work/centrifugo /
 COPY --from=builder /copy/lib/ /lib/

@@ -8,7 +8,10 @@ use anyhow::{Context, Result};
 use jwt_simple::prelude::*;
 use log::{debug, error};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::{fs, os::unix::fs::PermissionsExt};
+use std::{fs, os::unix::fs::PermissionsExt, sync::LazyLock};
+
+static ODS_SOCKET_PATH: LazyLock<String> =
+    LazyLock::new(|| std::env::var("SOCKET_PATH").expect("SOCKET_PATH missing"));
 
 macro_rules! update_os_path {
     () => {{
@@ -67,7 +70,7 @@ pub enum FactoryResetMode {
 pub async fn index() -> actix_web::Result<NamedFile> {
     debug!("index() called");
 
-    if let Err(e) = post_with_empty_body("/republish/v1").await {
+    if let Err(e) = post_with_empty_body("/republish/v1", &ODS_SOCKET_PATH).await {
         error!("republish failed: {e:#}");
         return Err(actix_web::error::ErrorInternalServerError(
             "republish failed",
@@ -90,7 +93,7 @@ pub async fn factory_reset(body: web::Json<FactoryResetInput>) -> impl Responder
         preserve: body.preserve.clone(),
     };
 
-    match post_with_json_body("/factory-reset/v1", payload).await {
+    match post_with_json_body("/factory-reset/v1", payload, &ODS_SOCKET_PATH).await {
         Ok(response) => response,
         Err(e) => {
             error!("factory_reset failed: {e:#}");
@@ -102,7 +105,7 @@ pub async fn factory_reset(body: web::Json<FactoryResetInput>) -> impl Responder
 pub async fn reboot() -> impl Responder {
     debug!("reboot() called");
 
-    match post_with_empty_body("/reboot/v1").await {
+    match post_with_empty_body("/reboot/v1", &ODS_SOCKET_PATH).await {
         Ok(response) => response,
         Err(e) => {
             error!("reboot failed: {e:#}");
@@ -114,7 +117,7 @@ pub async fn reboot() -> impl Responder {
 pub async fn reload_network() -> impl Responder {
     debug!("reload_network() called");
 
-    match post_with_empty_body("/reload-network/v1").await {
+    match post_with_empty_body("/reload-network/v1", &ODS_SOCKET_PATH).await {
         Ok(response) => response,
         Err(e) => {
             error!("reload-network failed: {e:#}");
@@ -186,7 +189,7 @@ pub async fn load_update(mut body: web::Json<LoadUpdatePayload>) -> impl Respond
 
     body.update_file_path = format!("{}/{}", update_os_path!(), body.update_file_path);
 
-    match post_with_json_body("/fwupdate/load/v1", body).await {
+    match post_with_json_body("/fwupdate/load/v1", body, &ODS_SOCKET_PATH).await {
         Ok(response) => response,
         Err(e) => {
             error!("load_update failed: {e:#}");
@@ -201,7 +204,7 @@ pub async fn run_update(body: web::Json<RunUpdatePayload>) -> impl Responder {
         body.validate_iothub_connection.clone()
     );
 
-    match post_with_json_body("/fwupdate/run/v1", body).await {
+    match post_with_json_body("/fwupdate/run/v1", body, &ODS_SOCKET_PATH).await {
         Ok(response) => response,
         Err(e) => {
             error!("run_update failed: {e:#}");

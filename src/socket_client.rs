@@ -7,7 +7,11 @@ use log::error;
 use serde::Serialize;
 use tokio::net::UnixStream;
 
-pub async fn post_with_json_body(path: &str, body: impl Serialize) -> Result<HttpResponse> {
+pub async fn post_with_json_body(
+    path: &str,
+    body: impl Serialize,
+    socket_path: &str,
+) -> Result<HttpResponse> {
     let json = match serde_json::to_value(body) {
         Ok(r) => r,
         Err(e) => {
@@ -23,10 +27,10 @@ pub async fn post_with_json_body(path: &str, body: impl Serialize) -> Result<Htt
         .body(serde_json::to_string(&json).unwrap_or_default())
         .context("build request failed")?;
 
-    post(request).await
+    post(request, socket_path).await
 }
 
-pub async fn post_with_empty_body(path: &str) -> Result<HttpResponse> {
+pub async fn post_with_empty_body(path: &str, socket_path: &str) -> Result<HttpResponse> {
     let request = Request::builder()
         .uri(path)
         .method("POST")
@@ -34,11 +38,11 @@ pub async fn post_with_empty_body(path: &str) -> Result<HttpResponse> {
         .body(String::new())
         .context("build request failed")?;
 
-    post(request).await
+    post(request, socket_path).await
 }
 
-async fn post(request: Request<String>) -> Result<HttpResponse> {
-    let mut sender = match sender().await {
+async fn post(request: Request<String>, socket_path: &str) -> Result<HttpResponse> {
+    let mut sender = match sender(socket_path).await {
         Err(e) => {
             error!("error creating request sender: {e}. socket might be broken. exit application");
             std::process::exit(1)
@@ -64,8 +68,8 @@ async fn post(request: Request<String>) -> Result<HttpResponse> {
     Ok(HttpResponse::build(status_code).body(body))
 }
 
-async fn sender() -> Result<http1::SendRequest<String>> {
-    let stream = UnixStream::connect(std::env::var("SOCKET_PATH").expect("SOCKET_PATH missing"))
+async fn sender(socket_path: &str) -> Result<http1::SendRequest<String>> {
+    let stream = UnixStream::connect(socket_path)
         .await
         .context("cannot create unix stream")?;
 
