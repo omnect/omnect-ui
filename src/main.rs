@@ -235,15 +235,15 @@ async fn create_module_certificate() -> impl Responder {
             let cert_response: CreateCertResponse =
                 serde_json::from_slice(&body_bytes).expect("CreateCertResponse not possible");
 
-            let mut file =
-                File::create(CERT_PATH).expect(&format!("{CERT_PATH} could not be created"));
+            let mut file = File::create(CERT_PATH)
+                .unwrap_or_else(|_| panic!("{CERT_PATH} could not be created"));
             file.write_all(cert_response.certificate.as_bytes())
-                .expect(&format!("write to {CERT_PATH} not possible"));
+                .unwrap_or_else(|_| panic!("write to {CERT_PATH} not possible"));
 
-            let mut file =
-                File::create(KEY_PATH).expect(&format!("{KEY_PATH} could not be created"));
+            let mut file = File::create(KEY_PATH)
+                .unwrap_or_else(|_| panic!("{KEY_PATH} could not be created"));
             file.write_all(cert_response.private_key.bytes.as_bytes())
-                .expect(&format!("write to {KEY_PATH} not possible"));
+                .unwrap_or_else(|_| panic!("write to {KEY_PATH} not possible"));
 
             HttpResponse::Ok().finish()
         }
