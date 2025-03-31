@@ -2,10 +2,11 @@ use actix_session::SessionExt;
 use actix_web::{
     body::EitherBody,
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
+    web::Data,
     Error, FromRequest, HttpMessage, HttpResponse,
 };
 use actix_web_httpauth::extractors::basic::BasicAuth;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use jwt_simple::prelude::*;
 use log::error;
 use std::{
@@ -13,6 +14,8 @@ use std::{
     pin::Pin,
     rc::Rc,
 };
+
+use crate::api::Api;
 
 pub const TOKEN_EXPIRE_HOURS: u64 = 2;
 
@@ -59,6 +62,8 @@ where
         let service = Rc::clone(&self.service);
 
         Box::pin(async move {
+            let api_config = req.app_data::<Data<Api>>().cloned().unwrap();
+
             let token = match req.get_session().get::<String>("token") {
                 Ok(token) => token.unwrap_or_default(),
                 Err(e) => {
@@ -67,7 +72,10 @@ where
                 }
             };
 
-            if !token.is_empty() && verify_token(token).is_ok_and(|res| res) {
+            if !token.is_empty()
+                && verify_token(token, api_config.centrifugo_client_token_hmac_secret_key())
+                    .is_ok_and(|res| res)
+            {
                 let res = service.call(req).await?;
                 Ok(res.map_into_left_body())
             } else {
@@ -77,7 +85,7 @@ where
                     return Ok(unauthorized_error(req).map_into_right_body());
                 };
 
-                match verify_user(auth) {
+                match verify_user(auth, api_config.username(), api_config.password()) {
                     Ok(true) => {
                         let res = service.call(req).await?;
                         Ok(res.map_into_left_body())
@@ -93,10 +101,11 @@ where
     }
 }
 
-pub fn verify_token(token: String) -> Result<bool> {
-    let key =
-        std::env::var("CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY").context("missing jwt secret")?;
-    let key = HS256Key::from_bytes(key.as_bytes());
+pub fn verify_token(
+    token: String,
+    centrifugo_client_token_hmac_secret_key: String,
+) -> Result<bool> {
+    let key = HS256Key::from_bytes(centrifugo_client_token_hmac_secret_key.as_bytes());
     let options = VerificationOptions {
         accept_future: true,
         time_tolerance: Some(Duration::from_mins(15)),
@@ -110,10 +119,8 @@ pub fn verify_token(token: String) -> Result<bool> {
         .is_ok())
 }
 
-fn verify_user(auth: BasicAuth) -> Result<bool> {
-    let user = std::env::var("LOGIN_USER").context("login_token: missing user")?;
-    let password = std::env::var("LOGIN_PASSWORD").context("login_token: missing password")?;
-    Ok(auth.user_id() == user && auth.password() == Some(&password))
+fn verify_user(auth: BasicAuth, username: String, password: String) -> Result<bool> {
+    Ok(auth.user_id() == username && auth.password() == Some(&password))
 }
 
 fn unauthorized_error(req: ServiceRequest) -> ServiceResponse {

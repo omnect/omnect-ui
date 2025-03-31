@@ -2,6 +2,7 @@ mod api;
 mod middleware;
 mod socket_client;
 
+use crate::api::Api;
 use actix_files::Files;
 use actix_multipart::form::MultipartFormConfig;
 use actix_session::{
@@ -26,6 +27,13 @@ use tokio::process::Command;
 
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
 const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
+
+macro_rules! update_os_path {
+    () => {{
+        static DATA_DIR_PATH_DEFAULT: &'static str = "/var/lib/omnect-ui";
+        std::env::var("DATA_DIR_PATH").unwrap_or(DATA_DIR_PATH_DEFAULT.to_string())
+    }};
+}
 
 #[derive(Serialize)]
 struct CreateCertPayload {
@@ -122,6 +130,12 @@ async fn main() {
             .build()
     }
 
+    let ods_socket_path = std::env::var("SOCKET_PATH").expect("env SOCKET_PATH is missing");
+    let centrifugo_client_token_hmac_secret_key =
+        std::env::var("CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY").expect("missing jwt secret");
+    let username = std::env::var("LOGIN_USER").expect("login_token: missing user");
+    let password = std::env::var("LOGIN_PASSWORD").expect("login_token: missing password");
+
     let server = HttpServer::new(move || {
         App::new()
             .wrap(session_middleware())
@@ -130,46 +144,53 @@ async fn main() {
                     .total_limit(UPLOAD_LIMIT_BYTES)
                     .memory_limit(MEMORY_LIMIT_BYTES),
             )
-            .route("/", web::get().to(api::index))
+            .app_data(Api::new(
+                ods_socket_path.to_string(),
+                update_os_path!(),
+                centrifugo_client_token_hmac_secret_key.to_string(),
+                username.to_string(),
+                password.to_string(),
+            ))
+            .route("/", web::get().to(Api::index))
             .route(
                 "/factory-reset",
-                web::post().to(api::factory_reset).wrap(middleware::AuthMw),
+                web::post().to(Api::factory_reset).wrap(middleware::AuthMw),
             )
             .route(
                 "/reboot",
-                web::post().to(api::reboot).wrap(middleware::AuthMw),
+                web::post().to(Api::reboot).wrap(middleware::AuthMw),
             )
             .route(
                 "/reload-network",
-                web::post().to(api::reload_network).wrap(middleware::AuthMw),
+                web::post().to(Api::reload_network).wrap(middleware::AuthMw),
             )
             .route(
                 "/update/file",
-                web::post().to(api::save_file).wrap(middleware::AuthMw),
+                web::post().to(Api::save_file).wrap(middleware::AuthMw),
             )
             .route(
                 "/update/load",
-                web::post().to(api::load_update).wrap(middleware::AuthMw),
+                web::post().to(Api::load_update).wrap(middleware::AuthMw),
             )
             .route(
                 "/update/run",
-                web::post().to(api::run_update).wrap(middleware::AuthMw),
+                web::post().to(Api::run_update).wrap(middleware::AuthMw),
             )
             .route(
                 "/token/login",
-                web::post().to(api::token).wrap(middleware::AuthMw),
+                web::post().to(Api::token).wrap(middleware::AuthMw),
             )
             .route(
                 "/token/refresh",
-                web::get().to(api::token).wrap(middleware::AuthMw),
+                web::get().to(Api::token).wrap(middleware::AuthMw),
             )
-            .route("/version", web::get().to(api::version))
-            .route("/logout", web::post().to(api::logout))
+            .route("/version", web::get().to(Api::version))
+            .route("/logout", web::post().to(Api::logout))
             .service(Files::new(
                 "/static",
                 std::fs::canonicalize("static").expect("static folder not found"),
             ))
-            .default_service(web::route().to(api::index))
+            .default_service(web::route().to(Api::index))
     })
     .bind_rustls_0_23(format!("0.0.0.0:{ui_port}"), tls_config)
     .expect("bind_rustls")
