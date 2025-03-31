@@ -3,12 +3,12 @@ use crate::socket_client::*;
 use actix_files::NamedFile;
 use actix_multipart::form::{tempfile::TempFile, MultipartForm};
 use actix_session::Session;
-use actix_web::{http::StatusCode, web, HttpResponse, Responder};
+use actix_web::{web, HttpResponse, Responder};
 use anyhow::{Context, Result};
 use jwt_simple::prelude::*;
 use log::{debug, error};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::{fs, os::unix::fs::PermissionsExt};
+use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
 
 macro_rules! data_path {
     ($filename:expr) => {{
@@ -63,27 +63,17 @@ pub struct Api {
     centrifugo_client_token_hmac_secret_key: String,
     username: String,
     password: String,
+    index_html: PathBuf,
 }
 
 impl Api {
-    pub fn centrifugo_client_token_hmac_secret_key(&self) -> String {
-        self.centrifugo_client_token_hmac_secret_key.clone()
-    }
-
-    pub fn username(&self) -> String {
-        self.username.clone()
-    }
-
-    pub fn password(&self) -> String {
-        self.password.clone()
-    }
-
     pub fn new(
         ods_socket_path: String,
         update_os_path: String,
         centrifugo_client_token_hmac_secret_key: String,
         username: String,
         password: String,
+        index_html: PathBuf,
     ) -> Self {
         debug!("Api::new() called");
 
@@ -100,7 +90,20 @@ impl Api {
             centrifugo_client_token_hmac_secret_key,
             username,
             password,
+            index_html,
         }
+    }
+
+    pub fn centrifugo_client_token_hmac_secret_key(&self) -> String {
+        self.centrifugo_client_token_hmac_secret_key.clone()
+    }
+
+    pub fn username(&self) -> String {
+        self.username.clone()
+    }
+
+    pub fn password(&self) -> String {
+        self.password.clone()
     }
 
     pub async fn index(config: web::Data<Api>) -> actix_web::Result<NamedFile> {
@@ -113,9 +116,7 @@ impl Api {
             ));
         }
 
-        Ok(NamedFile::open(
-            std::fs::canonicalize("static/index.html").expect("static/index.html not found"),
-        )?)
+        Ok(NamedFile::open(config.index_html.to_path_buf())?)
     }
 
     pub async fn factory_reset(
@@ -136,7 +137,7 @@ impl Api {
             Ok(response) => response,
             Err(e) => {
                 error!("factory_reset failed: {e:#}");
-                HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(format!("{e}"))
+                HttpResponse::InternalServerError().body(format!("{e}"))
             }
         }
     }
@@ -148,7 +149,7 @@ impl Api {
             Ok(response) => response,
             Err(e) => {
                 error!("reboot failed: {e:#}");
-                HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(format!("{e}"))
+                HttpResponse::InternalServerError().body(format!("{e}"))
             }
         }
     }
@@ -160,7 +161,7 @@ impl Api {
             Ok(response) => response,
             Err(e) => {
                 error!("reload-network failed: {e:#}");
-                HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(format!("{e}"))
+                HttpResponse::InternalServerError().body(format!("{e}"))
             }
         }
     }
@@ -183,7 +184,7 @@ impl Api {
             error!("token: missing secret key");
         };
 
-        HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).finish()
+        HttpResponse::InternalServerError().finish()
     }
 
     pub async fn logout(session: Session) -> impl Responder {
@@ -237,7 +238,7 @@ impl Api {
             Ok(response) => response,
             Err(e) => {
                 error!("load_update failed: {e:#}");
-                HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(format!("{e}"))
+                HttpResponse::InternalServerError().body(format!("{e}"))
             }
         }
     }
@@ -255,7 +256,7 @@ impl Api {
             Ok(response) => response,
             Err(e) => {
                 error!("run_update failed: {e:#}");
-                HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR).body(format!("{e}"))
+                HttpResponse::InternalServerError().body(format!("{e}"))
             }
         }
     }

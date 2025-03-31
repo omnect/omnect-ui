@@ -135,6 +135,8 @@ async fn main() {
         std::env::var("CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY").expect("missing jwt secret");
     let username = std::env::var("LOGIN_USER").expect("login_token: missing user");
     let password = std::env::var("LOGIN_PASSWORD").expect("login_token: missing password");
+    let index_html =
+        std::fs::canonicalize("static/index.html").expect("static/index.html not found");
 
     let server = HttpServer::new(move || {
         App::new()
@@ -150,6 +152,7 @@ async fn main() {
                 centrifugo_client_token_hmac_secret_key.to_string(),
                 username.to_string(),
                 password.to_string(),
+                index_html.to_path_buf(),
             ))
             .route("/", web::get().to(Api::index))
             .route(
