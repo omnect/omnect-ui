@@ -147,12 +147,12 @@ async fn main() {
                     .memory_limit(MEMORY_LIMIT_BYTES),
             )
             .app_data(Api::new(
-                ods_socket_path.to_string(),
-                update_os_path!(),
-                centrifugo_client_token_hmac_secret_key.to_string(),
-                username.to_string(),
-                password.to_string(),
-                index_html.to_path_buf(),
+                &ods_socket_path,
+                &update_os_path!(),
+                &centrifugo_client_token_hmac_secret_key,
+                &username,
+                &password,
+                &index_html.to_path_buf(),
             ))
             .route("/", web::get().to(Api::index))
             .route(

@@ -8,17 +8,21 @@ use anyhow::{Context, Result};
 use jwt_simple::prelude::*;
 use log::{debug, error};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf};
+use std::{
+    fs,
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+};
 
 macro_rules! data_path {
     ($filename:expr) => {{
-        format!(r"/data/{}", $filename)
+        Path::new("/data/").join($filename)
     }};
 }
 
 macro_rules! tmp_path {
     ($filename:expr) => {{
-        format!(r"/tmp/{}", $filename)
+        Path::new("/tmp/").join($filename)
     }};
 }
 
@@ -35,7 +39,7 @@ pub struct FactoryResetPayload {
 
 #[derive(Serialize, Deserialize)]
 pub struct LoadUpdatePayload {
-    update_file_path: String,
+    update_file_path: PathBuf,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -60,50 +64,39 @@ pub enum FactoryResetMode {
 pub struct Api {
     ods_socket_path: String,
     update_os_path: String,
-    centrifugo_client_token_hmac_secret_key: String,
-    username: String,
-    password: String,
+    pub centrifugo_client_token_hmac_secret_key: String,
+    pub username: String,
+    pub password: String,
     index_html: PathBuf,
 }
 
 impl Api {
     pub fn new(
-        ods_socket_path: String,
-        update_os_path: String,
-        centrifugo_client_token_hmac_secret_key: String,
-        username: String,
-        password: String,
-        index_html: PathBuf,
-    ) -> Self {
+        ods_socket_path: &str,
+        update_os_path: &str,
+        centrifugo_client_token_hmac_secret_key: &str,
+        username: &str,
+        password: &str,
+        index_html: &Path,
+    ) -> Result<Self> {
         debug!("Api::new() called");
 
-        fs::exists(&ods_socket_path).unwrap_or_else(|_| {
-            panic!("omnect device service socket file {ods_socket_path} does not exist")
-        });
+        let _ = fs::exists(ods_socket_path).context(format!(
+            "omnect device service socket file {ods_socket_path} does not exist"
+        ));
 
-        fs::exists(&update_os_path)
-            .unwrap_or_else(|_| panic!("path {update_os_path} for os update does not exist"));
+        let _ = fs::exists(update_os_path).context(format!(
+            "path {update_os_path} for os update does not exist"
+        ));
 
-        Api {
-            ods_socket_path,
-            update_os_path,
-            centrifugo_client_token_hmac_secret_key,
-            username,
-            password,
-            index_html,
-        }
-    }
-
-    pub fn centrifugo_client_token_hmac_secret_key(&self) -> String {
-        self.centrifugo_client_token_hmac_secret_key.clone()
-    }
-
-    pub fn username(&self) -> String {
-        self.username.clone()
-    }
-
-    pub fn password(&self) -> String {
-        self.password.clone()
+        Ok(Self {
+            ods_socket_path: ods_socket_path.into(),
+            update_os_path: update_os_path.into(),
+            centrifugo_client_token_hmac_secret_key: centrifugo_client_token_hmac_secret_key.into(),
+            username: username.into(),
+            password: password.into(),
+            index_html: index_html.into(),
+        })
     }
 
     pub async fn index(config: web::Data<Api>) -> actix_web::Result<NamedFile> {
@@ -116,7 +109,7 @@ impl Api {
             ));
         }
 
-        Ok(NamedFile::open(config.index_html.to_path_buf())?)
+        Ok(NamedFile::open(&config.index_html)?)
     }
 
     pub async fn factory_reset(
@@ -209,13 +202,14 @@ impl Api {
         let _ = Api::clear_data_folder().await;
 
         if let Err(e) =
-            Api::persist_uploaded_file(form.file, tmp_path!(filename), data_path!(filename)).await
+            Api::persist_uploaded_file(form.file, &tmp_path!(&filename), &data_path!(&filename))
+                .await
         {
             error!("save_file() failed: {e:#}");
             return HttpResponse::InternalServerError().body(format!("{e}"));
         }
 
-        if let Err(e) = Api::set_file_permission(data_path!(filename)).await {
+        if let Err(e) = Api::set_file_permission(&data_path!(&filename)).await {
             error!("save_file() failed: {e:#}");
             return HttpResponse::InternalServerError().body(format!("{e}"));
         }
@@ -227,12 +221,9 @@ impl Api {
         mut body: web::Json<LoadUpdatePayload>,
         config: web::Data<Api>,
     ) -> impl Responder {
-        debug!(
-            "load_update() called with path {}",
-            body.update_file_path.clone()
-        );
+        debug!("load_update() called with path {:?}", body.update_file_path);
 
-        body.update_file_path = format!("{}/{}", &config.update_os_path, body.update_file_path);
+        body.update_file_path = Path::new(&config.update_os_path).join(&body.update_file_path);
 
         match post_with_json_body("/fwupdate/load/v1", body, &config.ods_socket_path).await {
             Ok(response) => response,
@@ -249,7 +240,7 @@ impl Api {
     ) -> impl Responder {
         debug!(
             "run_update() called with validate_iothub_connection: {}",
-            body.validate_iothub_connection.clone()
+            body.validate_iothub_connection
         );
 
         match post_with_json_body("/fwupdate/run/v1", body, &config.ods_socket_path).await {
@@ -273,25 +264,25 @@ impl Api {
 
     async fn persist_uploaded_file(
         tmp_file: TempFile,
-        temp_path: String,
-        data_path: String,
+        temp_path: &Path,
+        data_path: &Path,
     ) -> Result<()> {
         debug!("persist_uploaded_file() called");
 
         tmp_file
             .file
-            .persist(&temp_path)
+            .persist(temp_path)
             .context("failed to persist tmp file")?;
 
-        fs::copy(temp_path, &data_path).context("failed to copy file to data dir")?;
+        fs::copy(temp_path, data_path).context("failed to copy file to data dir")?;
 
         Ok(())
     }
 
-    async fn set_file_permission(file_path: String) -> Result<()> {
+    async fn set_file_permission(file_path: &Path) -> Result<()> {
         debug!("set_file_permission() called");
 
-        let metadata = fs::metadata(&file_path).context("failed to get file metadata")?;
+        let metadata = fs::metadata(file_path).context("failed to get file metadata")?;
         let mut perm = metadata.permissions();
         perm.set_mode(0o750);
         fs::set_permissions(file_path, perm).context("failed to set file permission")?;

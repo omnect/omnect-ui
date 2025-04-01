@@ -73,7 +73,7 @@ where
             };
 
             if !token.is_empty()
-                && verify_token(token, api_config.centrifugo_client_token_hmac_secret_key())
+                && verify_token(&token, &api_config.centrifugo_client_token_hmac_secret_key)
                     .is_ok_and(|res| res)
             {
                 let res = service.call(req).await?;
@@ -85,7 +85,7 @@ where
                     return Ok(unauthorized_error(req).map_into_right_body());
                 };
 
-                match verify_user(auth, api_config.username(), api_config.password()) {
+                match verify_user(auth, &api_config.username, &api_config.password) {
                     Ok(true) => {
                         let res = service.call(req).await?;
                         Ok(res.map_into_left_body())
@@ -101,10 +101,7 @@ where
     }
 }
 
-pub fn verify_token(
-    token: String,
-    centrifugo_client_token_hmac_secret_key: String,
-) -> Result<bool> {
+pub fn verify_token(token: &str, centrifugo_client_token_hmac_secret_key: &str) -> Result<bool> {
     let key = HS256Key::from_bytes(centrifugo_client_token_hmac_secret_key.as_bytes());
     let options = VerificationOptions {
         accept_future: true,
@@ -115,12 +112,12 @@ pub fn verify_token(
     };
 
     Ok(key
-        .verify_token::<NoCustomClaims>(&token, Some(options))
+        .verify_token::<NoCustomClaims>(token, Some(options))
         .is_ok())
 }
 
-fn verify_user(auth: BasicAuth, username: String, password: String) -> Result<bool> {
-    Ok(auth.user_id() == username && auth.password() == Some(&password))
+fn verify_user(auth: BasicAuth, username: &str, password: &str) -> Result<bool> {
+    Ok(auth.user_id() == username && auth.password() == Some(password))
 }
 
 fn unauthorized_error(req: ServiceRequest) -> ServiceResponse {
