@@ -9,4 +9,4 @@ docker buildx build \
   --platform   linux/arm64 \
   --load \
   -f Dockerfile . \
-  -t omnect-ui-arm64:"local_${omnect_ui_version}"
+  -t omnectshareddevacr.azurecr.io/omnect-ui:rst

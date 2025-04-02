@@ -24,6 +24,7 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 use tokio::process::Command;
+use uuid::Uuid;
 
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
 const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
@@ -56,6 +57,24 @@ struct CreateCertResponse {
     certificate: String,
     #[allow(dead_code)]
     expiration: String,
+}
+
+#[derive(Serialize)]
+struct HeaderKeyValue {
+    name: String,
+    value: String,
+}
+
+#[derive(Serialize)]
+struct PublishEndpoint {
+    url: String,
+    headers: Vec<HeaderKeyValue>,
+}
+
+#[derive(Serialize)]
+struct PublishIdEndpoint {
+    id: String,
+    endpoint: PublishEndpoint,
 }
 
 const CERT_PATH: &str = "/cert/cert.pem";
@@ -134,13 +153,22 @@ async fn main() {
             .build()
     }
 
+    let centrifugo_client_token_hmac_secret_key = Uuid::new_v4().to_string();
+    let centrifugo_http_api_key = Uuid::new_v4().to_string();
+
+    std::env::set_var(
+        "CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY",
+        &centrifugo_client_token_hmac_secret_key,
+    );
+    std::env::set_var("CENTRIFUGO_HTTP_API_KEY", &centrifugo_http_api_key);
+
     let ods_socket_path = std::env::var("SOCKET_PATH").expect("env SOCKET_PATH is missing");
-    let centrifugo_client_token_hmac_secret_key =
-        std::env::var("CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY").expect("missing jwt secret");
     let username = std::env::var("LOGIN_USER").expect("login_token: missing user");
     let password = std::env::var("LOGIN_PASSWORD").expect("login_token: missing password");
     let index_html =
         std::fs::canonicalize("static/index.html").expect("static/index.html not found");
+
+    send_publish_endpoint(&centrifugo_http_api_key, &ods_socket_path).await;
 
     let server = HttpServer::new(move || {
         App::new()
@@ -290,4 +318,40 @@ async fn create_module_certificate() -> impl Responder {
             HttpResponse::InternalServerError().finish()
         }
     }
+}
+
+async fn send_publish_endpoint(
+    centrifugo_http_api_key: &str,
+    ods_socket_path: &str,
+) -> impl Responder {
+    let iotedge_modulegenerationid =
+        std::env::var("IOTEDGE_MODULEGENERATIONID").expect("IOTEDGE_MODULEGENERATIONID missing");
+
+    let headers = vec![
+        HeaderKeyValue {
+            name: String::from("Content-Type"),
+            value: String::from("application/json"),
+        },
+        HeaderKeyValue {
+            name: String::from("X-API-Key"),
+            value: String::from(centrifugo_http_api_key),
+        },
+    ];
+
+    let body = PublishIdEndpoint {
+        id: iotedge_modulegenerationid,
+        endpoint: PublishEndpoint {
+            url: String::from("https://localhost:8000/api/publish"),
+            headers,
+        },
+    };
+
+    if let Err(e) =
+        socket_client::post_with_json_body("/publish-endpoint/v1", body, ods_socket_path).await
+    {
+        error!("sending publish endpoint failed: {e:#}");
+        HttpResponse::InternalServerError().finish();
+    }
+
+    HttpResponse::Ok().finish()
 }
