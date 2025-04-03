@@ -63,35 +63,15 @@ pub enum FactoryResetMode {
 
 #[derive(Clone)]
 pub struct Api {
-    ods_socket_path: String,
-    update_os_path: String,
+    pub ods_socket_path: String,
+    pub update_os_path: String,
     pub centrifugo_client_token_hmac_secret_key: String,
     pub username: String,
     pub password: String,
-    index_html: PathBuf,
+    pub index_html: PathBuf,
 }
 
 impl Api {
-    pub fn new(
-        ods_socket_path: &str,
-        update_os_path: &str,
-        centrifugo_client_token_hmac_secret_key: &str,
-        username: &str,
-        password: &str,
-        index_html: &Path,
-    ) -> Self {
-        debug!("Api::new() called");
-
-        Self {
-            ods_socket_path: ods_socket_path.into(),
-            update_os_path: update_os_path.into(),
-            centrifugo_client_token_hmac_secret_key: centrifugo_client_token_hmac_secret_key.into(),
-            username: username.into(),
-            password: password.into(),
-            index_html: index_html.into(),
-        }
-    }
-
     pub async fn index(config: web::Data<Api>) -> actix_web::Result<NamedFile> {
         debug!("index() called");
 
