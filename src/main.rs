@@ -192,6 +192,15 @@ async fn main() {
     fs::exists(&update_os_path!())
         .unwrap_or_else(|_| panic!("path {} for os update does not exist", &update_os_path!()));
 
+    let api_config = Api {
+        ods_socket_path,
+        update_os_path: update_os_path!(),
+        centrifugo_client_token_hmac_secret_key,
+        username,
+        password,
+        index_html,
+    };
+
     let server = HttpServer::new(move || {
         App::new()
             .wrap(session_middleware())
@@ -200,14 +209,7 @@ async fn main() {
                     .total_limit(UPLOAD_LIMIT_BYTES)
                     .memory_limit(MEMORY_LIMIT_BYTES),
             )
-            .app_data(Data::new(Api::new(
-                &ods_socket_path,
-                &update_os_path!(),
-                &centrifugo_client_token_hmac_secret_key,
-                &username,
-                &password,
-                &index_html.to_path_buf(),
-            )))
+            .app_data(Data::new(api_config.clone()))
             .route("/", web::get().to(Api::index))
             .route(
                 "/factory-reset",
@@ -346,8 +348,12 @@ async fn send_publish_endpoint(
     centrifugo_http_api_key: &str,
     ods_socket_path: &str,
 ) -> impl Responder {
+    #[cfg(not(feature = "mock"))]
     let iotedge_modulegenerationid =
         std::env::var("IOTEDGE_MODULEGENERATIONID").expect("IOTEDGE_MODULEGENERATIONID missing");
+
+    #[cfg(feature = "mock")]
+    let iotedge_modulegenerationid = "omnect-ui";
 
     let headers = vec![
         HeaderKeyValue {
