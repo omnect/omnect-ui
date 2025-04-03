@@ -13,7 +13,7 @@ use actix_session::{
 use actix_web::{
     body::MessageBody,
     cookie::{Key, SameSite},
-    web::{self},
+    web::{self, Data},
     App, HttpResponse, HttpServer, Responder,
 };
 use anyhow::Result;
@@ -33,6 +33,14 @@ macro_rules! update_os_path {
     () => {{
         static DATA_DIR_PATH_DEFAULT: &'static str = "/var/lib/omnect-ui";
         std::env::var("DATA_DIR_PATH").unwrap_or(DATA_DIR_PATH_DEFAULT.to_string())
+    }};
+}
+
+macro_rules! centrifugo_http_server_port {
+    () => {{
+        static CENTRIFUGO_HTTP_SERVER_PORT_DEFAULT: &'static str = "8000";
+        std::env::var("CENTRIFUGO_HTTP_SERVER_PORT")
+            .unwrap_or(CENTRIFUGO_HTTP_SERVER_PORT_DEFAULT.to_string())
     }};
 }
 
@@ -161,6 +169,10 @@ async fn main() {
         &centrifugo_client_token_hmac_secret_key,
     );
     std::env::set_var("CENTRIFUGO_HTTP_API_KEY", &centrifugo_http_api_key);
+    std::env::set_var(
+        "CENTRIFUGO_HTTP_SERVER_PORT",
+        &centrifugo_http_server_port!(),
+    );
 
     let ods_socket_path = std::env::var("SOCKET_PATH").expect("env SOCKET_PATH is missing");
     let username = std::env::var("LOGIN_USER").expect("login_token: missing user");
@@ -170,6 +182,16 @@ async fn main() {
 
     send_publish_endpoint(&centrifugo_http_api_key, &ods_socket_path).await;
 
+    fs::exists(&ods_socket_path).unwrap_or_else(|_| {
+        panic!(
+            "omnect device service socket file {} does not exist",
+            &ods_socket_path
+        )
+    });
+
+    fs::exists(&update_os_path!())
+        .unwrap_or_else(|_| panic!("path {} for os update does not exist", &update_os_path!()));
+
     let server = HttpServer::new(move || {
         App::new()
             .wrap(session_middleware())
@@ -178,14 +200,14 @@ async fn main() {
                     .total_limit(UPLOAD_LIMIT_BYTES)
                     .memory_limit(MEMORY_LIMIT_BYTES),
             )
-            .app_data(Api::new(
+            .app_data(Data::new(Api::new(
                 &ods_socket_path,
                 &update_os_path!(),
                 &centrifugo_client_token_hmac_secret_key,
                 &username,
                 &password,
                 &index_html.to_path_buf(),
-            ))
+            )))
             .route("/", web::get().to(Api::index))
             .route(
                 "/factory-reset",
@@ -341,7 +363,10 @@ async fn send_publish_endpoint(
     let body = PublishIdEndpoint {
         id: iotedge_modulegenerationid,
         endpoint: PublishEndpoint {
-            url: String::from("https://localhost:8000/api/publish"),
+            url: format!(
+                "https://localhost:{}/api/publish",
+                &centrifugo_http_server_port!()
+            ),
             headers,
         },
     };

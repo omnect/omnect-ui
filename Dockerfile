@@ -35,7 +35,6 @@ COPY --from=distroless /var/lib/dpkg/status.d /distroless_pkgs
 
 RUN cargo new /work/omnect-ui
 
-COPY .git ./omnect-ui/.git
 COPY Cargo.lock ./omnect-ui/Cargo.lock
 COPY Cargo.toml ./omnect-ui/Cargo.toml
 COPY src/build.rs ./omnect-ui/src/build.rs
@@ -43,6 +42,7 @@ COPY src/build.rs ./omnect-ui/src/build.rs
 RUN --mount=type=cache,target=/usr/local/cargo/registry cd omnect-ui && cargo build ${OMNECT_UI_BUILD_ARG} --release --target-dir ./build
 
 COPY src/* ./omnect-ui/src/
+COPY .git ./omnect-ui/.git
 RUN --mount=type=cache,target=/usr/local/cargo/registry <<EOF
   set -e
   # update timestamps to force a new build
