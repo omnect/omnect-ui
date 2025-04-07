@@ -348,13 +348,6 @@ async fn send_publish_endpoint(
     centrifugo_http_api_key: &str,
     ods_socket_path: &str,
 ) -> impl Responder {
-    #[cfg(not(feature = "mock"))]
-    let iotedge_modulegenerationid =
-        std::env::var("IOTEDGE_MODULEGENERATIONID").expect("IOTEDGE_MODULEGENERATIONID missing");
-
-    #[cfg(feature = "mock")]
-    let iotedge_modulegenerationid = "omnect-ui";
-
     let headers = vec![
         HeaderKeyValue {
             name: String::from("Content-Type"),
@@ -367,7 +360,7 @@ async fn send_publish_endpoint(
     ];
 
     let body = PublishIdEndpoint {
-        id: iotedge_modulegenerationid,
+        id: String::from(env!("CARGO_PKG_NAME")),
         endpoint: PublishEndpoint {
             url: format!(
                 "https://localhost:{}/api/publish",
