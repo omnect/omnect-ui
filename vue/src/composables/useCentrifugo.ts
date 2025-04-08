@@ -1,10 +1,8 @@
 import { Centrifuge, type PublicationContext, SubscriptionState } from "centrifuge"
 import { type Ref, ref } from "vue"
 import type { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
-import { useEventHook } from "./useEventHook"
 
 const centrifuge: Ref<Centrifuge | undefined> = ref(undefined)
-const connectedEvent = useEventHook()
 
 export function useCentrifuge() {
 	const centrifuge_url = `wss://${window.location.hostname}:8000/connection/websocket`
@@ -24,7 +22,6 @@ export function useCentrifuge() {
 				})
 				.on("connected", (ctx) => {
 					console.debug(`connected over ${ctx.transport}`)
-					connectedEvent.trigger()
 				})
 				.on("disconnected", (ctx) => {
 					console.debug(`disconnected: ${ctx.code}, ${ctx.reason}`)
@@ -96,5 +93,5 @@ export function useCentrifuge() {
 		}
 	}
 
-	return { subscribe, unsubscribe, unsubscribeAll, initializeCentrifuge, token, history, onConnected: connectedEvent.on }
+	return { subscribe, unsubscribe, unsubscribeAll, initializeCentrifuge, token, history }
 }
