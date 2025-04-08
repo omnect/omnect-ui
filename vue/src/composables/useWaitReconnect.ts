@@ -21,6 +21,11 @@ export function useWaitReconnect() {
 	const checkReconnect = async () => {
 		try {
 			const res = await axios.get("/", {
+				headers: {
+					"Cache-Control": "no-cache, no-store, must-revalidate",
+					Pragma: "no-cache",
+					Expires: "0"
+				},
 				timeout: 2_500
 			})
 			if (res.status === 200 && wasDown.value) {
