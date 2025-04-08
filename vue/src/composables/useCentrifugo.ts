@@ -9,25 +9,23 @@ export function useCentrifuge() {
 	const token = ref("")
 
 	const initializeCentrifuge = () => {
-		if (centrifuge.value == null) {
-			centrifuge.value = new Centrifuge(centrifuge_url, {
-				token: token.value,
-				getToken: async () => {
-					return await getToken()
-				}
+		centrifuge.value = new Centrifuge(centrifuge_url, {
+			token: token.value,
+			getToken: async () => {
+				return await getToken()
+			}
+		})
+		centrifuge.value
+			.on("connecting", (ctx) => {
+				console.debug(`connecting: ${ctx.code}, ${ctx.reason}`)
 			})
-			centrifuge.value
-				.on("connecting", (ctx) => {
-					console.debug(`connecting: ${ctx.code}, ${ctx.reason}`)
-				})
-				.on("connected", (ctx) => {
-					console.debug(`connected over ${ctx.transport}`)
-				})
-				.on("disconnected", (ctx) => {
-					console.debug(`disconnected: ${ctx.code}, ${ctx.reason}`)
-				})
-				.connect()
-		}
+			.on("connected", (ctx) => {
+				console.debug(`connected over ${ctx.transport}`)
+			})
+			.on("disconnected", (ctx) => {
+				console.debug(`disconnected: ${ctx.code}, ${ctx.reason}`)
+			})
+			.connect()
 	}
 
 	const getToken = async (): Promise<string> => {
