@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue"
+import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 import OmnectLogo from "../components/OmnectLogo.vue"
 import { useSnackbar } from "../composables/useSnackbar"
@@ -39,6 +39,17 @@ const handleSubmit = async (): Promise<void> => {
 		errorMsg.value = "Failed to set password."
 	}
 }
+
+onMounted(async () => {
+	try {
+		const requireSetPassword = await fetch("require-set-password")
+		if (requireSetPassword.status !== 201) {
+			router.push("/")
+		}
+	} catch {
+		router.push("/login")
+	}
+})
 </script>
 
 <template>

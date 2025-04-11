@@ -30,9 +30,9 @@ use uuid::Uuid;
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
 const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
 
-macro_rules! data_path {
+macro_rules! config_path {
     ($filename:expr) => {{
-        Path::new("/data/").join($filename)
+        Path::new("/data/").join("config/").join($filename)
     }};
 }
 
@@ -394,7 +394,7 @@ pub async fn validate_password(password: &str) -> Result<()> {
         bail!("password is empty");
     }
 
-    let password_file = data_path!("password");
+    let password_file = config_path!("password");
     if !password_file.exists() {
         bail!("password file not found");
     }

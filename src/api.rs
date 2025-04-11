@@ -25,6 +25,12 @@ macro_rules! data_path {
     }};
 }
 
+macro_rules! config_path {
+    ($filename:expr) => {{
+        Path::new("/data/").join("config/").join($filename)
+    }};
+}
+
 macro_rules! tmp_path {
     ($filename:expr) => {{
         Path::new("/tmp/").join($filename)
@@ -258,11 +264,16 @@ impl Api {
             return HttpResponse::InternalServerError().finish();
         }
         let hash = password_hash.unwrap().to_string();
-        let password_file = data_path!("password");
+        let password_file = config_path!("password");
         if password_file.exists() {
             return HttpResponse::Found()
                 .append_header(("Location", "/login"))
                 .finish();
+        }
+
+        if let Err(e) = fs::create_dir_all(password_file.parent().unwrap()) {
+            error!("set_password() failed: {:#}", e);
+            return HttpResponse::InternalServerError().body(format!("{:#}", e));
         }
 
         match File::create(password_file) {
@@ -296,7 +307,7 @@ impl Api {
             return HttpResponse::BadRequest().body("current password is not correct");
         }
 
-        let password_file = data_path!("password");
+        let password_file = config_path!("password");
 
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
@@ -330,7 +341,7 @@ impl Api {
     pub async fn require_set_password() -> impl Responder {
         debug!("require_set_password() called");
 
-        let password_file = data_path!("password");
+        let password_file = config_path!("password");
         if !password_file.exists() {
             return HttpResponse::Created()
                 .append_header(("Location", "/set-password"))
@@ -344,7 +355,7 @@ impl Api {
         debug!("clear_data_folder() called");
         for entry in fs::read_dir("/data")? {
             let entry = entry?;
-            if entry.path().is_file() && entry.file_name() != "password" {
+            if entry.path().is_file() {
                 fs::remove_file(entry.path())?;
             }
         }
