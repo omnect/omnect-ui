@@ -4,7 +4,7 @@ import { useRouter } from "vue-router"
 import OmnectLogo from "../components/OmnectLogo.vue"
 import { useCentrifuge } from "../composables/useCentrifugo"
 
-const { initializeCentrifuge, disconnect } = useCentrifuge()
+const { initializeCentrifuge, unsubscribeAll, disconnect } = useCentrifuge()
 const router = useRouter()
 
 const password = ref("")
@@ -31,7 +31,7 @@ const doLogin = async (e: Event) => {
 		}
 
 		if (res.status === 401) {
-			errorMsg.value = "Username and/or password wrong."
+			errorMsg.value = "Password is wrong."
 			return
 		}
 
@@ -42,6 +42,7 @@ const doLogin = async (e: Event) => {
 }
 
 onMounted(() => {
+	unsubscribeAll()
 	disconnect()
 })
 </script>
