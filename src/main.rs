@@ -374,8 +374,7 @@ async fn send_publish_endpoint(
         id: String::from(env!("CARGO_PKG_NAME")),
         endpoint: PublishEndpoint {
             url: format!(
-                "https://{}:{}/api/publish",
-                String::from(env!("CARGO_PKG_NAME")),
+                "https://localhost:{}/api/publish",
                 &centrifugo_http_server_port!()
             ),
             headers,
