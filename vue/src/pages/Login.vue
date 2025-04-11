@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref } from "vue"
+import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 import OmnectLogo from "../components/OmnectLogo.vue"
 import { useCentrifuge } from "../composables/useCentrifugo"
 
-const { initializeCentrifuge } = useCentrifuge()
+const { initializeCentrifuge, disconnect } = useCentrifuge()
 const router = useRouter()
 
 const password = ref("")
@@ -40,6 +40,10 @@ const doLogin = async (e: Event) => {
 		errorMsg.value = "Failed to login."
 	}
 }
+
+onMounted(() => {
+	disconnect()
+})
 </script>
 
 <template>
