@@ -271,10 +271,12 @@ async fn main() {
     std::env::set_var("CENTRIFUGO_HTTP_SERVER_TLS_CERT_PEM", CERT_PATH);
     std::env::set_var("CENTRIFUGO_HTTP_SERVER_TLS_KEY_PEM", KEY_PATH);
 
-    let mut centrifugo =
-        Command::new(std::fs::canonicalize("centrifugo").expect("centrifugo not found"))
-            .spawn()
-            .expect("Failed to spawn child process");
+    let mut centrifugo = Command::new(
+        std::fs::canonicalize("centrifugo -c ./centrifugo_config.json")
+            .expect("centrifugo not found"),
+    )
+    .spawn()
+    .expect("Failed to spawn child process");
 
     debug!("centrifugo pid: {}", centrifugo.id().unwrap());
 
