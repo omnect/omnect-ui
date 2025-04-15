@@ -24,8 +24,6 @@ docker run --rm \
   -e RUST_LOG=debug \
   -e UI_PORT=1977 \
   -e SOCKET_PATH=/socket/api.sock \
-  -e LOGIN_USER=omnect-ui \
-  -e LOGIN_PASSWORD=123 \
   -e CENTRIFUGO_ADMIN_ENABLED=true \
   -e CENTRIFUGO_ADMIN_PASSWORD=123 \
   -e CENTRIFUGO_ADMIN_SECRET=123 \
