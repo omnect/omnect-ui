@@ -25,6 +25,7 @@ use std::fs::File;
 use std::io::Write;
 use std::{fs, path::Path};
 use tokio::process::Command;
+use tokio::signal::unix::{signal, SignalKind};
 use uuid::Uuid;
 
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
@@ -281,9 +282,16 @@ async fn main() {
 
     debug!("centrifugo pid: {}", centrifugo.id().unwrap());
 
+    let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install SIGTERM handler");
+
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             debug!("ctrl-c");
+            delete_publish_endpoint(&ods_socket_path).await;
+            server_handle.stop(true).await;
+        },
+        _ = sigterm.recv() => {
+            debug!("SIGTERM received");
             delete_publish_endpoint(&ods_socket_path).await;
             server_handle.stop(true).await;
         },
