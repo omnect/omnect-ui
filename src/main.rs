@@ -197,8 +197,9 @@ async fn main() {
     fs::exists(&update_os_path!())
         .unwrap_or_else(|_| panic!("path {} for os update does not exist", &update_os_path!()));
 
+    let ods_socket_path_for_api = ods_socket_path.clone();
     let api_config = Api {
-        ods_socket_path,
+        ods_socket_path: ods_socket_path_for_api,
         update_os_path: update_os_path!(),
         centrifugo_client_token_hmac_secret_key,
         index_html,
@@ -283,6 +284,7 @@ async fn main() {
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             debug!("ctrl-c");
+            delete_publish_endpoint(&ods_socket_path).await;
             server_handle.stop(true).await;
         },
         _ = server_task => {
@@ -385,6 +387,19 @@ async fn send_publish_endpoint(
         socket_client::post_with_json_body("/publish-endpoint/v1", body, ods_socket_path).await
     {
         error!("sending publish endpoint failed: {e:#}");
+        HttpResponse::InternalServerError().finish();
+    }
+
+    HttpResponse::Ok().finish()
+}
+
+async fn delete_publish_endpoint(ods_socket_path: &str) -> impl Responder {
+    let path = format!(
+        "/publish-endpoint/v1/{}",
+        String::from(env!("CARGO_PKG_NAME"))
+    );
+    if let Err(e) = socket_client::delete_with_empty_body(&path, ods_socket_path).await {
+        error!("deleting publish endpoint failed: {e:#}");
         HttpResponse::InternalServerError().finish();
     }
 

@@ -41,6 +41,17 @@ pub async fn post_with_empty_body(path: &str, socket_path: &str) -> Result<HttpR
     post(request, socket_path).await
 }
 
+pub async fn delete_with_empty_body(path: &str, socket_path: &str) -> Result<HttpResponse> {
+    let request = Request::builder()
+        .uri(path)
+        .method("DELETE")
+        .header("Host", "localhost")
+        .body(String::new())
+        .context("build request failed")?;
+
+    post(request, socket_path).await
+}
+
 async fn post(request: Request<String>, socket_path: &str) -> Result<HttpResponse> {
     let mut sender = match sender(socket_path).await {
         Err(e) => {
