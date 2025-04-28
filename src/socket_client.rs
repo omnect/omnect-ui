@@ -27,7 +27,7 @@ pub async fn post_with_json_body(
         .body(serde_json::to_string(&json).unwrap_or_default())
         .context("build request failed")?;
 
-    post(request, socket_path).await
+    send_request(request, socket_path).await
 }
 
 pub async fn post_with_empty_body(path: &str, socket_path: &str) -> Result<HttpResponse> {
@@ -38,7 +38,7 @@ pub async fn post_with_empty_body(path: &str, socket_path: &str) -> Result<HttpR
         .body(String::new())
         .context("build request failed")?;
 
-    post(request, socket_path).await
+    send_request(request, socket_path).await
 }
 
 pub async fn delete_with_empty_body(path: &str, socket_path: &str) -> Result<HttpResponse> {
@@ -49,10 +49,10 @@ pub async fn delete_with_empty_body(path: &str, socket_path: &str) -> Result<Htt
         .body(String::new())
         .context("build request failed")?;
 
-    post(request, socket_path).await
+    send_request(request, socket_path).await
 }
 
-async fn post(request: Request<String>, socket_path: &str) -> Result<HttpResponse> {
+async fn send_request(request: Request<String>, socket_path: &str) -> Result<HttpResponse> {
     let mut sender = match sender(socket_path).await {
         Err(e) => {
             error!("error creating request sender: {e}. socket might be broken. exit application");

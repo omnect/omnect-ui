@@ -198,9 +198,8 @@ async fn main() {
     fs::exists(&update_os_path!())
         .unwrap_or_else(|_| panic!("path {} for os update does not exist", &update_os_path!()));
 
-    let ods_socket_path_for_api = ods_socket_path.clone();
     let api_config = Api {
-        ods_socket_path: ods_socket_path_for_api,
+        ods_socket_path: ods_socket_path.clone(),
         update_os_path: update_os_path!(),
         centrifugo_client_token_hmac_secret_key,
         index_html,
