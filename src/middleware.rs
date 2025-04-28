@@ -78,7 +78,6 @@ where
 
             if !token.is_empty()
                 && verify_token(&token, &api_config.centrifugo_client_token_hmac_secret_key)
-                    .is_ok_and(|res| res)
             {
                 let res = service.call(req).await?;
                 Ok(res.map_into_left_body())
@@ -100,7 +99,7 @@ where
     }
 }
 
-pub fn verify_token(token: &str, centrifugo_client_token_hmac_secret_key: &str) -> Result<bool> {
+pub fn verify_token(token: &str, centrifugo_client_token_hmac_secret_key: &str) -> bool {
     let key = HS256Key::from_bytes(centrifugo_client_token_hmac_secret_key.as_bytes());
     let options = VerificationOptions {
         accept_future: true,
@@ -110,9 +109,8 @@ pub fn verify_token(token: &str, centrifugo_client_token_hmac_secret_key: &str) 
         ..Default::default()
     };
 
-    Ok(key
-        .verify_token::<NoCustomClaims>(token, Some(options))
-        .is_ok())
+    key.verify_token::<NoCustomClaims>(token, Some(options))
+        .is_ok()
 }
 
 fn verify_user(auth: BasicAuth) -> bool {
@@ -474,7 +472,7 @@ mod tests {
         let claim = generate_valid_claim();
         let (token, key) = generate_token_and_key(claim);
 
-        assert!(verify_token(token.as_str(), &key).unwrap());
+        assert!(verify_token(token.as_str(), &key));
     }
 
     #[tokio::test]
@@ -482,7 +480,7 @@ mod tests {
         let claim = generate_expired_claim();
         let (token, key) = generate_token_and_key(claim);
 
-        assert!(!verify_token(token.as_str(), &key).unwrap());
+        assert!(!verify_token(token.as_str(), &key));
     }
 
     #[tokio::test]
@@ -490,12 +488,12 @@ mod tests {
         let claim = generate_unset_subject_claim();
         let (token, key) = generate_token_and_key(claim);
 
-        assert!(!verify_token(token.as_str(), &key).unwrap());
+        assert!(!verify_token(token.as_str(), &key));
 
         let claim = generate_invalid_subject_claim();
         let (token, key) = generate_token_and_key(claim);
 
-        assert!(!verify_token(token.as_str(), &key).unwrap());
+        assert!(!verify_token(token.as_str(), &key));
     }
 
     #[tokio::test]
@@ -504,7 +502,7 @@ mod tests {
         let (_, key) = generate_token_and_key(claim);
         let token = "someinvalidtestbytes".to_string();
 
-        assert!(!verify_token(token.as_str(), &key).unwrap());
+        assert!(!verify_token(token.as_str(), &key));
     }
 
     #[tokio::test]
