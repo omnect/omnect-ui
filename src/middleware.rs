@@ -59,10 +59,10 @@ where
     forward_ready!(service);
 
     fn call(&self, mut req: ServiceRequest) -> Self::Future {
-        let service = Rc::clone(&self.service);
+        let service = self.service.clone();
 
         Box::pin(async move {
-            let Some(api_config) = req.app_data::<Data<Api>>().cloned() else {
+            let Some(api_config) = req.app_data::<Data<Api>>() else {
                 let http_res = HttpResponse::InternalServerError().finish();
                 let (http_req, _) = req.into_parts();
                 return Ok(ServiceResponse::new(http_req, http_res).map_into_right_body());
