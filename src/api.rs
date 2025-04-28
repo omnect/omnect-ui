@@ -1,6 +1,6 @@
-use crate::common::config_path;
+use crate::common::{config_path, validate_password};
+use crate::middleware::TOKEN_EXPIRE_HOURS;
 use crate::socket_client::*;
-use crate::{middleware::TOKEN_EXPIRE_HOURS, validate_password};
 use actix_files::NamedFile;
 use actix_multipart::form::{tempfile::TempFile, MultipartForm};
 use actix_session::Session;
@@ -304,11 +304,7 @@ impl Api {
         Ok(())
     }
 
-    fn persist_uploaded_file(
-        tmp_file: TempFile,
-        temp_path: &Path,
-        data_path: &Path,
-    ) -> Result<()> {
+    fn persist_uploaded_file(tmp_file: TempFile, temp_path: &Path, data_path: &Path) -> Result<()> {
         debug!("persist_uploaded_file() called");
 
         tmp_file

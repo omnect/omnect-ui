@@ -15,7 +15,8 @@ use std::{
     rc::Rc,
 };
 
-use crate::{api::Api, validate_password};
+use crate::api::Api;
+use crate::common::validate_password;
 
 pub const TOKEN_EXPIRE_HOURS: u64 = 2;
 
