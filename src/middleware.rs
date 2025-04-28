@@ -89,7 +89,7 @@ where
                     return Ok(unauthorized_error(req).map_into_right_body());
                 };
 
-                if verify_user(auth).await {
+                if verify_user(auth) {
                     let res = service.call(req).await?;
                     Ok(res.map_into_left_body())
                 } else {
@@ -115,7 +115,7 @@ pub fn verify_token(token: &str, centrifugo_client_token_hmac_secret_key: &str) 
         .is_ok())
 }
 
-async fn verify_user(auth: BasicAuth) -> bool {
+fn verify_user(auth: BasicAuth) -> bool {
     let Some(password) = auth.password() else {
         return false;
     };
@@ -513,7 +513,7 @@ mod tests {
 
         let expected = false;
 
-        let result = verify_user(basic_auth).await;
+        let result = verify_user(basic_auth);
 
         assert_eq!(expected, result);
     }
