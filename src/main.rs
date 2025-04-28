@@ -186,8 +186,6 @@ async fn main() {
     let index_html =
         std::fs::canonicalize("static/index.html").expect("static/index.html not found");
 
-    send_publish_endpoint(&centrifugo_http_api_key, &ods_socket_path).await;
-
     fs::exists(&ods_socket_path).unwrap_or_else(|_| {
         panic!(
             "omnect device service socket file {} does not exist",
@@ -197,6 +195,8 @@ async fn main() {
 
     fs::exists(&update_os_path!())
         .unwrap_or_else(|_| panic!("path {} for os update does not exist", &update_os_path!()));
+
+    send_publish_endpoint(&centrifugo_http_api_key, &ods_socket_path).await;
 
     let api_config = Api {
         ods_socket_path: ods_socket_path.clone(),
