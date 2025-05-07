@@ -1,4 +1,5 @@
 mod api;
+mod certificate;
 mod common;
 mod middleware;
 mod socket_client;
@@ -12,7 +13,6 @@ use actix_session::{
     SessionMiddleware,
 };
 use actix_web::{
-    body::MessageBody,
     cookie::{Key, SameSite},
     web::{self, Data},
     App, HttpResponse, HttpServer, Responder,
@@ -20,11 +20,12 @@ use actix_web::{
 use anyhow::Result;
 use env_logger::{Builder, Env, Target};
 use log::{debug, error, info};
-use serde::{Deserialize, Serialize};
-use std::{fs, fs::File, io::Write};
-
-use tokio::process::Command;
-use tokio::signal::unix::{signal, SignalKind};
+use serde::Serialize;
+use std::{fs, io::Write};
+use tokio::{
+    process::Command,
+    signal::unix::{signal, SignalKind},
+};
 use uuid::Uuid;
 
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
@@ -46,29 +47,6 @@ macro_rules! centrifugo_http_server_port {
 }
 
 #[derive(Serialize)]
-struct CreateCertPayload {
-    #[serde(rename = "commonName")]
-    common_name: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct PrivateKey {
-    #[serde(rename = "type")]
-    #[allow(dead_code)]
-    type_name: String,
-    bytes: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct CreateCertResponse {
-    #[serde(rename = "privateKey")]
-    private_key: PrivateKey,
-    certificate: String,
-    #[allow(dead_code)]
-    expiration: String,
-}
-
-#[derive(Serialize)]
 struct HeaderKeyValue {
     name: String,
     value: String,
@@ -84,34 +62,6 @@ struct PublishEndpoint {
 struct PublishIdEndpoint {
     id: &'static str,
     endpoint: PublishEndpoint,
-}
-
-#[derive(Deserialize)]
-struct StatusResponse {
-    #[serde(rename = "NetworkStatus")]
-    network_status: NetworkStatus,
-}
-
-#[derive(Deserialize)]
-struct NetworkStatus {
-    #[serde(rename = "network_status")]
-    network_interfaces: Vec<NetworkInterface>,
-}
-
-#[derive(Deserialize)]
-struct NetworkInterface {
-    online: bool,
-    ipv4: Ipv4Info,
-}
-
-#[derive(Deserialize)]
-struct Ipv4Info {
-    addrs: Vec<Ipv4AddrInfo>,
-}
-
-#[derive(Deserialize)]
-struct Ipv4AddrInfo {
-    addr: String,
 }
 
 macro_rules! cert_path {
@@ -161,7 +111,7 @@ async fn main() {
         .parse::<u64>()
         .expect("UI_PORT format");
 
-    create_module_certificate().await;
+    let _ = certificate::create_module_certificate(&cert_path!(), &key_path!()).await;
 
     let mut tls_certs =
         std::io::BufReader::new(std::fs::File::open(cert_path!()).expect("read certs_file"));
@@ -341,67 +291,6 @@ async fn main() {
     debug!("good bye");
 }
 
-#[cfg(feature = "mock")]
-async fn create_module_certificate() -> impl Responder {
-    HttpResponse::Ok().finish()
-}
-
-#[cfg(not(feature = "mock"))]
-async fn create_module_certificate() -> impl Responder {
-    info!("create module certificate");
-
-    let iotedge_moduleid = std::env::var("IOTEDGE_MODULEID").expect("IOTEDGE_MODULEID missing");
-    // let iotedge_deviceid = std::env::var("IOTEDGE_DEVICEID").expect("IOTEDGE_DEVICEID missing");
-    let iotedge_modulegenerationid =
-        std::env::var("IOTEDGE_MODULEGENERATIONID").expect("IOTEDGE_MODULEGENERATIONID missing");
-    let iotedge_apiversion =
-        std::env::var("IOTEDGE_APIVERSION").expect("IOTEDGE_APIVERSION missing");
-
-    let iotedge_workloaduri =
-        std::env::var("IOTEDGE_WORKLOADURI").expect("IOTEDGE_WORKLOADURI missing");
-
-    let ods_socket_path = std::env::var("SOCKET_PATH").expect("env SOCKET_PATH is missing");
-
-    if let Some(ip) = get_ip_address(&ods_socket_path).await {
-        debug!("IP address: {}", ip);
-        let payload = CreateCertPayload { common_name: ip };
-        let path = format!(
-            "/modules/{}/genid/{}/certificate/server?api-version={}",
-            iotedge_moduleid, iotedge_modulegenerationid, iotedge_apiversion
-        );
-        let ori_socket_path = iotedge_workloaduri.to_string();
-        let socket_path = ori_socket_path.strip_prefix("unix://").unwrap();
-
-        match socket_client::post_with_json_body(&path, payload, socket_path).await {
-            Ok(response) => {
-                let body = response.into_body();
-                let body_bytes = body.try_into_bytes().unwrap();
-                let cert_response: CreateCertResponse =
-                    serde_json::from_slice(&body_bytes).expect("CreateCertResponse not possible");
-
-                let mut file = File::create(cert_path!())
-                    .unwrap_or_else(|_| panic!("{} could not be created", cert_path!()));
-                file.write_all(cert_response.certificate.as_bytes())
-                    .unwrap_or_else(|_| panic!("write to {} not possible", cert_path!()));
-
-                let mut file = File::create(key_path!())
-                    .unwrap_or_else(|_| panic!("{} could not be created", key_path!()));
-                file.write_all(cert_response.private_key.bytes.as_bytes())
-                    .unwrap_or_else(|_| panic!("write to {} not possible", key_path!()));
-
-                HttpResponse::Ok().finish()
-            }
-            Err(e) => {
-                error!("create_module_certificate failed: {e:#}");
-                HttpResponse::InternalServerError().finish()
-            }
-        }
-    } else {
-        error!("create_module_certificate failed, no ip found");
-        HttpResponse::InternalServerError().finish()
-    }
-}
-
 async fn send_publish_endpoint(
     centrifugo_http_api_key: &str,
     ods_socket_path: &str,
@@ -447,27 +336,4 @@ async fn delete_publish_endpoint(ods_socket_path: &str) -> impl Responder {
     }
 
     HttpResponse::Ok().finish()
-}
-
-async fn get_ip_address(ods_socket_path: &str) -> Option<String> {
-    match socket_client::get_with_empty_body("/status/v1", ods_socket_path).await {
-        Ok(response) => {
-            let body = response.into_body();
-            let body_bytes = body.try_into_bytes().unwrap();
-            let status_response: StatusResponse =
-                serde_json::from_slice(&body_bytes).expect("StatusResponse not possible");
-
-            status_response
-                .network_status
-                .network_interfaces
-                .into_iter()
-                .find(|iface| iface.online)
-                .and_then(|iface| iface.ipv4.addrs.into_iter().next())
-                .map(|addr_info| addr_info.addr)
-        }
-        Err(e) => {
-            error!("get ip address failed: {e:#}");
-            None
-        }
-    }
 }
