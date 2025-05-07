@@ -86,32 +86,30 @@ struct PublishIdEndpoint {
     endpoint: PublishEndpoint,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 struct StatusResponse {
     #[serde(rename = "NetworkStatus")]
     network_status: NetworkStatus,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 struct NetworkStatus {
     #[serde(rename = "network_status")]
     network_interfaces: Vec<NetworkInterface>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 struct NetworkInterface {
-    name: String,
-    mac: String,
     online: bool,
     ipv4: Ipv4Info,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 struct Ipv4Info {
     addrs: Vec<Ipv4AddrInfo>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 struct Ipv4AddrInfo {
     addr: String,
 }
