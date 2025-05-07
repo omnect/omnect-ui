@@ -22,6 +22,7 @@ use env_logger::{Builder, Env, Target};
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use std::{fs, fs::File, io::Write};
+
 use tokio::process::Command;
 use tokio::signal::unix::{signal, SignalKind};
 use uuid::Uuid;
@@ -91,6 +92,37 @@ macro_rules! cert_path {
         std::env::var("CERT_PATH").unwrap_or(CERT_PATH_DEFAULT.to_string())
     }};
 }
+#[derive(Deserialize, Serialize)]
+struct StatusResponse {
+    NetworkStatus: NetworkStatus,
+}
+
+#[derive(Deserialize, Serialize)]
+struct NetworkStatus {
+    network_status: Vec<NetworkInterface>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct NetworkInterface {
+    name: String,
+    mac: String,
+    online: bool,
+    ipv4: Ipv4Info,
+}
+
+#[derive(Deserialize, Serialize)]
+struct Ipv4Info {
+    addrs: Vec<Ipv4AddrInfo>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct Ipv4AddrInfo {
+    addr: String,
+}
+
+const CERT_PATH: &str = "/cert/cert.pem";
+const KEY_PATH: &str = "/cert/key.pem";
+const EXPIRATION_PATH: &str = "/cert/expiration";
 
 macro_rules! key_path {
     () => {{
@@ -319,10 +351,10 @@ async fn create_module_certificate() -> impl Responder {
 
 #[cfg(not(feature = "mock"))]
 async fn create_module_certificate() -> impl Responder {
-    info!("create_module_certificate()");
+    info!("create module certificate");
 
     let iotedge_moduleid = std::env::var("IOTEDGE_MODULEID").expect("IOTEDGE_MODULEID missing");
-    let iotedge_deviceid = std::env::var("IOTEDGE_DEVICEID").expect("IOTEDGE_DEVICEID missing");
+    // let iotedge_deviceid = std::env::var("IOTEDGE_DEVICEID").expect("IOTEDGE_DEVICEID missing");
     let iotedge_modulegenerationid =
         std::env::var("IOTEDGE_MODULEGENERATIONID").expect("IOTEDGE_MODULEGENERATIONID missing");
     let iotedge_apiversion =
@@ -331,39 +363,50 @@ async fn create_module_certificate() -> impl Responder {
     let iotedge_workloaduri =
         std::env::var("IOTEDGE_WORKLOADURI").expect("IOTEDGE_WORKLOADURI missing");
 
-    let payload = CreateCertPayload {
-        common_name: iotedge_deviceid.to_string(),
-    };
-    let path = format!(
-        "/modules/{}/genid/{}/certificate/server?api-version={}",
-        iotedge_moduleid, iotedge_modulegenerationid, iotedge_apiversion
-    );
-    let ori_socket_path = iotedge_workloaduri.to_string();
-    let socket_path = ori_socket_path.strip_prefix("unix://").unwrap();
+    let ods_socket_path = std::env::var("SOCKET_PATH").expect("env SOCKET_PATH is missing");
 
-    match socket_client::post_with_json_body(&path, payload, socket_path).await {
-        Ok(response) => {
-            let body = response.into_body();
-            let body_bytes = body.try_into_bytes().unwrap();
-            let cert_response: CreateCertResponse =
-                serde_json::from_slice(&body_bytes).expect("CreateCertResponse not possible");
+    if let Some(ip) = get_ip_address(&ods_socket_path).await {
+        debug!("IP address: {}", ip);
+        let payload = CreateCertPayload { common_name: ip };
+        let path = format!(
+            "/modules/{}/genid/{}/certificate/server?api-version={}",
+            iotedge_moduleid, iotedge_modulegenerationid, iotedge_apiversion
+        );
+        let ori_socket_path = iotedge_workloaduri.to_string();
+        let socket_path = ori_socket_path.strip_prefix("unix://").unwrap();
 
-            let mut file = File::create(cert_path!())
-                .unwrap_or_else(|_| panic!("{} could not be created", cert_path!()));
-            file.write_all(cert_response.certificate.as_bytes())
-                .unwrap_or_else(|_| panic!("write to {} not possible", cert_path!()));
+        match socket_client::post_with_json_body(&path, payload, socket_path).await {
+            Ok(response) => {
+                let body = response.into_body();
+                let body_bytes = body.try_into_bytes().unwrap();
+                let cert_response: CreateCertResponse =
+                    serde_json::from_slice(&body_bytes).expect("CreateCertResponse not possible");
 
-            let mut file = File::create(key_path!())
-                .unwrap_or_else(|_| panic!("{} could not be created", key_path!()));
-            file.write_all(cert_response.private_key.bytes.as_bytes())
-                .unwrap_or_else(|_| panic!("write to {} not possible", key_path!()));
+                let mut file = File::create(CERT_PATH)
+                    .unwrap_or_else(|_| panic!("{CERT_PATH} could not be created"));
+                file.write_all(cert_response.certificate.as_bytes())
+                    .unwrap_or_else(|_| panic!("write to {CERT_PATH} not possible"));
 
-            HttpResponse::Ok().finish()
+                let mut file = File::create(KEY_PATH)
+                    .unwrap_or_else(|_| panic!("{KEY_PATH} could not be created"));
+                file.write_all(cert_response.private_key.bytes.as_bytes())
+                    .unwrap_or_else(|_| panic!("write to {KEY_PATH} not possible"));
+
+                let mut file = File::create(EXPIRATION_PATH)
+                    .unwrap_or_else(|_| panic!("{EXPIRATION_PATH} could not be created"));
+                file.write_all(cert_response.expiration.as_bytes())
+                    .unwrap_or_else(|_| panic!("write to {EXPIRATION_PATH} not possible"));
+
+                HttpResponse::Ok().finish()
+            }
+            Err(e) => {
+                error!("create_module_certificate failed: {e:#}");
+                HttpResponse::InternalServerError().finish()
+            }
         }
-        Err(e) => {
-            error!("create_module_certificate failed: {e:#}");
-            HttpResponse::InternalServerError().finish()
-        }
+    } else {
+        error!("create_module_certificate failed, no ip found");
+        HttpResponse::InternalServerError().finish()
     }
 }
 
@@ -412,4 +455,27 @@ async fn delete_publish_endpoint(ods_socket_path: &str) -> impl Responder {
     }
 
     HttpResponse::Ok().finish()
+}
+
+async fn get_ip_address(ods_socket_path: &str) -> Option<String> {
+    match socket_client::get_with_empty_body("/status/v1", ods_socket_path).await {
+        Ok(response) => {
+            let body = response.into_body();
+            let body_bytes = body.try_into_bytes().unwrap();
+            let status_response: StatusResponse =
+                serde_json::from_slice(&body_bytes).expect("StatusResponse not possible");
+
+            status_response
+                .NetworkStatus
+                .network_status
+                .into_iter()
+                .find(|iface| iface.online)
+                .and_then(|iface| iface.ipv4.addrs.into_iter().next())
+                .map(|addr_info| addr_info.addr)
+        }
+        Err(e) => {
+            error!("get ip address failed: {e:#}");
+            None
+        }
+    }
 }
