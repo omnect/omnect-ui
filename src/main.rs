@@ -86,20 +86,16 @@ struct PublishIdEndpoint {
     endpoint: PublishEndpoint,
 }
 
-macro_rules! cert_path {
-    () => {{
-        static CERT_PATH_DEFAULT: &'static str = "/cert/cert.pem";
-        std::env::var("CERT_PATH").unwrap_or(CERT_PATH_DEFAULT.to_string())
-    }};
-}
 #[derive(Deserialize, Serialize)]
 struct StatusResponse {
-    NetworkStatus: NetworkStatus,
+    #[serde(rename = "NetworkStatus")]
+    network_status: NetworkStatus,
 }
 
 #[derive(Deserialize, Serialize)]
 struct NetworkStatus {
-    network_status: Vec<NetworkInterface>,
+    #[serde(rename = "network_status")]
+    network_interfaces: Vec<NetworkInterface>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -120,9 +116,12 @@ struct Ipv4AddrInfo {
     addr: String,
 }
 
-const CERT_PATH: &str = "/cert/cert.pem";
-const KEY_PATH: &str = "/cert/key.pem";
-const EXPIRATION_PATH: &str = "/cert/expiration";
+macro_rules! cert_path {
+    () => {{
+        static CERT_PATH_DEFAULT: &'static str = "/cert/cert.pem";
+        std::env::var("CERT_PATH").unwrap_or(CERT_PATH_DEFAULT.to_string())
+    }};
+}
 
 macro_rules! key_path {
     () => {{
@@ -382,20 +381,15 @@ async fn create_module_certificate() -> impl Responder {
                 let cert_response: CreateCertResponse =
                     serde_json::from_slice(&body_bytes).expect("CreateCertResponse not possible");
 
-                let mut file = File::create(CERT_PATH)
-                    .unwrap_or_else(|_| panic!("{CERT_PATH} could not be created"));
+                let mut file = File::create(cert_path!())
+                    .unwrap_or_else(|_| panic!("{} could not be created", cert_path!()));
                 file.write_all(cert_response.certificate.as_bytes())
-                    .unwrap_or_else(|_| panic!("write to {CERT_PATH} not possible"));
+                    .unwrap_or_else(|_| panic!("write to {} not possible", cert_path!()));
 
-                let mut file = File::create(KEY_PATH)
-                    .unwrap_or_else(|_| panic!("{KEY_PATH} could not be created"));
+                let mut file = File::create(key_path!())
+                    .unwrap_or_else(|_| panic!("{} could not be created", key_path!()));
                 file.write_all(cert_response.private_key.bytes.as_bytes())
-                    .unwrap_or_else(|_| panic!("write to {KEY_PATH} not possible"));
-
-                let mut file = File::create(EXPIRATION_PATH)
-                    .unwrap_or_else(|_| panic!("{EXPIRATION_PATH} could not be created"));
-                file.write_all(cert_response.expiration.as_bytes())
-                    .unwrap_or_else(|_| panic!("write to {EXPIRATION_PATH} not possible"));
+                    .unwrap_or_else(|_| panic!("write to {} not possible", key_path!()));
 
                 HttpResponse::Ok().finish()
             }
@@ -466,8 +460,8 @@ async fn get_ip_address(ods_socket_path: &str) -> Option<String> {
                 serde_json::from_slice(&body_bytes).expect("StatusResponse not possible");
 
             status_response
-                .NetworkStatus
                 .network_status
+                .network_interfaces
                 .into_iter()
                 .find(|iface| iface.online)
                 .and_then(|iface| iface.ipv4.addrs.into_iter().next())
