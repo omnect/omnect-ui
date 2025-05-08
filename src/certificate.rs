@@ -1,6 +1,6 @@
 use crate::socket_client;
 use actix_web::body::MessageBody;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::{fs::File, io::Write};
@@ -83,28 +83,25 @@ pub async fn create_module_certificate(cert_path: &str, key_path: &str) -> Resul
         .strip_prefix("unix://")
         .context("failed to strip socket path")?;
 
-    match socket_client::post_with_json_body(&path, payload, socket_path).await {
-        Ok(response) => {
-            let cert_response: CreateCertResponse = serde_json::from_slice(
-                &response
-                    .into_body()
-                    .try_into_bytes()
-                    .map_err(|e| anyhow!("Failed to convert response body into bytes: {e:?}"))?,
-            )
-            .context("CreateCertResponse not possible")?;
+    let response = socket_client::post_with_json_body(&path, payload, socket_path)
+        .await
+        .context("create_module_certificate request failed")?;
 
-            let mut file = File::create(cert_path).context("could not be create cert_path")?;
-            file.write_all(cert_response.certificate.as_bytes())
-                .context("could not write to cert_path")?;
+    let cert_response: CreateCertResponse = serde_json::from_slice(
+        &response
+            .into_body()
+            .try_into_bytes()
+            .map_err(|e| anyhow!("Failed to convert response body into bytes: {e:?}"))?,
+    )
+    .context("CreateCertResponse not possible")?;
 
-            let mut file = File::create(key_path).context("could not be create key_path")?;
-            file.write_all(cert_response.private_key.bytes.as_bytes())
-                .context("could not write to key_path")
-        }
-        Err(e) => {
-            bail!("create_module_certificate failed: {e:#}");
-        }
-    }
+    let mut file = File::create(cert_path).context("could not be create cert_path")?;
+    file.write_all(cert_response.certificate.as_bytes())
+        .context("could not write to cert_path")?;
+
+    let mut file = File::create(key_path).context("could not be create key_path")?;
+    file.write_all(cert_response.private_key.bytes.as_bytes())
+        .context("could not write to key_path")
 }
 
 async fn get_ip_address(ods_socket_path: &str) -> Result<String> {

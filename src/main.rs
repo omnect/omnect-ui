@@ -111,7 +111,7 @@ async fn main() {
         .parse::<u64>()
         .expect("UI_PORT format");
 
-    let _ = certificate::create_module_certificate(&cert_path!(), &key_path!())
+    certificate::create_module_certificate(&cert_path!(), &key_path!())
         .await
         .expect("Failed to create module certificate");
 
