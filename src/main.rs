@@ -111,7 +111,9 @@ async fn main() {
         .parse::<u64>()
         .expect("UI_PORT format");
 
-    let _ = certificate::create_module_certificate(&cert_path!(), &key_path!()).await;
+    let _ = certificate::create_module_certificate(&cert_path!(), &key_path!())
+        .await
+        .expect("Failed to create module certificate");
 
     let mut tls_certs =
         std::io::BufReader::new(std::fs::File::open(cert_path!()).expect("read certs_file"));

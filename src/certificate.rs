@@ -70,48 +70,40 @@ pub async fn create_module_certificate(cert_path: &str, key_path: &str) -> Resul
         .context("IOTEDGE_MODULEGENERATIONID missing")?;
     let iotedge_apiversion =
         std::env::var("IOTEDGE_APIVERSION").context("IOTEDGE_APIVERSION missing")?;
-
     let iotedge_workloaduri =
         std::env::var("IOTEDGE_WORKLOADURI").context("IOTEDGE_WORKLOADURI missing")?;
 
     let ods_socket_path = std::env::var("SOCKET_PATH").context("env SOCKET_PATH is missing")?;
-    match get_ip_address(&ods_socket_path).await {
-        Ok(ip) => {
-            debug!("IP address: {}", ip);
-            let payload = CreateCertPayload { common_name: ip };
-            let path = format!("/modules/{iotedge_moduleid}/genid/{iotedge_modulegenerationid}/certificate/server?api-version={iotedge_apiversion}");
-            let ori_socket_path = iotedge_workloaduri.to_string();
-            let socket_path = ori_socket_path
-                .strip_prefix("unix://")
-                .context("failed to strip socket path")?;
+    let ip = get_ip_address(&ods_socket_path).await?;
+    debug!("IP address: {}", ip);
 
-            match socket_client::post_with_json_body(&path, payload, socket_path).await {
-                Ok(response) => {
-                    let body = response.into_body();
-                    let body_bytes = body.try_into_bytes().map_err(|e| {
-                        anyhow!("Failed to convert response body into bytes: {e:?}")
-                    })?;
-                    let cert_response: CreateCertResponse = serde_json::from_slice(&body_bytes)
-                        .context("CreateCertResponse not possible")?;
+    let payload = CreateCertPayload { common_name: ip };
+    let path = format!("/modules/{iotedge_moduleid}/genid/{iotedge_modulegenerationid}/certificate/server?api-version={iotedge_apiversion}");
+    let socket_path = iotedge_workloaduri
+        .strip_prefix("unix://")
+        .context("failed to strip socket path")?;
 
-                    let mut file = File::create(cert_path)
-                        .unwrap_or_else(|_| panic!("{} could not be created", cert_path));
-                    file.write_all(cert_response.certificate.as_bytes())
-                        .unwrap_or_else(|_| panic!("write to {} not possible", cert_path));
+    match socket_client::post_with_json_body(&path, payload, socket_path).await {
+        Ok(response) => {
+            let cert_response: CreateCertResponse = serde_json::from_slice(
+                &response
+                    .into_body()
+                    .try_into_bytes()
+                    .map_err(|e| anyhow!("Failed to convert response body into bytes: {e:?}"))?,
+            )
+            .context("CreateCertResponse not possible")?;
 
-                    let mut file = File::create(key_path)
-                        .unwrap_or_else(|_| panic!("{} could not be created", key_path));
-                    file.write_all(cert_response.private_key.bytes.as_bytes())
-                        .unwrap_or_else(|_| panic!("write to {} not possible", key_path));
+            let mut file = File::create(cert_path).context("could not be create cert_path")?;
+            file.write_all(cert_response.certificate.as_bytes())
+                .context("could not write to cert_path")?;
 
-                    Ok(())
-                }
-                Err(e) => {
-                    bail!("create_module_certificate failed: {e:#}");
-                }
-            }
+            let mut file = File::create(key_path).context("could not be create key_path")?;
+            file.write_all(cert_response.private_key.bytes.as_bytes())
+                .context("could not write to key_path")
         }
-        Err(e) => bail!("create_module_certificate failed: {e:#}"),
+        Err(e) => {
+            bail!("create_module_certificate failed: {e:#}");
+        }
     }
 }
 
@@ -119,8 +111,8 @@ async fn get_ip_address(ods_socket_path: &str) -> Result<String> {
     let response = socket_client::get_with_empty_body("/status/v1", ods_socket_path)
         .await
         .context("Failed to get status from socket client")?;
-    let body = response.into_body();
-    let body_bytes = body
+    let body_bytes = response
+        .into_body()
         .try_into_bytes()
         .map_err(|e| anyhow!("Failed to convert response body into bytes: {e:?}"))?;
 
