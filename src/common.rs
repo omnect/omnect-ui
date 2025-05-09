@@ -22,7 +22,12 @@ struct TokenClaims {
 pub struct StatusResponse {
     #[serde(rename = "NetworkStatus")]
     pub network_status: NetworkStatus,
-    #[serde(rename = "FleetId")]
+    #[serde(rename = "SystemInfo")]
+    pub system_info: SystemInfo,
+}
+
+#[derive(Deserialize)]
+pub struct SystemInfo {
     pub fleet_id: Option<String>,
 }
 
@@ -163,7 +168,7 @@ async fn get_fleet_id(ods_socket_path: &str) -> Result<String> {
         .await
         .context("failed to parse StatusResponse from JSON")?;
 
-    if let Some(fleet_id) = &status_response.fleet_id {
+    if let Some(fleet_id) = &status_response.system_info.fleet_id {
         return Ok(fleet_id.clone());
     }
 
