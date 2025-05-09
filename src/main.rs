@@ -91,7 +91,7 @@ macro_rules! key_path {
 async fn main() {
     log_panics::init();
 
-    CryptoProvider::install_default(default_provider()).unwrap();
+    CryptoProvider::install_default(default_provider()).expect("failed to install crypto provider");
 
     let mut builder = if cfg!(debug_assertions) {
         Builder::from_env(Env::default().default_filter_or("debug"))

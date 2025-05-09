@@ -1,6 +1,7 @@
 use actix_web::body::MessageBody;
 use anyhow::{anyhow, bail, Context, Result};
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
+use base64::{prelude::BASE64_STANDARD, Engine};
 use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
 use reqwest::blocking::get;
 use serde::{Deserialize, Serialize};
@@ -120,10 +121,6 @@ pub async fn validate_token_and_claims(
         return Ok(());
     }
 
-    if roles.contains(&String::from("FleetObserver")) {
-        bail!("user has no permission to set password");
-    }
-
     if roles.contains(&String::from("FleetOperator")) {
         let Some(fleet_list) = &claims.custom.fleet_list else {
             bail!("user has no permission on this fleet");
@@ -140,7 +137,7 @@ pub async fn validate_token_and_claims(
         }
     }
 
-    Err(anyhow!("user has no permission to set password"))
+    bail!("user has no permission to set password")
 }
 
 async fn get_keycloak_realm_public_key(keycloak_public_key_url: &str) -> Result<RS256PublicKey> {
@@ -149,18 +146,8 @@ async fn get_keycloak_realm_public_key(keycloak_public_key_url: &str) -> Result<
         .json::<RealmInfo>()
         .context("failed to parse realm info")?;
 
-    let base64_key = &resp.public_key;
-
-    let mut pem = String::from("-----BEGIN PUBLIC KEY-----\n");
-    for chunk in base64_key.as_bytes().chunks(64) {
-        pem.push_str(&String::from_utf8_lossy(chunk));
-        pem.push('\n');
-    }
-    pem.push_str("-----END PUBLIC KEY-----\n");
-
-    let public_key = RS256PublicKey::from_pem(&pem).context("failed to create pem")?;
-
-    Ok(public_key)
+    RS256PublicKey::from_der(&BASE64_STANDARD.decode(resp.public_key.as_bytes()).unwrap())
+        .context("failed to decode public key")
 }
 
 async fn get_fleet_id(ods_socket_path: &str) -> Result<String> {
@@ -172,7 +159,7 @@ async fn get_fleet_id(ods_socket_path: &str) -> Result<String> {
         return Ok(fleet_id.clone());
     }
 
-    Err(anyhow!("failed to get fleet id from status response"))
+    bail!("failed to get fleet id from status response")
 }
 
 pub async fn get_status(ods_socket_path: &str) -> Result<StatusResponse> {
@@ -184,8 +171,5 @@ pub async fn get_status(ods_socket_path: &str) -> Result<StatusResponse> {
         .try_into_bytes()
         .map_err(|e| anyhow!("failed to convert response body into bytes: {e:?}"))?;
 
-    let status_response: StatusResponse =
-        serde_json::from_slice(&body_bytes).context("failed to parse StatusResponse from JSON")?;
-
-    Ok(status_response)
+    serde_json::from_slice(&body_bytes).context("failed to parse StatusResponse from JSON")
 }
