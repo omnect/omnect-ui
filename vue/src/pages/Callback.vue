@@ -2,9 +2,10 @@
 import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 import { getUser, handleRedirectCallback } from "../auth/auth-service"
+import OmnectLogo from "../components/OmnectLogo.vue"
 
 const router = useRouter()
-const loading = ref(true)
+const loading = ref(false)
 const errorMsg = ref("")
 
 onMounted(async () => {
@@ -12,6 +13,7 @@ onMounted(async () => {
 		await handleRedirectCallback()
 		const user = await getUser()
 		if (user) {
+			loading.value = true
 			const res = await fetch("token/validate", {
 				method: "POST",
 				headers: {
@@ -25,6 +27,8 @@ onMounted(async () => {
 			} else {
 				errorMsg.value = "You are not authorized."
 			}
+
+			loading.value = false
 		} else {
 			errorMsg.value = "You are not authorized."
 		}
@@ -35,9 +39,11 @@ onMounted(async () => {
 </script>
 
 <template>
-	<v-sheet :border="true" rounded class="m-20">
+	<v-sheet class="mx-auto pa-12 pb-8 m-t-16 flex flex-col gap-y-16 items-center" border elevation="0" max-width="448"
+		rounded="lg">
+		<OmnectLogo></OmnectLogo>
 		<h1>Checking permissions</h1>
 		<p v-if="loading">Loading...</p>
-		<p v-else>{{ errorMsg }}</p>
+		<p class="text-error font-bold font-size-5" v-else>{{ errorMsg }}</p>
 	</v-sheet>
 </template>

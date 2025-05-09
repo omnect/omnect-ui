@@ -41,7 +41,7 @@ onMounted(async () => {
 })
 
 const showBars = computed(() => {
-	return route.path !== "/login" && route.path !== "/set-password"
+	return route.path !== "/login" && route.path !== "/set-password" && route.path !== "/auth-callback"
 })
 </script>
 
