@@ -295,6 +295,7 @@ impl Api {
             &body,
             &config.keycloak_public_key_url,
             &config.tenant,
+            &config.ods_socket_path,
         )
         .await
         {

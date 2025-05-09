@@ -1,3 +1,4 @@
+use actix_web::body::MessageBody;
 use anyhow::{anyhow, bail, Context, Result};
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
@@ -17,6 +18,12 @@ struct TokenClaims {
     fleet_list: Option<Vec<String>>,
 }
 
+#[derive(Deserialize)]
+struct StatusResponse {
+    #[serde(rename = "FleetId")]
+    fleet_id: String,
+}
+
 macro_rules! config_path {
     ($filename:expr) => {{
         static CONFIG_PATH_DEFAULT: &'static str = "/data/config";
@@ -25,6 +32,8 @@ macro_rules! config_path {
     }};
 }
 pub(crate) use config_path;
+
+use crate::socket_client;
 
 pub fn validate_password(password: &str) -> Result<()> {
     if password.is_empty() {
@@ -56,14 +65,15 @@ pub async fn validate_token_and_claims(
     token: &str,
     keycloak_public_key_url: &str,
     tenant: &String,
+    ods_socket_path: &str,
 ) -> Result<()> {
-    let Ok(pub_key) = get_keycloak_realm_public_key(keycloak_public_key_url).await else {
-        bail!("failed to get public key");
-    };
+    let pub_key = get_keycloak_realm_public_key(keycloak_public_key_url)
+        .await
+        .context("failed to get public key")?;
 
-    let Ok(claims) = pub_key.verify_token::<TokenClaims>(token, None) else {
-        bail!("failed to verify token");
-    };
+    let claims = pub_key
+        .verify_token::<TokenClaims>(token, None)
+        .context("failed to verify token")?;
 
     let Some(tenant_list) = &claims.custom.tenant_list else {
         bail!("user has no tenant list");
@@ -90,8 +100,11 @@ pub async fn validate_token_and_claims(
             bail!("user has no permission on this fleet");
         };
 
-        //TODO: Check if fleet is available and compare with fleet from ods
-        if !fleet_list.contains(&String::from("123")) {
+        let fleet_id = get_fleet_id(ods_socket_path)
+            .await
+            .context("failed to get fleet id")?;
+
+        if !fleet_list.contains(&fleet_id) {
             bail!("user has no permission on this fleet");
         } else {
             return Ok(());
@@ -119,4 +132,20 @@ async fn get_keycloak_realm_public_key(keycloak_public_key_url: &str) -> Result<
     let public_key = RS256PublicKey::from_pem(&pem).context("failed to create pem")?;
 
     Ok(public_key)
+}
+
+async fn get_fleet_id(ods_socket_path: &str) -> Result<String> {
+    let response = socket_client::get_with_empty_body("/status/v1", ods_socket_path)
+        .await
+        .context("Failed to get status from socket client")?;
+
+    let body_bytes = response
+        .into_body()
+        .try_into_bytes()
+        .map_err(|e| anyhow!("Failed to convert response body into bytes: {e:?}"))?;
+
+    let status_response: StatusResponse =
+        serde_json::from_slice(&body_bytes).context("Failed to parse StatusResponse from JSON")?;
+
+    Ok(status_response.fleet_id)
 }
