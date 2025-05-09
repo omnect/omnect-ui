@@ -20,6 +20,7 @@ use actix_web::{
 use anyhow::Result;
 use env_logger::{Builder, Env, Target};
 use log::{debug, error, info};
+use rustls::crypto::{ring::default_provider, CryptoProvider};
 use serde::{Deserialize, Serialize};
 use std::{fs, fs::File, io::Write};
 use tokio::process::Command;
@@ -41,6 +42,14 @@ macro_rules! centrifugo_http_server_port {
         static CENTRIFUGO_HTTP_SERVER_PORT_DEFAULT: &'static str = "8000";
         std::env::var("CENTRIFUGO_HTTP_SERVER_PORT")
             .unwrap_or(CENTRIFUGO_HTTP_SERVER_PORT_DEFAULT.to_string())
+    }};
+}
+
+macro_rules! keycloak_public_key_url {
+    () => {{
+        static KEYCLOAK_PUBLIC_KEY_URL: &'static str =
+            "https://keycloak.omnect.conplement.cloud/realms/cp-prod";
+        std::env::var("KEYCLOAK_PUBLIC_KEY_URL").unwrap_or(KEYCLOAK_PUBLIC_KEY_URL.to_string())
     }};
 }
 
@@ -102,6 +111,8 @@ macro_rules! key_path {
 #[actix_web::main]
 async fn main() {
     log_panics::init();
+
+    CryptoProvider::install_default(default_provider()).unwrap();
 
     let mut builder = if cfg!(debug_assertions) {
         Builder::from_env(Env::default().default_filter_or("debug"))
@@ -189,6 +200,8 @@ async fn main() {
     let index_html =
         std::fs::canonicalize("static/index.html").expect("static/index.html not found");
 
+    let tenant = std::env::var("TENANT").expect("env TENANT is missing");
+
     fs::exists(&ods_socket_path).unwrap_or_else(|_| {
         panic!(
             "omnect device service socket file {} does not exist",
@@ -206,6 +219,8 @@ async fn main() {
         update_os_path: update_os_path!(),
         centrifugo_client_token_hmac_secret_key,
         index_html,
+        keycloak_public_key_url: keycloak_public_key_url!(),
+        tenant,
     };
 
     let server = HttpServer::new(move || {
@@ -249,6 +264,10 @@ async fn main() {
             .route(
                 "/token/refresh",
                 web::get().to(Api::token).wrap(middleware::AuthMw),
+            )
+            .route(
+                "/token/validate",
+                web::post().to(Api::validate_portal_token),
             )
             .route(
                 "/require-set-password",

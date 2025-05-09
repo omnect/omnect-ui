@@ -12,6 +12,8 @@ use argon2::{
 };
 use jwt_simple::prelude::*;
 use log::{debug, error};
+use reqwest::blocking::get;
+use serde::Deserialize;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{
     fs::{self, File},
@@ -80,12 +82,26 @@ pub enum FactoryResetMode {
     Mode4 = 4,
 }
 
+#[derive(Deserialize)]
+pub struct RealmInfo {
+    public_key: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TokenClaims {
+    roles: Option<Vec<String>>,
+    tenant_list: Option<Vec<String>>,
+    fleet_list: Option<Vec<String>>,
+}
+
 #[derive(Clone)]
 pub struct Api {
     pub ods_socket_path: String,
     pub update_os_path: String,
     pub centrifugo_client_token_hmac_secret_key: String,
     pub index_html: PathBuf,
+    pub keycloak_public_key_url: String,
+    pub tenant: String,
 }
 
 impl Api {
@@ -151,25 +167,11 @@ impl Api {
         }
     }
 
-    pub async fn token(session: Session) -> impl Responder {
-        if let Ok(key) = std::env::var("CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY") {
-            let key = HS256Key::from_bytes(key.as_bytes());
-            let claims =
-                Claims::create(Duration::from_hours(TOKEN_EXPIRE_HOURS)).with_subject("omnect-ui");
-
-            if let Ok(token) = key.authenticate(claims) {
-                match session.insert("token", token.clone()) {
-                    Ok(_) => return HttpResponse::Ok().body(token),
-                    Err(e) => return HttpResponse::InternalServerError().body(format!("{e}")),
-                }
-            } else {
-                error!("token: cannot create token");
-            };
-        } else {
-            error!("token: missing secret key");
+    pub async fn token(session: Session, config: web::Data<Api>) -> impl Responder {
+        let Ok(token) = Api::set_session_token(session, config) else {
+            return HttpResponse::InternalServerError().finish();
         };
-
-        HttpResponse::InternalServerError().finish()
+        HttpResponse::Ok().body(token)
     }
 
     pub async fn logout(session: Session) -> impl Responder {
@@ -243,7 +245,11 @@ impl Api {
         }
     }
 
-    pub async fn set_password(body: web::Json<SetPasswordPayload>) -> impl Responder {
+    pub async fn set_password(
+        body: web::Json<SetPasswordPayload>,
+        session: Session,
+        config: web::Data<Api>,
+    ) -> impl Responder {
         debug!("set_password() called");
 
         if !Api::set_password_necessary() {
@@ -257,7 +263,10 @@ impl Api {
             return HttpResponse::InternalServerError().body(format!("{:#}", e));
         }
 
-        HttpResponse::Ok().finish()
+        let Ok(token) = Api::set_session_token(session, config) else {
+            return HttpResponse::InternalServerError().finish();
+        };
+        HttpResponse::Ok().body(token)
     }
 
     pub async fn update_password(
@@ -289,6 +298,19 @@ impl Api {
                 .finish();
         }
 
+        HttpResponse::Ok().finish()
+    }
+
+    pub async fn validate_portal_token(body: String, config: web::Data<Api>) -> impl Responder {
+        debug!("validate_portal_token() called");
+
+        if let Err(e) =
+            Api::validate_token_and_claims(&body, &config.keycloak_public_key_url, &config.tenant)
+                .await
+        {
+            error!("validate_portal_token() failed: {e:#}");
+            return HttpResponse::Unauthorized().finish();
+        }
         HttpResponse::Ok().finish()
     }
 
@@ -364,5 +386,90 @@ impl Api {
 
         file.write_all(hash.as_bytes())
             .context("failed to write password file")
+    }
+
+    fn set_session_token(session: Session, config: web::Data<Api>) -> Result<String> {
+        let key = HS256Key::from_bytes(config.centrifugo_client_token_hmac_secret_key.as_bytes());
+        let claims =
+            Claims::create(Duration::from_hours(TOKEN_EXPIRE_HOURS)).with_subject("omnect-ui");
+
+        let token = key.authenticate(claims).expect("failed to create token");
+
+        if let Err(e) = session.insert("token", token.clone()) {
+            return Err(anyhow!(e).context("failed to insert token into session"));
+        }
+
+        Ok(token)
+    }
+
+    async fn get_keycloak_realm_public_key(
+        keycloak_public_key_url: &str,
+    ) -> Result<RS256PublicKey> {
+        let resp = get(keycloak_public_key_url)
+            .context("failed to fetch from url")?
+            .json::<RealmInfo>()
+            .context("failed to parse realm info")?;
+
+        let base64_key = &resp.public_key;
+
+        let mut pem = String::from("-----BEGIN PUBLIC KEY-----\n");
+        for chunk in base64_key.as_bytes().chunks(64) {
+            pem.push_str(&String::from_utf8_lossy(chunk));
+            pem.push('\n');
+        }
+        pem.push_str("-----END PUBLIC KEY-----\n");
+
+        let public_key = RS256PublicKey::from_pem(&pem).context("failed to create pem")?;
+
+        Ok(public_key)
+    }
+
+    async fn validate_token_and_claims(
+        token: &str,
+        keycloak_public_key_url: &str,
+        tenant: &String,
+    ) -> Result<()> {
+        let Ok(pub_key) = Api::get_keycloak_realm_public_key(keycloak_public_key_url).await else {
+            bail!("failed to get public key");
+        };
+
+        let Ok(claims) = pub_key.verify_token::<TokenClaims>(token, None) else {
+            bail!("failed to verify token");
+        };
+
+        let Some(tenant_list) = &claims.custom.tenant_list else {
+            bail!("user has no tenant list");
+        };
+
+        if !tenant_list.contains(tenant) {
+            bail!("user has no permission to set password");
+        }
+
+        let Some(roles) = &claims.custom.roles else {
+            bail!("user has no roles");
+        };
+
+        if roles.contains(&String::from("FleetAdministrator")) {
+            return Ok(());
+        }
+
+        if roles.contains(&String::from("FleetObserver")) {
+            bail!("user has no permission to set password");
+        }
+
+        if roles.contains(&String::from("FleetOperator")) {
+            let Some(fleet_list) = &claims.custom.fleet_list else {
+                bail!("user has no permission on this fleet");
+            };
+
+            //TODO: Check if fleet is available and compare with fleet from ods
+            if !fleet_list.contains(&String::from("123")) {
+                bail!("user has no permission on this fleet");
+            } else {
+                return Ok(());
+            }
+        }
+
+        Err(anyhow!("user has no permission to set password"))
     }
 }
