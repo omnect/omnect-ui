@@ -19,9 +19,33 @@ struct TokenClaims {
 }
 
 #[derive(Deserialize)]
-struct StatusResponse {
+pub struct StatusResponse {
+    #[serde(rename = "NetworkStatus")]
+    pub network_status: NetworkStatus,
     #[serde(rename = "FleetId")]
-    fleet_id: String,
+    pub fleet_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct NetworkStatus {
+    #[serde(rename = "network_status")]
+    pub network_interfaces: Vec<NetworkInterface>,
+}
+
+#[derive(Deserialize)]
+pub struct NetworkInterface {
+    pub online: bool,
+    pub ipv4: Ipv4Info,
+}
+
+#[derive(Deserialize)]
+pub struct Ipv4Info {
+    pub addrs: Vec<Ipv4AddrInfo>,
+}
+
+#[derive(Deserialize)]
+pub struct Ipv4AddrInfo {
+    pub addr: String,
 }
 
 macro_rules! config_path {
@@ -135,17 +159,28 @@ async fn get_keycloak_realm_public_key(keycloak_public_key_url: &str) -> Result<
 }
 
 async fn get_fleet_id(ods_socket_path: &str) -> Result<String> {
+    let status_response: StatusResponse = get_status(ods_socket_path)
+        .await
+        .context("failed to parse StatusResponse from JSON")?;
+
+    if let Some(fleet_id) = &status_response.fleet_id {
+        return Ok(fleet_id.clone());
+    }
+
+    Err(anyhow!("failed to get fleet id from status response"))
+}
+
+pub async fn get_status(ods_socket_path: &str) -> Result<StatusResponse> {
     let response = socket_client::get_with_empty_body("/status/v1", ods_socket_path)
         .await
-        .context("Failed to get status from socket client")?;
-
+        .context("failed to get status from socket client")?;
     let body_bytes = response
         .into_body()
         .try_into_bytes()
-        .map_err(|e| anyhow!("Failed to convert response body into bytes: {e:?}"))?;
+        .map_err(|e| anyhow!("failed to convert response body into bytes: {e:?}"))?;
 
     let status_response: StatusResponse =
-        serde_json::from_slice(&body_bytes).context("Failed to parse StatusResponse from JSON")?;
+        serde_json::from_slice(&body_bytes).context("failed to parse StatusResponse from JSON")?;
 
-    Ok(status_response.fleet_id)
+    Ok(status_response)
 }
