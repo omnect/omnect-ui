@@ -390,11 +390,13 @@ impl Api {
         let claims =
             Claims::create(Duration::from_hours(TOKEN_EXPIRE_HOURS)).with_subject("omnect-ui");
 
-        let token = key.authenticate(claims).expect("failed to create token");
+        let Ok(token) = key.authenticate(claims) else {
+            bail!("failed to create token");
+        };
 
-        if session.insert("token", token.clone()).is_err() {
-            bail!("failed to insert token into session");
-        }
+        let _ = session
+            .insert("token", &token)
+            .context("failed to insert token into session");
 
         Ok(token)
     }
