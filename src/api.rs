@@ -107,6 +107,10 @@ impl Api {
         Ok(NamedFile::open(&config.index_html)?)
     }
 
+    pub async fn config() -> actix_web::Result<NamedFile> {
+        Ok(NamedFile::open(config_path!("app_config.js"))?)
+    }
+
     pub async fn factory_reset(
         body: web::Json<FactoryResetInput>,
         config: web::Data<Api>,
@@ -390,9 +394,7 @@ impl Api {
         let claims =
             Claims::create(Duration::from_hours(TOKEN_EXPIRE_HOURS)).with_subject("omnect-ui");
 
-        let Ok(token) = key.authenticate(claims) else {
-            bail!("failed to create token");
-        };
+        let token = key.authenticate(claims).context("failed to create token")?;
 
         let _ = session
             .insert("token", &token)

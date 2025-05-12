@@ -5,7 +5,7 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
 use reqwest::blocking::get;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::{io::Write, path::Path};
 
 #[derive(Deserialize)]
 pub struct RealmInfo {
@@ -52,6 +52,12 @@ pub struct Ipv4Info {
 #[derive(Deserialize)]
 pub struct Ipv4AddrInfo {
     pub addr: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct FrontEndConfig {
+    #[serde(rename = "KEYCLOAK_URL")]
+    keycloak_url: String,
 }
 
 macro_rules! config_path {
@@ -172,4 +178,17 @@ pub async fn get_status(ods_socket_path: &str) -> Result<StatusResponse> {
         .map_err(|e| anyhow!("failed to convert response body into bytes: {e:?}"))?;
 
     serde_json::from_slice(&body_bytes).context("failed to parse StatusResponse from JSON")
+}
+
+pub fn create_frontend_config_file(keycloak_url: &str) -> Result<()> {
+    let mut config_file = std::fs::File::create(config_path!("app_config.js"))
+        .expect("failed to create frontend config file");
+
+    config_file
+        .write_all(
+            format!("window.__APP_CONFIG__ = {{KEYCLOAK_URL:\"{keycloak_url}\"}};").as_bytes(),
+        )
+        .unwrap();
+
+    Ok(())
 }

@@ -6,4 +6,3 @@ centrifugo
 *.env
 *.http
 /static
-!vue/.env

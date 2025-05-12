@@ -47,11 +47,11 @@ macro_rules! centrifugo_http_server_port {
     }};
 }
 
-macro_rules! keycloak_public_key_url {
+macro_rules! keycloak_url {
     () => {{
-        static KEYCLOAK_PUBLIC_KEY_URL: &'static str =
+        static KEYCLOAK_URL: &'static str =
             "https://keycloak.omnect.conplement.cloud/realms/cp-prod";
-        std::env::var("KEYCLOAK_PUBLIC_KEY_URL").unwrap_or(KEYCLOAK_PUBLIC_KEY_URL.to_string())
+        std::env::var("KEYCLOAK_URL").unwrap_or(KEYCLOAK_URL.to_string())
     }};
 }
 
@@ -193,6 +193,9 @@ async fn main() {
     fs::exists(&update_os_path!())
         .unwrap_or_else(|_| panic!("path {} for os update does not exist", &update_os_path!()));
 
+    common::create_frontend_config_file(&keycloak_url!())
+        .expect("failed to create frontend config file");
+
     send_publish_endpoint(&centrifugo_http_api_key, &ods_socket_path).await;
 
     let api_config = Api {
@@ -200,7 +203,7 @@ async fn main() {
         update_os_path: update_os_path!(),
         centrifugo_client_token_hmac_secret_key,
         index_html,
-        keycloak_public_key_url: keycloak_public_key_url!(),
+        keycloak_public_key_url: keycloak_url!(),
         tenant,
     };
 
@@ -214,6 +217,7 @@ async fn main() {
             )
             .app_data(Data::new(api_config.clone()))
             .route("/", web::get().to(Api::index))
+            .route("/config.js", web::get().to(Api::config))
             .route(
                 "/factory-reset",
                 web::post().to(Api::factory_reset).wrap(middleware::AuthMw),
