@@ -155,11 +155,11 @@ async fn get_fleet_id(ods_socket_path: &str) -> Result<String> {
         .await
         .context("failed to parse StatusResponse from JSON")?;
 
-    if let Some(fleet_id) = &status_response.system_info.fleet_id {
-        return Ok(fleet_id.clone());
-    }
+    let Some(fleet_id) = &status_response.system_info.fleet_id else {
+        bail!("failed to get fleet id from status response")
+    };
 
-    bail!("failed to get fleet id from status response")
+    Ok(fleet_id.clone())
 }
 
 pub async fn get_status(ods_socket_path: &str) -> Result<StatusResponse> {

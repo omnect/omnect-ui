@@ -91,8 +91,6 @@ macro_rules! key_path {
 async fn main() {
     log_panics::init();
 
-    CryptoProvider::install_default(default_provider()).expect("failed to install crypto provider");
-
     let mut builder = if cfg!(debug_assertions) {
         Builder::from_env(Env::default().default_filter_or("debug"))
     } else {
@@ -121,6 +119,8 @@ async fn main() {
         .expect("UI_PORT missing")
         .parse::<u64>()
         .expect("UI_PORT format");
+
+    CryptoProvider::install_default(default_provider()).expect("failed to install crypto provider");
 
     certificate::create_module_certificate(&cert_path!(), &key_path!())
         .await

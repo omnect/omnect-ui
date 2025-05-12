@@ -1,4 +1,4 @@
-use crate::common::{self, config_path, validate_password};
+use crate::common::{config_path, validate_password, validate_token_and_claims};
 use crate::middleware::TOKEN_EXPIRE_HOURS;
 use crate::socket_client::*;
 use actix_files::NamedFile;
@@ -155,10 +155,13 @@ impl Api {
     }
 
     pub async fn token(session: Session, config: web::Data<Api>) -> impl Responder {
-        let Ok(token) = Api::set_session_token(session, config) else {
-            return HttpResponse::InternalServerError().finish();
-        };
-        HttpResponse::Ok().body(token)
+        match Api::set_session_token(session, config) {
+            Ok(token) => HttpResponse::Ok().body(token),
+            Err(e) => {
+                error!("token() failed: {e:#}");
+                HttpResponse::InternalServerError().body(format!("{e}"))
+            }
+        }
     }
 
     pub async fn logout(session: Session) -> impl Responder {
@@ -250,10 +253,13 @@ impl Api {
             return HttpResponse::InternalServerError().body(format!("{:#}", e));
         }
 
-        let Ok(token) = Api::set_session_token(session, config) else {
-            return HttpResponse::InternalServerError().finish();
-        };
-        HttpResponse::Ok().body(token)
+        match Api::set_session_token(session, config) {
+            Ok(token) => HttpResponse::Ok().body(token),
+            Err(e) => {
+                error!("token() failed: {e:#}");
+                HttpResponse::InternalServerError().body(format!("{e}"))
+            }
+        }
     }
 
     pub async fn update_password(
@@ -291,7 +297,7 @@ impl Api {
     pub async fn validate_portal_token(body: String, config: web::Data<Api>) -> impl Responder {
         debug!("validate_portal_token() called");
 
-        if let Err(e) = common::validate_token_and_claims(
+        if let Err(e) = validate_token_and_claims(
             &body,
             &config.keycloak_public_key_url,
             &config.tenant,
@@ -386,8 +392,8 @@ impl Api {
 
         let token = key.authenticate(claims).expect("failed to create token");
 
-        if let Err(e) = session.insert("token", token.clone()) {
-            return Err(anyhow!(e).context("failed to insert token into session"));
+        if session.insert("token", token.clone()).is_err() {
+            bail!("failed to insert token into session");
         }
 
         Ok(token)
