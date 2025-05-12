@@ -3,5 +3,7 @@
 .vscode
 centrifugo
 *.tar.gz
+*.env
 *.http
 /static
+!vue/.env
