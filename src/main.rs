@@ -262,6 +262,7 @@ async fn main() {
             .route("/update-password", web::post().to(Api::update_password))
             .route("/version", web::get().to(Api::version))
             .route("/logout", web::post().to(Api::logout))
+            .route("/healthcheck", web::get().to(Api::healthcheck))
             .service(Files::new(
                 "/static",
                 std::fs::canonicalize("static").expect("static folder not found"),

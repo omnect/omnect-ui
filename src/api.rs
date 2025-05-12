@@ -111,6 +111,11 @@ impl Api {
         Ok(NamedFile::open(config_path!("app_config.js"))?)
     }
 
+    pub async fn healthcheck() -> impl Responder {
+        debug!("healthcheck() called");
+        HttpResponse::Ok().finish()
+    }
+
     pub async fn factory_reset(
         body: web::Json<FactoryResetInput>,
         config: web::Data<Api>,
