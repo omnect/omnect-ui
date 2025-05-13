@@ -196,21 +196,20 @@ async fn main() {
         tenant,
     };
 
-    let server = HttpServer::new(move || {
-        let session_key = Key::generate();
+    let session_key = Key::generate();
 
-        let session_middleware = move || {
-            SessionMiddleware::builder(CookieSessionStore::default(), session_key)
-                .cookie_name(String::from("omnect-ui-session"))
-                .cookie_secure(true)
-                .session_lifecycle(BrowserSession::default())
-                .cookie_same_site(SameSite::Strict)
-                .cookie_content_security(CookieContentSecurity::Private)
-                .cookie_http_only(true)
-                .build()
-        };
+    let server = HttpServer::new(move || {
         App::new()
-            .wrap(session_middleware())
+            .wrap(
+                SessionMiddleware::builder(CookieSessionStore::default(), session_key.clone())
+                    .cookie_name(String::from("omnect-ui-session"))
+                    .cookie_secure(true)
+                    .session_lifecycle(BrowserSession::default())
+                    .cookie_same_site(SameSite::Strict)
+                    .cookie_content_security(CookieContentSecurity::Private)
+                    .cookie_http_only(true)
+                    .build(),
+            )
             .app_data(
                 MultipartFormConfig::default()
                     .total_limit(UPLOAD_LIMIT_BYTES)
