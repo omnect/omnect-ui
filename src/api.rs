@@ -1,3 +1,4 @@
+use crate::common::VERSION_CHECK;
 use crate::common::{config_path, validate_password, validate_token_and_claims};
 use crate::middleware::TOKEN_EXPIRE_HOURS;
 use crate::socket_client::*;
@@ -113,7 +114,19 @@ impl Api {
 
     pub async fn healthcheck() -> impl Responder {
         debug!("healthcheck() called");
-        HttpResponse::Ok().finish()
+
+        let info = VERSION_CHECK.lock().unwrap().clone();
+
+        match info {
+            Some(result) => {
+                if result.is_below_min {
+                    HttpResponse::InternalServerError().json(result)
+                } else {
+                    HttpResponse::Ok().json(result)
+                }
+            }
+            None => HttpResponse::Ok().body("No version check performed yet"),
+        }
     }
 
     pub async fn factory_reset(

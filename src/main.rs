@@ -29,6 +29,8 @@ use tokio::{
 };
 use uuid::Uuid;
 
+pub const MIN_ODS_VERSION: &str = "0.39.0";
+
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
 const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
 
@@ -120,11 +122,16 @@ async fn main() {
         .parse::<u64>()
         .expect("UI_PORT format");
 
+    let ods_socket_path = std::env::var("SOCKET_PATH").expect("env SOCKET_PATH is missing");
+    common::check_and_store_ods_version(&ods_socket_path)
+        .await
+        .expect("failed to check and store ods version");
+
     CryptoProvider::install_default(default_provider()).expect("failed to install crypto provider");
 
     certificate::create_module_certificate(&cert_path!(), &key_path!())
         .await
-        .expect("Failed to create module certificate");
+        .expect("failed to create module certificate");
 
     let mut tls_certs =
         std::io::BufReader::new(std::fs::File::open(cert_path!()).expect("read certs_file"));

@@ -1,11 +1,28 @@
+use crate::MIN_ODS_VERSION;
 use actix_web::body::MessageBody;
 use anyhow::{anyhow, bail, Context, Result};
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
 use reqwest::blocking::get;
+use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::{fs, io::Write, path::Path};
+use std::{
+    fs,
+    io::Write,
+    path::Path,
+    sync::{LazyLock, Mutex},
+};
+
+#[derive(Clone, Debug, Serialize)]
+pub struct VersionCheckResult {
+    pub min_version: String,
+    pub current_version: String,
+    pub is_below_min: bool,
+}
+
+pub static VERSION_CHECK: LazyLock<Mutex<Option<VersionCheckResult>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 #[derive(Deserialize)]
 pub struct RealmInfo {
@@ -30,6 +47,7 @@ pub struct StatusResponse {
 #[derive(Deserialize)]
 pub struct SystemInfo {
     pub fleet_id: Option<String>,
+    pub omnect_device_service_version: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -196,6 +214,35 @@ pub fn create_frontend_config_file(keycloak_url: &str) -> Result<()> {
             format!("window.__APP_CONFIG__ = {{KEYCLOAK_URL:\"{keycloak_url}\"}};").as_bytes(),
         )
         .unwrap();
+
+    Ok(())
+}
+
+pub async fn check_and_store_ods_version(ods_socket_path: &str) -> Result<()> {
+    let status_response = get_status(ods_socket_path)
+        .await
+        .context("Failed to get status from socket client")?;
+
+    let Some(omnect_device_service_version) =
+        &status_response.system_info.omnect_device_service_version
+    else {
+        bail!("failed to get omnect_device_service_version from status response")
+    };
+
+    let ods_version = omnect_device_service_version.clone();
+
+    // compare to MIN_ODS_VERSION
+    let min_version = Version::parse(MIN_ODS_VERSION).expect("parse MIN_ODS_VERSION");
+    let current_version = Version::parse(&ods_version).expect("parse ods_version");
+    let is_below_min = current_version < min_version;
+    {
+        let mut version_check = VERSION_CHECK.lock().unwrap();
+        *version_check = Some(VersionCheckResult {
+            min_version: MIN_ODS_VERSION.to_string(),
+            current_version: ods_version.clone(),
+            is_below_min,
+        });
+    }
 
     Ok(())
 }
