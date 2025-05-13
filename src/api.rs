@@ -120,7 +120,7 @@ impl Api {
         match info {
             Some(result) => {
                 if result.is_below_min {
-                    HttpResponse::InternalServerError().json(result)
+                    HttpResponse::ServiceUnavailable().json(result)
                 } else {
                     HttpResponse::Ok().json(result)
                 }

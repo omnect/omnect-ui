@@ -221,7 +221,7 @@ pub fn create_frontend_config_file(keycloak_url: &str) -> Result<()> {
 pub async fn check_and_store_ods_version(ods_socket_path: &str) -> Result<()> {
     let status_response = get_status(ods_socket_path)
         .await
-        .context("Failed to get status from socket client")?;
+        .context("failed to get status from socket client")?;
 
     let Some(omnect_device_service_version) =
         &status_response.system_info.omnect_device_service_version

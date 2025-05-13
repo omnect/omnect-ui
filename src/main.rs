@@ -173,7 +173,6 @@ async fn main() {
         &centrifugo_http_server_port!(),
     );
 
-    let ods_socket_path = std::env::var("SOCKET_PATH").expect("env SOCKET_PATH is missing");
     let index_html =
         std::fs::canonicalize("static/index.html").expect("static/index.html not found");
 
