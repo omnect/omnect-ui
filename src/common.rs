@@ -41,7 +41,7 @@ pub struct StatusResponse {
 #[derive(Deserialize)]
 pub struct SystemInfo {
     pub fleet_id: Option<String>,
-    pub omnect_device_service_version: Option<String>,
+    omnect_device_service_version: String,
 }
 
 #[derive(Deserialize)]
@@ -217,21 +217,19 @@ pub async fn check_and_store_ods_version(ods_socket_path: &str) -> Result<()> {
         .await
         .context("failed to get status from socket client")?;
 
-    let Some(omnect_device_service_version) =
-        &status_response.system_info.omnect_device_service_version
-    else {
-        bail!("failed to get omnect_device_service_version from status response")
-    };
-
     let version_req = VersionReq::parse(REQ_ODS_VERSION)
         .map_err(|e| anyhow!("failed to parse REQ_ODS_VERSION: {e}"))?;
-    let current_version = Version::parse(omnect_device_service_version)
-        .map_err(|e| anyhow!("failed to parse omnect_device_service_version: {e}"))?;
+    let current_version =
+        Version::parse(&status_response.system_info.omnect_device_service_version)
+            .map_err(|e| anyhow!("failed to parse omnect_device_service_version: {e}"))?;
     let version_mismatch = !version_req.matches(&current_version);
 
     VERSION_CHECK.get_or_init(|| VersionCheckResult {
         req_ods_version: REQ_ODS_VERSION.to_string(),
-        cur_ods_version: omnect_device_service_version.clone(),
+        cur_ods_version: status_response
+            .system_info
+            .omnect_device_service_version
+            .clone(),
         version_mismatch,
     });
 
