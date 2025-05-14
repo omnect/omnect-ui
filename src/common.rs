@@ -1,11 +1,11 @@
-use crate::MIN_ODS_VERSION;
+use crate::REQ_ODS_VERSION;
 use actix_web::body::MessageBody;
 use anyhow::{anyhow, bail, Context, Result};
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
 use reqwest::blocking::get;
-use semver::Version;
+use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Write, path::Path, sync::OnceLock};
 
@@ -13,9 +13,9 @@ pub static VERSION_CHECK: OnceLock<VersionCheckResult> = OnceLock::new();
 
 #[derive(Clone, Debug, Serialize)]
 pub struct VersionCheckResult {
-    pub min_version: String,
-    pub current_version: String,
-    pub is_below_min: bool,
+    pub req_ods_version: String,
+    pub cur_ods_version: String,
+    pub version_mismatch: bool,
 }
 
 #[derive(Deserialize)]
@@ -223,15 +223,16 @@ pub async fn check_and_store_ods_version(ods_socket_path: &str) -> Result<()> {
         bail!("failed to get omnect_device_service_version from status response")
     };
 
-    let min_version = Version::parse(MIN_ODS_VERSION)
-        .map_err(|e| anyhow!("failed to parse MIN_ODS_VERSION: {e}"))?;
+    let version_req = VersionReq::parse(REQ_ODS_VERSION)
+        .map_err(|e| anyhow!("failed to parse REQ_ODS_VERSION: {e}"))?;
     let current_version = Version::parse(omnect_device_service_version)
         .map_err(|e| anyhow!("failed to parse omnect_device_service_version: {e}"))?;
-    let is_below_min = current_version < min_version;
+    let version_mismatch = !version_req.matches(&current_version);
+
     VERSION_CHECK.get_or_init(|| VersionCheckResult {
-        min_version: MIN_ODS_VERSION.to_string(),
-        current_version: omnect_device_service_version.clone(),
-        is_below_min,
+        req_ods_version: REQ_ODS_VERSION.to_string(),
+        cur_ods_version: omnect_device_service_version.clone(),
+        version_mismatch,
     });
 
     Ok(())

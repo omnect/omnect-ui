@@ -115,7 +115,7 @@ impl Api {
         debug!("healthcheck() called");
 
         if let Some(result) = VERSION_CHECK.get() {
-            if result.is_below_min {
+            if result.version_mismatch {
                 HttpResponse::ServiceUnavailable().json(result)
             } else {
                 HttpResponse::Ok().json(result)

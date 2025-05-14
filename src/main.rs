@@ -29,7 +29,7 @@ use tokio::{
 };
 use uuid::Uuid;
 
-pub const MIN_ODS_VERSION: &str = "0.39.0";
+pub const REQ_ODS_VERSION: &str = ">=0.39.0";
 
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
 const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
