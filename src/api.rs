@@ -1,5 +1,4 @@
-use crate::common::VERSION_CHECK;
-use crate::common::{config_path, validate_password, validate_token_and_claims};
+use crate::common::{config_path, validate_password, validate_token_and_claims, VERSION_CHECK};
 use crate::middleware::TOKEN_EXPIRE_HOURS;
 use crate::socket_client::*;
 use actix_files::NamedFile;

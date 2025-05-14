@@ -229,17 +229,16 @@ pub async fn check_and_store_ods_version(ods_socket_path: &str) -> Result<()> {
         bail!("failed to get omnect_device_service_version from status response")
     };
 
-    let ods_version = omnect_device_service_version.clone();
-
     // compare to MIN_ODS_VERSION
     let min_version = Version::parse(MIN_ODS_VERSION).expect("parse MIN_ODS_VERSION");
-    let current_version = Version::parse(&ods_version).expect("parse ods_version");
+    let current_version = Version::parse(&omnect_device_service_version)
+        .expect("parse omnect_device_service_version");
     let is_below_min = current_version < min_version;
     {
         let mut version_check = VERSION_CHECK.lock().unwrap();
         *version_check = Some(VersionCheckResult {
             min_version: MIN_ODS_VERSION.to_string(),
-            current_version: ods_version.clone(),
+            current_version: omnect_device_service_version.clone(),
             is_below_min,
         });
     }

@@ -123,6 +123,12 @@ async fn main() {
         .expect("UI_PORT format");
 
     let ods_socket_path = std::env::var("SOCKET_PATH").expect("env SOCKET_PATH is missing");
+    fs::exists(&ods_socket_path).unwrap_or_else(|_| {
+        panic!(
+            "omnect device service socket file {} does not exist",
+            &ods_socket_path
+        )
+    });
     common::check_and_store_ods_version(&ods_socket_path)
         .await
         .expect("failed to check and store ods version");
@@ -177,13 +183,6 @@ async fn main() {
         std::fs::canonicalize("static/index.html").expect("static/index.html not found");
 
     let tenant = std::env::var("TENANT").expect("env TENANT is missing");
-
-    fs::exists(&ods_socket_path).unwrap_or_else(|_| {
-        panic!(
-            "omnect device service socket file {} does not exist",
-            &ods_socket_path
-        )
-    });
 
     fs::exists(&update_os_path!())
         .unwrap_or_else(|_| panic!("path {} for os update does not exist", &update_os_path!()));
