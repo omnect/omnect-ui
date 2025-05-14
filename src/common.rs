@@ -7,12 +7,9 @@ use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
 use reqwest::blocking::get;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::{
-    fs,
-    io::Write,
-    path::Path,
-    sync::{LazyLock, Mutex},
-};
+use std::{fs, io::Write, path::Path, sync::OnceLock};
+
+pub static VERSION_CHECK: OnceLock<VersionCheckResult> = OnceLock::new();
 
 #[derive(Clone, Debug, Serialize)]
 pub struct VersionCheckResult {
@@ -20,9 +17,6 @@ pub struct VersionCheckResult {
     pub current_version: String,
     pub is_below_min: bool,
 }
-
-pub static VERSION_CHECK: LazyLock<Mutex<Option<VersionCheckResult>>> =
-    LazyLock::new(|| Mutex::new(None));
 
 #[derive(Deserialize)]
 pub struct RealmInfo {
@@ -229,19 +223,16 @@ pub async fn check_and_store_ods_version(ods_socket_path: &str) -> Result<()> {
         bail!("failed to get omnect_device_service_version from status response")
     };
 
-    // compare to MIN_ODS_VERSION
-    let min_version = Version::parse(MIN_ODS_VERSION).expect("parse MIN_ODS_VERSION");
-    let current_version = Version::parse(&omnect_device_service_version)
-        .expect("parse omnect_device_service_version");
+    let min_version = Version::parse(MIN_ODS_VERSION)
+        .map_err(|e| anyhow!("failed to parse MIN_ODS_VERSION: {e}"))?;
+    let current_version = Version::parse(omnect_device_service_version)
+        .map_err(|e| anyhow!("failed to parse omnect_device_service_version: {e}"))?;
     let is_below_min = current_version < min_version;
-    {
-        let mut version_check = VERSION_CHECK.lock().unwrap();
-        *version_check = Some(VersionCheckResult {
-            min_version: MIN_ODS_VERSION.to_string(),
-            current_version: omnect_device_service_version.clone(),
-            is_below_min,
-        });
-    }
+    VERSION_CHECK.get_or_init(|| VersionCheckResult {
+        min_version: MIN_ODS_VERSION.to_string(),
+        current_version: omnect_device_service_version.clone(),
+        is_below_min,
+    });
 
     Ok(())
 }

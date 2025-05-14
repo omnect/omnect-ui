@@ -114,17 +114,14 @@ impl Api {
     pub async fn healthcheck() -> impl Responder {
         debug!("healthcheck() called");
 
-        let info = VERSION_CHECK.lock().unwrap().clone();
-
-        match info {
-            Some(result) => {
-                if result.is_below_min {
-                    HttpResponse::ServiceUnavailable().json(result)
-                } else {
-                    HttpResponse::Ok().json(result)
-                }
+        if let Some(result) = VERSION_CHECK.get() {
+            if result.is_below_min {
+                HttpResponse::ServiceUnavailable().json(result)
+            } else {
+                HttpResponse::Ok().json(result)
             }
-            None => HttpResponse::Ok().body("No version check performed yet"),
+        } else {
+            HttpResponse::Ok().body("No version check performed yet")
         }
     }
 
