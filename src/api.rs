@@ -1,4 +1,4 @@
-use crate::common::{config_path, validate_password, validate_token_and_claims, VERSION_CHECK};
+use crate::common::{config_path, validate_password, validate_token_and_claims};
 use crate::middleware::TOKEN_EXPIRE_HOURS;
 use crate::socket_client::*;
 use actix_files::NamedFile;
@@ -81,6 +81,13 @@ pub enum FactoryResetMode {
     Mode4 = 4,
 }
 
+#[derive(Clone, Debug, Serialize)]
+pub struct VersionCheckResult {
+    pub req_ods_version: String,
+    pub cur_ods_version: String,
+    pub version_mismatch: bool,
+}
+
 #[derive(Clone)]
 pub struct Api {
     pub ods_socket_path: String,
@@ -89,6 +96,7 @@ pub struct Api {
     pub index_html: PathBuf,
     pub keycloak_public_key_url: String,
     pub tenant: String,
+    pub version_check_result: VersionCheckResult,
 }
 
 impl Api {
@@ -111,17 +119,13 @@ impl Api {
         Ok(NamedFile::open(config_path!("app_config.js"))?)
     }
 
-    pub async fn healthcheck() -> impl Responder {
+    pub async fn healthcheck(config: web::Data<Api>) -> impl Responder {
         debug!("healthcheck() called");
 
-        if let Some(result) = VERSION_CHECK.get() {
-            if result.version_mismatch {
-                HttpResponse::ServiceUnavailable().json(result)
-            } else {
-                HttpResponse::Ok().json(result)
-            }
+        if config.version_check_result.version_mismatch {
+            HttpResponse::ServiceUnavailable().json(&config.version_check_result)
         } else {
-            HttpResponse::Ok().body("No version check performed yet")
+            HttpResponse::Ok().json(&config.version_check_result)
         }
     }
 

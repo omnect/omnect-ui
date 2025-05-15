@@ -1,3 +1,4 @@
+use crate::api::VersionCheckResult;
 use crate::REQ_ODS_VERSION;
 use actix_web::body::MessageBody;
 use anyhow::{anyhow, bail, Context, Result};
@@ -7,16 +8,7 @@ use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
 use reqwest::blocking::get;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
-use std::{fs, io::Write, path::Path, sync::OnceLock};
-
-pub static VERSION_CHECK: OnceLock<VersionCheckResult> = OnceLock::new();
-
-#[derive(Clone, Debug, Serialize)]
-pub struct VersionCheckResult {
-    pub req_ods_version: String,
-    pub cur_ods_version: String,
-    pub version_mismatch: bool,
-}
+use std::{fs, io::Write, path::Path};
 
 #[derive(Deserialize)]
 pub struct RealmInfo {
@@ -212,7 +204,7 @@ pub fn create_frontend_config_file(keycloak_url: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn check_and_store_ods_version(ods_socket_path: &str) -> Result<()> {
+pub async fn check_and_store_ods_version(ods_socket_path: &str) -> Result<VersionCheckResult> {
     let status_response = get_status(ods_socket_path)
         .await
         .context("failed to get status from socket client")?;
@@ -224,14 +216,12 @@ pub async fn check_and_store_ods_version(ods_socket_path: &str) -> Result<()> {
             .map_err(|e| anyhow!("failed to parse omnect_device_service_version: {e}"))?;
     let version_mismatch = !version_req.matches(&current_version);
 
-    VERSION_CHECK.get_or_init(|| VersionCheckResult {
+    Ok(VersionCheckResult {
         req_ods_version: REQ_ODS_VERSION.to_string(),
         cur_ods_version: status_response
             .system_info
             .omnect_device_service_version
             .clone(),
         version_mismatch,
-    });
-
-    Ok(())
+    })
 }

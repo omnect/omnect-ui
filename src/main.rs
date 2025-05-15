@@ -129,7 +129,7 @@ async fn main() {
             &ods_socket_path
         )
     });
-    common::check_and_store_ods_version(&ods_socket_path)
+    let version_check_result = common::check_and_store_ods_version(&ods_socket_path)
         .await
         .expect("failed to check and store ods version");
 
@@ -199,6 +199,7 @@ async fn main() {
         index_html,
         keycloak_public_key_url: keycloak_url!(),
         tenant,
+        version_check_result,
     };
 
     let session_key = Key::generate();
