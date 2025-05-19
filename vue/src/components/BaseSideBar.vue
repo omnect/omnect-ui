@@ -37,7 +37,8 @@ onGotResponse(async (res) => {
 				<v-list-item-title :style="{ fontWeight: 700 }"> {{ (route.meta!.text as string) }}</v-list-item-title>
 			</v-list-item>
 			<v-list-item active-class="text-white bg-white/10" target="_blank" rel="noopener noreferrer"
-				href="https://documentation.omnect.conplement.cloud/" class="text-white hover:bg-white/10">
+				href="https://documentation.omnect.conplement.cloud/omnect-Secure-OS/omnect-ui"
+				class="text-white hover:bg-white/10">
 				<v-list-item-title :style="{ fontWeight: 700 }">Documentation</v-list-item-title>
 			</v-list-item>
 		</v-list>
