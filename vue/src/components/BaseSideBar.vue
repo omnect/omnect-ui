@@ -44,7 +44,7 @@ onGotResponse(async (res) => {
 		</v-list>
 		<template v-slot:append>
 			<div class="flex flex-col items-center mb-4">
-				<div class="text-center w-40 text-sm lowercase"> (v.{{ version }})</div>
+				<div class="text-center w-40 text-sm lowercase">(v.{{ version }})</div>
 				<a :class="`text-white hover:underline-white`" class="decoration-underline"
 					href="https://www.conplement.de/en/impressum-legal-notice" target="_blank">Imprint</a>
 			</div>
