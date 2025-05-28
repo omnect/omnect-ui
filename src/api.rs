@@ -1,5 +1,4 @@
 use crate::{
-    certificate::create_module_certificate,
     common::{centrifugo_config, config_path, validate_password},
     keycloak_client,
     middleware::TOKEN_EXPIRE_HOURS,
@@ -81,11 +80,7 @@ impl Api {
         let index_html =
             std::fs::canonicalize("static/index.html").context("static/index.html not found")?;
         let tenant = std::env::var("TENANT").unwrap_or("cp".to_string());
-        let ods_client = Arc::new(OmnectDeviceServiceClient::new().await?);
-
-        create_module_certificate(&ods_client)
-            .await
-            .expect("failed to create module certificate");
+        let ods_client = Arc::new(OmnectDeviceServiceClient::new(true).await?);
 
         Ok(Api {
             ods_client,

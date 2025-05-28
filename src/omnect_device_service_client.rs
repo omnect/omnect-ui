@@ -96,22 +96,25 @@ struct PublishIdEndpoint {
 pub struct OmnectDeviceServiceClient {
     socket_client: SocketClient,
     socket_path: String,
+    register_publish_endpoint: bool,
 }
 
 impl OmnectDeviceServiceClient {
     const REQUIRED_CLIENT_VERSION: &str = ">=0.39.0";
 
-    pub async fn new() -> Result<Self> {
+    pub async fn new(register_publish_endpoint: bool) -> Result<Self> {
         let socket_client = SocketClient::new();
         let socket_path = env::var("SOCKET_PATH").unwrap_or("/socket/api.sock".to_string());
 
         let client = OmnectDeviceServiceClient {
             socket_client,
             socket_path,
+            register_publish_endpoint,
         };
 
-        client.register_publish_endpoint().await?;
-
+        if register_publish_endpoint {
+            client.register_publish_endpoint().await?;
+        }
         Ok(client)
     }
 
@@ -248,19 +251,21 @@ impl OmnectDeviceServiceClient {
 
 impl Drop for OmnectDeviceServiceClient {
     fn drop(&mut self) {
-        let socket_client = self.socket_client.clone();
-        let socket_path = self.socket_path.clone();
+        if self.register_publish_endpoint {
+            let socket_client = self.socket_client.clone();
+            let socket_path = self.socket_path.clone();
 
-        tokio::spawn(async move {
-            socket_client
-                .delete_with_empty_body(
-                    &Uri::new(
-                        &socket_path,
-                        concat!("/publish-endpoint/v1/", env!("CARGO_PKG_NAME")),
+            tokio::spawn(async move {
+                socket_client
+                    .delete_with_empty_body(
+                        &Uri::new(
+                            &socket_path,
+                            concat!("/publish-endpoint/v1/", env!("CARGO_PKG_NAME")),
+                        )
+                        .into(),
                     )
-                    .into(),
-                )
-                .await
-        });
+                    .await
+            });
+        }
     }
 }

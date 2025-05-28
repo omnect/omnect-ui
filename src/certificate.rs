@@ -41,40 +41,37 @@ pub async fn create_module_certificate(_ods_client: &OmnectDeviceServiceClient) 
 }
 
 #[cfg(not(feature = "mock"))]
-pub async fn create_module_certificate(ods_client: &OmnectDeviceServiceClient) -> Result<()> {
+pub async fn create_module_certificate() -> Result<()> {
     info!("create module certificate");
-
-    let moduleid = std::env::var("IOTEDGE_MODULEID").context("IOTEDGE_MODULEID missing")?;
-    let modulegenerationid = std::env::var("IOTEDGE_MODULEGENERATIONID")
+    let ods_client = OmnectDeviceServiceClient::new(false).await?;
+    let id = std::env::var("IOTEDGE_MODULEID").context("IOTEDGE_MODULEID missing")?;
+    let gen_id = std::env::var("IOTEDGE_MODULEGENERATIONID")
         .context("IOTEDGE_MODULEGENERATIONID missing")?;
-    let apiversion = std::env::var("IOTEDGE_APIVERSION").context("IOTEDGE_APIVERSION missing")?;
-    let workloaduri =
-        std::env::var("IOTEDGE_WORKLOADURI").context("IOTEDGE_WORKLOADURI missing")?;
+    let api_version = std::env::var("IOTEDGE_APIVERSION").context("IOTEDGE_APIVERSION missing")?;
+    let uri = std::env::var("IOTEDGE_WORKLOADURI").context("IOTEDGE_WORKLOADURI missing")?;
     let payload = CreateCertPayload {
         common_name: ods_client.ip_address().await?,
     };
-    let path = format!(
-        "/modules/{moduleid}/genid/{modulegenerationid}/certificate/server?api-version={apiversion}"
-    );
+    let path = format!("/modules/{id}/genid/{gen_id}/certificate/server?api-version={api_version}");
     let uri = hyperlocal::Uri::new(
-        workloaduri
-            .strip_prefix("unix://")
+        uri.strip_prefix("unix://")
             .context("unexpected workload uri prefix")?,
         &path,
     )
     .into();
     let socket_client = SocketClient::new();
-    let response = socket_client
-        .post_with_json_body(&uri, payload)
-        .await
-        .context("create_module_certificate request failed")?;
-    let cert_response: CreateCertResponse =
-        serde_json::from_str(&response).context("CreateCertResponse not possible")?;
+    let response: CreateCertResponse = serde_json::from_str(
+        &socket_client
+            .post_with_json_body(&uri, payload)
+            .await
+            .context("create_module_certificate request failed")?,
+    )
+    .context("CreateCertResponse not possible")?;
     let mut file = File::create(cert_path()).context("could not be create cert_path")?;
-    file.write_all(cert_response.certificate.as_bytes())
+    file.write_all(response.certificate.as_bytes())
         .context("could not write to cert_path")?;
 
     let mut file = File::create(key_path()).context("could not be create key_path")?;
-    file.write_all(cert_response.private_key.bytes.as_bytes())
+    file.write_all(response.private_key.bytes.as_bytes())
         .context("could not write to key_path")
 }

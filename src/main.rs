@@ -6,7 +6,7 @@ mod middleware;
 mod omnect_device_service_client;
 mod socket_client;
 
-use crate::api::Api;
+use crate::{api::Api, certificate::create_module_certificate};
 use actix_files::Files;
 use actix_multipart::form::MultipartFormConfig;
 use actix_server::ServerHandle;
@@ -61,6 +61,10 @@ async fn main() {
         env!("CARGO_PKG_VERSION"),
         env!("GIT_SHORT_REV")
     );
+
+    create_module_certificate()
+        .await
+        .expect("failed to create module certificate");
 
     let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install SIGTERM handler");
     let mut centrifugo = run_centrifugo();
@@ -245,6 +249,10 @@ fn run_centrifugo() -> Child {
             .spawn()
             .expect("Failed to spawn child process");
 
-    debug!("centrifugo pid: {}", centrifugo.id().unwrap());
+    info!(
+        "centrifugo pid: {}",
+        centrifugo.id().expect("centrifugo pid")
+    );
+
     centrifugo
 }
