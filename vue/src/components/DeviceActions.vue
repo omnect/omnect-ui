@@ -18,6 +18,7 @@ const factoryResetKeys: Ref<Pick<FactoryReset, "keys"> | undefined> = ref(undefi
 
 const factoryResetPayload = computed(() => {
 	return {
+		mode: 1,
 		preserve: selectedFactoryResetKeys.value
 	}
 })
