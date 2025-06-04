@@ -43,8 +43,6 @@ export function useWaitReconnect() {
 			if (err.isAxiosError && err.code === "ECONNABORTED") {
 				wasDown.value = true
 			}
-			//ERR_CERT_AUTHORITY_INVALID
-			console.error("Error checking reconnect:", error)
 		}
 	}
 
