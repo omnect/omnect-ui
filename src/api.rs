@@ -1,6 +1,5 @@
 use crate::{
     common::{centrifugo_config, config_path, validate_password},
-    keycloak_client,
     middleware::TOKEN_EXPIRE_HOURS,
     omnect_device_service_client::*,
 };
@@ -42,8 +41,8 @@ macro_rules! tmp_path {
     };
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct TokenClaims {
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct TokenClaims {
     roles: Option<Vec<String>>,
     tenant_list: Option<Vec<String>>,
     fleet_list: Option<Vec<String>>,
@@ -67,9 +66,119 @@ pub struct UploadFormSingleFile {
     file: TempFile,
 }
 
+pub trait KeycloakVerifier: Send + Sync {
+    fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims>;
+}
+
+pub struct RealKeycloakVerifier;
+impl KeycloakVerifier for RealKeycloakVerifier {
+    fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims> {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let pub_key = rt.block_on(crate::keycloak_client::realm_public_key())?;
+        let claims = pub_key.verify_token::<TokenClaims>(token, None)?;
+        Ok(claims.custom)
+    }
+}
+
+pub trait DeviceServiceClientTrait: Send + Sync {
+    fn fleet_id<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<String>> + Send + 'a>>;
+    fn republish<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>>;
+    fn version_info<'a>(
+        &'a self,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = anyhow::Result<crate::omnect_device_service_client::VersionInfo>,
+                > + Send
+                + 'a,
+        >,
+    >;
+    fn factory_reset<'a>(
+        &'a self,
+        factory_reset: crate::omnect_device_service_client::FactoryReset,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>>;
+    fn reboot<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>>;
+    fn reload_network<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>>;
+    fn load_update<'a>(
+        &'a self,
+        load_update: crate::omnect_device_service_client::LoadUpdate,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<String>> + Send + 'a>>;
+    fn run_update<'a>(
+        &'a self,
+        run_update: crate::omnect_device_service_client::RunUpdate,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>>;
+}
+
+impl DeviceServiceClientTrait for OmnectDeviceServiceClient {
+    fn fleet_id<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<String>> + Send + 'a>>
+    {
+        Box::pin(self.fleet_id())
+    }
+    fn republish<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
+        Box::pin(self.republish())
+    }
+    fn version_info<'a>(
+        &'a self,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = anyhow::Result<crate::omnect_device_service_client::VersionInfo>,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(self.version_info())
+    }
+    fn factory_reset<'a>(
+        &'a self,
+        factory_reset: crate::omnect_device_service_client::FactoryReset,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
+        Box::pin(self.factory_reset(factory_reset))
+    }
+    fn reboot<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
+        Box::pin(self.reboot())
+    }
+    fn reload_network<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
+        Box::pin(self.reload_network())
+    }
+    fn load_update<'a>(
+        &'a self,
+        load_update: crate::omnect_device_service_client::LoadUpdate,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<String>> + Send + 'a>>
+    {
+        Box::pin(self.load_update(load_update))
+    }
+    fn run_update<'a>(
+        &'a self,
+        run_update: crate::omnect_device_service_client::RunUpdate,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
+        Box::pin(self.run_update(run_update))
+    }
+}
+
 #[derive(Clone)]
 pub struct Api {
-    pub ods_client: Arc<OmnectDeviceServiceClient>,
+    pub ods_client: Arc<dyn DeviceServiceClientTrait>,
+    pub keycloak: Arc<dyn KeycloakVerifier>,
     pub index_html: PathBuf,
     pub tenant: String,
 }
@@ -80,10 +189,12 @@ impl Api {
         let index_html =
             std::fs::canonicalize("static/index.html").context("static/index.html not found")?;
         let tenant = std::env::var("TENANT").unwrap_or("cp".to_string());
-        let ods_client = Arc::new(OmnectDeviceServiceClient::new(true).await?);
-
+        let ods_client = Arc::new(OmnectDeviceServiceClient::new(true).await?)
+            as Arc<dyn DeviceServiceClientTrait>;
+        let keycloak = Arc::new(RealKeycloakVerifier);
         Ok(Api {
             ods_client,
+            keycloak,
             index_html,
             tenant,
         })
@@ -287,7 +398,6 @@ impl Api {
 
     pub async fn validate_portal_token(body: String, api: web::Data<Api>) -> impl Responder {
         debug!("validate_portal_token() called");
-
         if let Err(e) = api.validate_token_and_claims(&body).await {
             error!("validate_portal_token() failed: {e:#}");
             return HttpResponse::Unauthorized().finish();
@@ -296,47 +406,29 @@ impl Api {
     }
 
     async fn validate_token_and_claims(&self, token: &str) -> Result<()> {
-        let pub_key = keycloak_client::realm_public_key()
-            .await
-            .context("failed to get public key")?;
-
-        let claims = pub_key
-            .verify_token::<TokenClaims>(token, None)
-            .context("failed to verify token")?;
-
-        let Some(tenant_list) = &claims.custom.tenant_list else {
+        let claims = self.keycloak.verify_token(token)?;
+        let Some(tenant_list) = &claims.tenant_list else {
             bail!("user has no tenant list");
         };
-
         if !tenant_list.contains(&self.tenant) {
             bail!("user has no permission to set password");
         }
-
-        let Some(roles) = &claims.custom.roles else {
+        let Some(roles) = &claims.roles else {
             bail!("user has no roles");
         };
-
         if roles.contains(&String::from("FleetAdministrator")) {
             return Ok(());
         }
-
         if roles.contains(&String::from("FleetOperator")) {
-            let Some(fleet_list) = &claims.custom.fleet_list else {
+            let Some(fleet_list) = &claims.fleet_list else {
                 bail!("user has no permission on this fleet");
             };
-
-            let fleet_id = self
-                .ods_client
-                .fleet_id()
-                .await
-                .context("failed to get fleet id")?;
-
+            let fleet_id = self.ods_client.fleet_id().await?;
             if !fleet_list.contains(&fleet_id) {
                 bail!("user has no permission on this fleet");
             }
             return Ok(());
         }
-
         bail!("user has no permission to set password")
     }
 
@@ -407,5 +499,196 @@ impl Api {
         }
 
         HttpResponse::Ok().body(token)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{App, http::header::ContentType, test};
+    use std::sync::Arc;
+
+    struct MockKeycloakVerifier {
+        claims: TokenClaims,
+    }
+    impl KeycloakVerifier for MockKeycloakVerifier {
+        fn verify_token(&self, _token: &str) -> anyhow::Result<TokenClaims> {
+            Ok(self.claims.clone())
+        }
+    }
+
+    #[derive(Clone)]
+    struct MockOdsClient {
+        fleet_id: String,
+    }
+    impl DeviceServiceClientTrait for MockOdsClient {
+        fn fleet_id<'a>(
+            &'a self,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<String>> + Send + 'a>>
+        {
+            let value = self.fleet_id.clone();
+            Box::pin(async move { Ok(value) })
+        }
+        fn republish<'a>(
+            &'a self,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>>
+        {
+            Box::pin(async { Ok(()) })
+        }
+        fn version_info<'a>(
+            &'a self,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<
+                        Output = anyhow::Result<crate::omnect_device_service_client::VersionInfo>,
+                    > + Send
+                    + 'a,
+            >,
+        > {
+            Box::pin(async { Err(anyhow::anyhow!("not implemented")) })
+        }
+        fn factory_reset<'a>(
+            &'a self,
+            _factory_reset: crate::omnect_device_service_client::FactoryReset,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>>
+        {
+            Box::pin(async { Ok(()) })
+        }
+        fn reboot<'a>(
+            &'a self,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>>
+        {
+            Box::pin(async { Ok(()) })
+        }
+        fn reload_network<'a>(
+            &'a self,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>>
+        {
+            Box::pin(async { Ok(()) })
+        }
+        fn load_update<'a>(
+            &'a self,
+            _load_update: crate::omnect_device_service_client::LoadUpdate,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<String>> + Send + 'a>>
+        {
+            Box::pin(async { Ok("mocked".to_string()) })
+        }
+        fn run_update<'a>(
+            &'a self,
+            _run_update: crate::omnect_device_service_client::RunUpdate,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>>
+        {
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    async fn call_validate(api: Api) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(api))
+                .route("/validate", web::post().to(Api::validate_portal_token)),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/validate")
+            .insert_header(ContentType::plaintext())
+            .set_payload("dummy")
+            .to_request();
+        test::call_service(&app, req).await
+    }
+
+    #[tokio::test]
+    async fn validate_portal_token_fleet_admin_should_succeed() {
+        let claims = TokenClaims {
+            roles: Some(vec!["FleetAdministrator".to_string()]),
+            tenant_list: Some(vec!["cp".to_string()]),
+            fleet_list: None,
+        };
+        let api = Api {
+            ods_client: Arc::new(MockOdsClient {
+                fleet_id: "Fleet1".to_string(),
+            }),
+            keycloak: Arc::new(MockKeycloakVerifier { claims }),
+            index_html: PathBuf::from("/dev/null"),
+            tenant: "cp".to_string(),
+        };
+        let resp = call_validate(api).await;
+        assert!(resp.status().is_success());
+    }
+
+    #[tokio::test]
+    async fn validate_portal_token_fleet_admin_invalid_tenant_should_fail() {
+        let claims = TokenClaims {
+            roles: Some(vec!["FleetAdministrator".to_string()]),
+            tenant_list: Some(vec!["othertenant".to_string()]),
+            fleet_list: None,
+        };
+        let api = Api {
+            ods_client: Arc::new(MockOdsClient {
+                fleet_id: "Fleet1".to_string(),
+            }),
+            keycloak: Arc::new(MockKeycloakVerifier { claims }),
+            index_html: PathBuf::from("/dev/null"),
+            tenant: "cp".to_string(),
+        };
+        let resp = call_validate(api).await;
+        assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn validate_portal_token_fleet_operator_should_succeed() {
+        let claims = TokenClaims {
+            roles: Some(vec!["FleetOperator".to_string()]),
+            tenant_list: Some(vec!["cp".to_string()]),
+            fleet_list: Some(vec!["Fleet1".to_string(), "Fleet2".to_string()]),
+        };
+        let api = Api {
+            ods_client: Arc::new(MockOdsClient {
+                fleet_id: "Fleet1".to_string(),
+            }),
+            keycloak: Arc::new(MockKeycloakVerifier { claims }),
+            index_html: PathBuf::from("/dev/null"),
+            tenant: "cp".to_string(),
+        };
+        let resp = call_validate(api).await;
+        assert!(resp.status().is_success());
+    }
+
+    #[tokio::test]
+    async fn validate_portal_token_fleet_operator_wrong_fleet_should_fail() {
+        let claims = TokenClaims {
+            roles: Some(vec!["FleetOperator".to_string()]),
+            tenant_list: Some(vec!["cp".to_string()]),
+            fleet_list: Some(vec!["Fleet2".to_string()]),
+        };
+        let api = Api {
+            ods_client: Arc::new(MockOdsClient {
+                fleet_id: "Fleet1".to_string(),
+            }),
+            keycloak: Arc::new(MockKeycloakVerifier { claims }),
+            index_html: PathBuf::from("/dev/null"),
+            tenant: "cp".to_string(),
+        };
+        let resp = call_validate(api).await;
+        assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn validate_portal_token_fleet_observer_should_fail() {
+        let claims = TokenClaims {
+            roles: Some(vec!["FleetObserver".to_string()]),
+            tenant_list: Some(vec!["cp".to_string()]),
+            fleet_list: None,
+        };
+        let api = Api {
+            ods_client: Arc::new(MockOdsClient {
+                fleet_id: "Fleet1".to_string(),
+            }),
+            keycloak: Arc::new(MockKeycloakVerifier { claims }),
+            index_html: PathBuf::from("/dev/null"),
+            tenant: "cp".to_string(),
+        };
+        let resp = call_validate(api).await;
+        assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
     }
 }
