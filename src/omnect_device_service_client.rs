@@ -148,13 +148,11 @@ impl OmnectDeviceServiceClient {
     }
 
     pub async fn status(&self) -> Result<Status> {
-        serde_json::from_str(
-            &self
-                .socket_client
-                .get_with_empty_body(&Uri::new(&self.socket_path, "/status/v1").into())
-                .await?,
-        )
-        .context("failed to parse status")
+        let body = self
+            .socket_client
+            .get_with_empty_body(&Uri::new(&self.socket_path, "/status/v1").into())
+            .await?;
+        serde_json::from_str(&body).context("failed to parse status")
     }
 
     pub async fn republish(&self) -> Result<()> {
