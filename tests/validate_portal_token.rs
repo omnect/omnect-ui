@@ -1,5 +1,4 @@
 use actix_web::{App, http::header::ContentType, test, web};
-use mockall::predicate::*;
 use omnect_ui::api::{Api, KeycloakVerifier, TokenClaims};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,13 +13,13 @@ impl KeycloakVerifier for MockKeycloakVerifier {
 }
 
 struct MockOdsClient {
-    fleet_id: String,
+    fleet_id: &'static str,
 }
 
 #[async_trait::async_trait]
 impl omnect_ui::omnect_device_service_client::DeviceServiceClientTrait for MockOdsClient {
     async fn fleet_id(&self) -> anyhow::Result<String> {
-        Ok(self.fleet_id.clone())
+        Ok(self.fleet_id.to_string())
     }
     async fn republish(&self) -> anyhow::Result<()> {
         panic!("not implemented")
@@ -71,97 +70,59 @@ async fn call_validate(api: Api) -> actix_web::dev::ServiceResponse {
     test::call_service(&app, req).await
 }
 
-#[tokio::test]
-async fn validate_portal_token_fleet_admin_should_succeed() {
-    let claims = TokenClaims {
-        roles: Some(vec!["FleetAdministrator".to_string()]),
-        tenant_list: Some(vec!["cp".to_string()]),
-        fleet_list: None,
-    };
-    let api = Api {
-        ods_client: Arc::new(MockOdsClient {
-            fleet_id: "Fleet1".to_string(),
-        }),
+fn make_claims(role: &str, tenant: &str, fleets: Option<Vec<&str>>) -> TokenClaims {
+    TokenClaims {
+        roles: Some(vec![role.to_string()]),
+        tenant_list: Some(vec![tenant.to_string()]),
+        fleet_list: fleets.map(|fs| fs.into_iter().map(|f| f.to_string()).collect()),
+    }
+}
+
+fn make_api(fleet_id: &'static str, claims: TokenClaims, tenant: &str) -> Api {
+    Api {
+        ods_client: Arc::new(MockOdsClient { fleet_id }),
         keycloak: Arc::new(MockKeycloakVerifier { claims }),
         index_html: PathBuf::from("/dev/null"),
-        tenant: "cp".to_string(),
-    };
+        tenant: tenant.to_string(),
+    }
+}
+
+async fn assert_status(api: Api, expected: actix_web::http::StatusCode) {
     let resp = call_validate(api).await;
-    assert!(resp.status().is_success());
+    assert_eq!(resp.status(), expected);
+}
+
+#[tokio::test]
+async fn validate_portal_token_fleet_admin_should_succeed() {
+    let claims = make_claims("FleetAdministrator", "cp", None);
+    let api = make_api("Fleet1", claims, "cp");
+    assert_status(api, actix_web::http::StatusCode::OK).await;
 }
 
 #[tokio::test]
 async fn validate_portal_token_fleet_admin_invalid_tenant_should_fail() {
-    let claims = TokenClaims {
-        roles: Some(vec!["FleetAdministrator".to_string()]),
-        tenant_list: Some(vec!["invalid_tenant".to_string()]),
-        fleet_list: None,
-    };
-    let api = Api {
-        ods_client: Arc::new(MockOdsClient {
-            fleet_id: "Fleet1".to_string(),
-        }),
-        keycloak: Arc::new(MockKeycloakVerifier { claims }),
-        index_html: PathBuf::from("/dev/null"),
-        tenant: "cp".to_string(),
-    };
-    let resp = call_validate(api).await;
-    assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+    let claims = make_claims("FleetAdministrator", "invalid_tenant", None);
+    let api = make_api("Fleet1", claims, "cp");
+    assert_status(api, actix_web::http::StatusCode::UNAUTHORIZED).await;
 }
 
 #[tokio::test]
 async fn validate_portal_token_fleet_operator_should_succeed() {
-    let claims = TokenClaims {
-        roles: Some(vec!["FleetOperator".to_string()]),
-        tenant_list: Some(vec!["cp".to_string()]),
-        fleet_list: Some(vec!["Fleet1".to_string(), "Fleet2".to_string()]),
-    };
-    let api = Api {
-        ods_client: Arc::new(MockOdsClient {
-            fleet_id: "Fleet1".to_string(),
-        }),
-        keycloak: Arc::new(MockKeycloakVerifier { claims }),
-        index_html: PathBuf::from("/dev/null"),
-        tenant: "cp".to_string(),
-    };
-    let resp = call_validate(api).await;
-    assert!(resp.status().is_success());
+    let claims = make_claims("FleetOperator", "cp", Some(vec!["Fleet1", "Fleet2"]));
+    let api = make_api("Fleet1", claims, "cp");
+    assert_status(api, actix_web::http::StatusCode::OK).await;
 }
 
 #[tokio::test]
 async fn validate_portal_token_fleet_operator_invalid_fleet_should_fail() {
-    let claims = TokenClaims {
-        roles: Some(vec!["FleetOperator".to_string()]),
-        tenant_list: Some(vec!["cp".to_string()]),
-        fleet_list: Some(vec!["Fleet2".to_string()]),
-    };
-    let api = Api {
-        ods_client: Arc::new(MockOdsClient {
-            fleet_id: "Fleet1".to_string(),
-        }),
-        keycloak: Arc::new(MockKeycloakVerifier { claims }),
-        index_html: PathBuf::from("/dev/null"),
-        tenant: "cp".to_string(),
-    };
-    let resp = call_validate(api).await;
-    assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+    let claims = make_claims("FleetOperator", "cp", Some(vec!["Fleet2"]));
+    let api = make_api("Fleet1", claims, "cp");
+    assert_status(api, actix_web::http::StatusCode::UNAUTHORIZED).await;
 }
 
 #[tokio::test]
 async fn validate_portal_token_fleet_observer_should_fail() {
-    let claims = TokenClaims {
-        roles: Some(vec!["FleetObserver".to_string()]),
-        tenant_list: Some(vec!["cp".to_string()]),
-        fleet_list: None,
-    };
-    let api = Api {
-        ods_client: Arc::new(MockOdsClient {
-            fleet_id: "Fleet1".to_string(),
-        }),
-        keycloak: Arc::new(MockKeycloakVerifier { claims }),
-        index_html: PathBuf::from("/dev/null"),
-        tenant: "cp".to_string(),
-    };
-    let resp = call_validate(api).await;
-    assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+    let claims = make_claims("FleetObserver", "cp", None);
+    let api = make_api("Fleet1", claims, "cp");
+    assert_status(api, actix_web::http::StatusCode::UNAUTHORIZED).await;
 }
