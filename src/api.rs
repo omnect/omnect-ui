@@ -1,9 +1,7 @@
-use crate::{
-    common::{centrifugo_config, config_path, validate_password},
-    keycloak_client,
-    middleware::TOKEN_EXPIRE_HOURS,
-    omnect_device_service_client::*,
-};
+use crate::common::{centrifugo_config, config_path, validate_password};
+use crate::keycloak_client::{KeycloakVerifier, RealKeycloakVerifier};
+use crate::middleware::TOKEN_EXPIRE_HOURS;
+use crate::omnect_device_service_client::*;
 use actix_files::NamedFile;
 use actix_multipart::form::{MultipartForm, tempfile::TempFile};
 use actix_session::Session;
@@ -42,13 +40,6 @@ macro_rules! tmp_path {
     };
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct TokenClaims {
-    roles: Option<Vec<String>>,
-    tenant_list: Option<Vec<String>>,
-    fleet_list: Option<Vec<String>>,
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetPasswordPayload {
@@ -69,7 +60,8 @@ pub struct UploadFormSingleFile {
 
 #[derive(Clone)]
 pub struct Api {
-    pub ods_client: Arc<OmnectDeviceServiceClient>,
+    pub ods_client: Arc<dyn DeviceServiceClientTrait>,
+    pub keycloak: Arc<dyn KeycloakVerifier>,
     pub index_html: PathBuf,
     pub tenant: String,
 }
@@ -80,10 +72,12 @@ impl Api {
         let index_html =
             std::fs::canonicalize("static/index.html").context("static/index.html not found")?;
         let tenant = std::env::var("TENANT").unwrap_or("cp".to_string());
-        let ods_client = Arc::new(OmnectDeviceServiceClient::new(true).await?);
-
+        let ods_client = Arc::new(OmnectDeviceServiceClient::new(true).await?)
+            as Arc<dyn DeviceServiceClientTrait>;
+        let keycloak = Arc::new(RealKeycloakVerifier);
         Ok(Api {
             ods_client,
+            keycloak,
             index_html,
             tenant,
         })
@@ -287,7 +281,6 @@ impl Api {
 
     pub async fn validate_portal_token(body: String, api: web::Data<Api>) -> impl Responder {
         debug!("validate_portal_token() called");
-
         if let Err(e) = api.validate_token_and_claims(&body).await {
             error!("validate_portal_token() failed: {e:#}");
             return HttpResponse::Unauthorized().finish();
@@ -296,47 +289,29 @@ impl Api {
     }
 
     async fn validate_token_and_claims(&self, token: &str) -> Result<()> {
-        let pub_key = keycloak_client::realm_public_key()
-            .await
-            .context("failed to get public key")?;
-
-        let claims = pub_key
-            .verify_token::<TokenClaims>(token, None)
-            .context("failed to verify token")?;
-
-        let Some(tenant_list) = &claims.custom.tenant_list else {
+        let claims = self.keycloak.verify_token(token)?;
+        let Some(tenant_list) = &claims.tenant_list else {
             bail!("user has no tenant list");
         };
-
         if !tenant_list.contains(&self.tenant) {
             bail!("user has no permission to set password");
         }
-
-        let Some(roles) = &claims.custom.roles else {
+        let Some(roles) = &claims.roles else {
             bail!("user has no roles");
         };
-
         if roles.contains(&String::from("FleetAdministrator")) {
             return Ok(());
         }
-
         if roles.contains(&String::from("FleetOperator")) {
-            let Some(fleet_list) = &claims.custom.fleet_list else {
+            let Some(fleet_list) = &claims.fleet_list else {
                 bail!("user has no permission on this fleet");
             };
-
-            let fleet_id = self
-                .ods_client
-                .fleet_id()
-                .await
-                .context("failed to get fleet id")?;
-
+            let fleet_id = self.ods_client.fleet_id().await?;
             if !fleet_list.contains(&fleet_id) {
                 bail!("user has no permission on this fleet");
             }
             return Ok(());
         }
-
         bail!("user has no permission to set password")
     }
 
