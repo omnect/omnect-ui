@@ -1,5 +1,6 @@
 use actix_web::{App, http::header::ContentType, test, web};
-use omnect_ui::api::{Api, KeycloakVerifier, TokenClaims};
+use omnect_ui::api::Api;
+use omnect_ui::keycloak_client::{KeycloakVerifier, TokenClaims};
 use std::path::PathBuf;
 use std::sync::Arc;
 

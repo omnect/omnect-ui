@@ -1,4 +1,5 @@
 use crate::common::{centrifugo_config, config_path, validate_password};
+use crate::keycloak_client::{KeycloakVerifier, RealKeycloakVerifier};
 use crate::middleware::TOKEN_EXPIRE_HOURS;
 use crate::omnect_device_service_client::*;
 use actix_files::NamedFile;
@@ -39,13 +40,6 @@ macro_rules! tmp_path {
     };
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct TokenClaims {
-    pub roles: Option<Vec<String>>,
-    pub tenant_list: Option<Vec<String>>,
-    pub fleet_list: Option<Vec<String>>,
-}
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetPasswordPayload {
@@ -62,23 +56,6 @@ pub struct UpdatePasswordPayload {
 #[derive(MultipartForm)]
 pub struct UploadFormSingleFile {
     file: TempFile,
-}
-
-pub trait KeycloakVerifier: Send + Sync {
-    fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims>;
-}
-
-pub struct RealKeycloakVerifier;
-impl KeycloakVerifier for RealKeycloakVerifier {
-    fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims> {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        let pub_key = rt.block_on(crate::keycloak_client::realm_public_key())?;
-        let claims = pub_key.verify_token::<TokenClaims>(token, None)?;
-        Ok(claims.custom)
-    }
 }
 
 #[derive(Clone)]

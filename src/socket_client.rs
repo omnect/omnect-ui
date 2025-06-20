@@ -15,6 +15,12 @@ pub struct SocketClient {
     client: Client<UnixConnector, String>,
 }
 
+impl Default for SocketClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SocketClient {
     pub fn new() -> Self {
         SOCKET_CLIENT
