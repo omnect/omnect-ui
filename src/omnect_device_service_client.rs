@@ -1,6 +1,9 @@
 use crate::{common::centrifugo_config, socket_client::SocketClient};
 use anyhow::{Context, Result, anyhow, bail};
+use async_trait::async_trait;
 use hyperlocal::Uri;
+#[cfg(test)]
+use mockall::automock;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -97,6 +100,69 @@ pub struct OmnectDeviceServiceClient {
     socket_client: SocketClient,
     socket_path: String,
     register_publish_endpoint: bool,
+}
+
+#[cfg_attr(test, automock)]
+#[async_trait]
+pub trait DeviceServiceClientTrait: Send + Sync {
+    async fn fleet_id(&self) -> anyhow::Result<String>;
+    async fn republish(&self) -> anyhow::Result<()>;
+    async fn version_info(
+        &self,
+    ) -> anyhow::Result<crate::omnect_device_service_client::VersionInfo>;
+    async fn factory_reset(
+        &self,
+        factory_reset: crate::omnect_device_service_client::FactoryReset,
+    ) -> anyhow::Result<()>;
+    async fn reboot(&self) -> anyhow::Result<()>;
+    async fn reload_network(&self) -> anyhow::Result<()>;
+    async fn load_update(
+        &self,
+        load_update: crate::omnect_device_service_client::LoadUpdate,
+    ) -> anyhow::Result<String>;
+    async fn run_update(
+        &self,
+        run_update: crate::omnect_device_service_client::RunUpdate,
+    ) -> anyhow::Result<()>;
+}
+
+#[async_trait]
+impl DeviceServiceClientTrait for OmnectDeviceServiceClient {
+    async fn fleet_id(&self) -> anyhow::Result<String> {
+        self.fleet_id().await
+    }
+    async fn republish(&self) -> anyhow::Result<()> {
+        self.republish().await
+    }
+    async fn version_info(
+        &self,
+    ) -> anyhow::Result<crate::omnect_device_service_client::VersionInfo> {
+        self.version_info().await
+    }
+    async fn factory_reset(
+        &self,
+        factory_reset: crate::omnect_device_service_client::FactoryReset,
+    ) -> anyhow::Result<()> {
+        self.factory_reset(factory_reset).await
+    }
+    async fn reboot(&self) -> anyhow::Result<()> {
+        self.reboot().await
+    }
+    async fn reload_network(&self) -> anyhow::Result<()> {
+        self.reload_network().await
+    }
+    async fn load_update(
+        &self,
+        load_update: crate::omnect_device_service_client::LoadUpdate,
+    ) -> anyhow::Result<String> {
+        self.load_update(load_update).await
+    }
+    async fn run_update(
+        &self,
+        run_update: crate::omnect_device_service_client::RunUpdate,
+    ) -> anyhow::Result<()> {
+        self.run_update(run_update).await
+    }
 }
 
 impl OmnectDeviceServiceClient {

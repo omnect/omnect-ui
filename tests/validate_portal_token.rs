@@ -1,5 +1,6 @@
 use actix_web::{App, http::header::ContentType, test, web};
-use omnect_ui::api::{Api, DeviceServiceClientTrait, KeycloakVerifier, TokenClaims};
+use mockall::predicate::*;
+use omnect_ui::api::{Api, KeycloakVerifier, TokenClaims};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -12,63 +13,46 @@ impl KeycloakVerifier for MockKeycloakVerifier {
     }
 }
 
-#[derive(Clone)]
 struct MockOdsClient {
     fleet_id: String,
 }
-impl DeviceServiceClientTrait for MockOdsClient {
-    fn fleet_id<'a>(
-        &'a self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<String>> + Send + 'a>>
-    {
-        let value = self.fleet_id.clone();
-        Box::pin(async move { Ok(value) })
+
+#[async_trait::async_trait]
+impl omnect_ui::omnect_device_service_client::DeviceServiceClientTrait for MockOdsClient {
+    async fn fleet_id(&self) -> anyhow::Result<String> {
+        Ok(self.fleet_id.clone())
     }
-    fn republish<'a>(
-        &'a self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
-        Box::pin(async { Ok(()) })
+    async fn republish(&self) -> anyhow::Result<()> {
+        panic!("not implemented")
     }
-    fn version_info<'a>(
-        &'a self,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<
-                    Output = anyhow::Result<omnect_ui::omnect_device_service_client::VersionInfo>,
-                > + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async { Err(anyhow::anyhow!("not implemented")) })
+    async fn version_info(
+        &self,
+    ) -> anyhow::Result<omnect_ui::omnect_device_service_client::VersionInfo> {
+        panic!("not implemented")
     }
-    fn factory_reset<'a>(
-        &'a self,
+    async fn factory_reset(
+        &self,
         _factory_reset: omnect_ui::omnect_device_service_client::FactoryReset,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
-        Box::pin(async { Ok(()) })
+    ) -> anyhow::Result<()> {
+        panic!("not implemented")
     }
-    fn reboot<'a>(
-        &'a self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
-        Box::pin(async { Ok(()) })
+    async fn reboot(&self) -> anyhow::Result<()> {
+        panic!("not implemented")
     }
-    fn reload_network<'a>(
-        &'a self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
-        Box::pin(async { Ok(()) })
+    async fn reload_network(&self) -> anyhow::Result<()> {
+        panic!("not implemented")
     }
-    fn load_update<'a>(
-        &'a self,
+    async fn load_update(
+        &self,
         _load_update: omnect_ui::omnect_device_service_client::LoadUpdate,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<String>> + Send + 'a>>
-    {
-        Box::pin(async { Ok("mocked".to_string()) })
+    ) -> anyhow::Result<String> {
+        panic!("not implemented")
     }
-    fn run_update<'a>(
-        &'a self,
+    async fn run_update(
+        &self,
         _run_update: omnect_ui::omnect_device_service_client::RunUpdate,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = anyhow::Result<()>> + Send + 'a>> {
-        Box::pin(async { Ok(()) })
+    ) -> anyhow::Result<()> {
+        panic!("not implemented")
     }
 }
 
