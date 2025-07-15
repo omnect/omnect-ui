@@ -3,6 +3,7 @@ use base64::{Engine, prelude::BASE64_STANDARD};
 use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
 use reqwest::blocking::get;
 use serde::{Deserialize, Serialize};
+use mockall::automock;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TokenClaims {
@@ -23,18 +24,18 @@ macro_rules! keycloak_url {
     }};
 }
 
-pub trait KeycloakVerifier: Send + Sync {
-    fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims>;
+#[automock]
+#[allow(async_fn_in_trait)]
+pub trait SingleSignOnProvider: Send + Sync {
+    async fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims>;
 }
 
-pub struct RealKeycloakVerifier;
-impl KeycloakVerifier for RealKeycloakVerifier {
-    fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims> {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        let pub_key = rt.block_on(crate::keycloak_client::realm_public_key())?;
+#[derive(Clone, Default)]
+pub struct KeycloakProvider;
+
+impl SingleSignOnProvider for KeycloakProvider {
+    async fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims> {
+        let pub_key = crate::keycloak_client::realm_public_key().await?;
         let claims = pub_key.verify_token::<TokenClaims>(token, None)?;
         Ok(claims.custom)
     }

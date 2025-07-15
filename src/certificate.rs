@@ -1,4 +1,7 @@
-use crate::{omnect_device_service_client::OmnectDeviceServiceClient, socket_client::SocketClient};
+use crate::{
+    omnect_device_service_client::{DeviceServiceClient, OmnectDeviceServiceClient},
+    socket_client::SocketClient,
+};
 use anyhow::{Context, Result};
 use log::info;
 use serde::{Deserialize, Serialize};

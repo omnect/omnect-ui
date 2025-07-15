@@ -1,67 +1,18 @@
 use actix_web::{App, http::header::ContentType, test, web};
 use omnect_ui::api::Api;
-use omnect_ui::keycloak_client::{KeycloakVerifier, TokenClaims};
+use omnect_ui::keycloak_client::TokenClaims;
 use std::path::PathBuf;
-use std::sync::Arc;
 
-struct MockKeycloakVerifier {
-    claims: TokenClaims,
-}
-impl KeycloakVerifier for MockKeycloakVerifier {
-    fn verify_token(&self, _token: &str) -> anyhow::Result<TokenClaims> {
-        Ok(self.claims.clone())
-    }
-}
+#[mockall_double::double]
+use omnect_ui::{
+    keycloak_client::SingleSignOnProvider, omnect_device_service_client::DeviceServiceClient,
+};
 
-struct MockOdsClient {
-    fleet_id: &'static str,
-}
-
-#[async_trait::async_trait]
-impl omnect_ui::omnect_device_service_client::DeviceServiceClientTrait for MockOdsClient {
-    async fn fleet_id(&self) -> anyhow::Result<String> {
-        Ok(self.fleet_id.to_string())
-    }
-    async fn republish(&self) -> anyhow::Result<()> {
-        panic!("not implemented")
-    }
-    async fn version_info(
-        &self,
-    ) -> anyhow::Result<omnect_ui::omnect_device_service_client::VersionInfo> {
-        panic!("not implemented")
-    }
-    async fn factory_reset(
-        &self,
-        _factory_reset: omnect_ui::omnect_device_service_client::FactoryReset,
-    ) -> anyhow::Result<()> {
-        panic!("not implemented")
-    }
-    async fn reboot(&self) -> anyhow::Result<()> {
-        panic!("not implemented")
-    }
-    async fn reload_network(&self) -> anyhow::Result<()> {
-        panic!("not implemented")
-    }
-    async fn load_update(
-        &self,
-        _load_update: omnect_ui::omnect_device_service_client::LoadUpdate,
-    ) -> anyhow::Result<String> {
-        panic!("not implemented")
-    }
-    async fn run_update(
-        &self,
-        _run_update: omnect_ui::omnect_device_service_client::RunUpdate,
-    ) -> anyhow::Result<()> {
-        panic!("not implemented")
-    }
-}
-
-async fn call_validate(api: Api) -> actix_web::dev::ServiceResponse {
-    let app = test::init_service(
-        App::new()
-            .app_data(web::Data::new(api))
-            .route("/validate", web::post().to(Api::validate_portal_token)),
-    )
+async fn call_validate(api: Api<DeviceServiceClient, SingleSignOnProvider>) -> actix_web::dev::ServiceResponse {
+    let app = test::init_service(App::new().app_data(web::Data::new(api)).route(
+        "/validate",
+        web::post().to(Api::<DeviceServiceClient, SingleSignOnProvider>::validate_portal_token),
+    ))
     .await;
     let req = test::TestRequest::post()
         .uri("/validate")
@@ -79,16 +30,25 @@ fn make_claims(role: &str, tenant: &str, fleets: Option<Vec<&str>>) -> TokenClai
     }
 }
 
-fn make_api(fleet_id: &'static str, claims: TokenClaims, tenant: &str) -> Api {
+fn make_api(fleet_id: &'static str, claims: TokenClaims, tenant: &str) -> Api<DeviceServiceClient, SingleSignOnProvider> {
+    let mut device_service_client_mock = DeviceServiceClient::default();
+    device_service_client_mock
+        .expect_fleet_id()
+        .returning(|| Ok(fleet_id.to_string()));
+    let mut single_sign_on_provider_mock = SingleSignOnProvider::default();
+    single_sign_on_provider_mock
+        .expect_verify_token()
+        .returning(move |_| Ok(claims.clone()));
+
     Api {
-        ods_client: Arc::new(MockOdsClient { fleet_id }),
-        keycloak: Arc::new(MockKeycloakVerifier { claims }),
+        service_client: device_service_client_mock,
+        single_sign_on: single_sign_on_provider_mock,
         index_html: PathBuf::from("/dev/null"),
         tenant: tenant.to_string(),
     }
 }
 
-async fn assert_status(api: Api, expected: actix_web::http::StatusCode) {
+async fn assert_status(api: Api<DeviceServiceClient, SingleSignOnProvider>, expected: actix_web::http::StatusCode) {
     let resp = call_validate(api).await;
     assert_eq!(resp.status(), expected);
 }
