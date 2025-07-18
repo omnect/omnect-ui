@@ -56,6 +56,8 @@ pub struct NetworkStatus {
 pub struct NetworkInterface {
     pub online: bool,
     pub ipv4: Ipv4Info,
+    pub file: String,
+    pub name: String,
 }
 
 #[derive(Deserialize)]
@@ -255,17 +257,19 @@ impl Drop for OmnectDeviceServiceClient {
             let socket_client = self.socket_client.clone();
             let socket_path = self.socket_path.clone();
 
-            tokio::spawn(async move {
-                socket_client
-                    .delete_with_empty_body(
-                        &Uri::new(
-                            &socket_path,
-                            concat!("/publish-endpoint/v1/", env!("CARGO_PKG_NAME")),
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                handle.spawn(async move {
+                    let _ = socket_client
+                        .delete_with_empty_body(
+                            &Uri::new(
+                                &socket_path,
+                                concat!("/publish-endpoint/v1/", env!("CARGO_PKG_NAME")),
+                            )
+                            .into(),
                         )
-                        .into(),
-                    )
-                    .await
-            });
+                        .await;
+                });
+            }
         }
     }
 }
