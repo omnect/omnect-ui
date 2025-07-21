@@ -116,13 +116,14 @@ async fn run_server() -> (
 
     type UiApi = Api<OmnectDeviceServiceClient, KeycloakProvider>;
 
-    let device_service = OmnectDeviceServiceClient::new(true)
-        .await
-        .expect("failed to create client to device service");
-    let keycloak_provider = KeycloakProvider::default();
-    let api = UiApi::new(device_service, keycloak_provider)
-        .await
-        .expect("failed to create api");
+    let api = UiApi::new(
+        OmnectDeviceServiceClient::new(true)
+            .await
+            .expect("failed to create client to device service"),
+        Default::default(),
+    )
+    .await
+    .expect("failed to create api");
 
     let mut tls_certs = std::io::BufReader::new(
         std::fs::File::open(certificate::cert_path()).expect("read certs_file"),

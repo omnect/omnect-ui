@@ -1,12 +1,12 @@
 use crate::{common::centrifugo_config, socket_client::SocketClient};
 use anyhow::{Context, Result, anyhow, bail};
 use hyperlocal::Uri;
+#[cfg(feature = "mock")]
+use mockall::automock;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::env;
-#[cfg(feature = "mock")]
-use mockall::automock;
 
 #[derive(Clone, Debug, Default, Deserialize_repr, PartialEq, Serialize_repr)]
 #[repr(u8)]
@@ -104,8 +104,7 @@ pub struct OmnectDeviceServiceClient {
 
 #[cfg_attr(feature = "mock", automock)]
 #[allow(async_fn_in_trait)]
-pub trait DeviceServiceClient
-{
+pub trait DeviceServiceClient {
     async fn fleet_id(&self) -> Result<String>;
 
     async fn ip_address(&self) -> Result<String>;
@@ -127,8 +126,7 @@ pub trait DeviceServiceClient
     async fn version_info(&self) -> Result<VersionInfo>;
 }
 
-impl OmnectDeviceServiceClient
-{
+impl OmnectDeviceServiceClient {
     const REQUIRED_CLIENT_VERSION: &str = ">=0.39.0";
 
     pub async fn new(register_publish_endpoint: bool) -> Result<Self> {
@@ -180,8 +178,7 @@ impl OmnectDeviceServiceClient
             .await
     }
 
-    async fn post_with_json_body(&self, path: &str, body: impl Serialize) -> Result<String>
-    {
+    async fn post_with_json_body(&self, path: &str, body: impl Serialize) -> Result<String> {
         self.socket_client
             .post_with_json_body(&Uri::new(&self.socket_path, path).into(), body)
             .await

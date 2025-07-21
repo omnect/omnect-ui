@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
-use reqwest::blocking::get;
-use serde::{Deserialize, Serialize};
 #[cfg(feature = "mock")]
 use mockall::automock;
+use reqwest::blocking::get;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TokenClaims {

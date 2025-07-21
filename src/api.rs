@@ -1,7 +1,9 @@
-use crate::common::{centrifugo_config, config_path, validate_password};
-use crate::keycloak_client::{SingleSignOnProvider};
-use crate::middleware::TOKEN_EXPIRE_HOURS;
-use crate::omnect_device_service_client::*;
+use crate::{
+    common::{centrifugo_config, config_path, validate_password},
+    keycloak_client::SingleSignOnProvider,
+    middleware::TOKEN_EXPIRE_HOURS,
+    omnect_device_service_client::*,
+};
 use actix_files::NamedFile;
 use actix_multipart::form::{MultipartForm, tempfile::TempFile};
 use actix_session::Session;
@@ -76,10 +78,7 @@ where
 {
     const UPDATE_FILE_NAME: &str = "update.tar";
 
-    pub async fn new(
-        service_client: ServiceClient,
-        single_sign_on: SingleSignOn,
-    ) -> Result<Self> {
+    pub async fn new(service_client: ServiceClient, single_sign_on: SingleSignOn) -> Result<Self> {
         let index_html =
             std::fs::canonicalize("static/index.html").context("static/index.html not found")?;
         let tenant = std::env::var("TENANT").unwrap_or("cp".to_string());

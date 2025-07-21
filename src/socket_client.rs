@@ -1,5 +1,5 @@
 use actix_web::http::StatusCode;
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result, ensure};
 use http_body_util::BodyExt;
 use hyper::{Request, Uri as HyperUri};
 use hyper_util::client::legacy::Client;
