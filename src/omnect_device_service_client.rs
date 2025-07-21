@@ -5,6 +5,7 @@ use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::env;
+#[cfg(feature = "mock")]
 use mockall::automock;
 
 #[derive(Clone, Debug, Default, Deserialize_repr, PartialEq, Serialize_repr)]
@@ -101,7 +102,7 @@ pub struct OmnectDeviceServiceClient {
     register_publish_endpoint: bool,
 }
 
-#[automock]
+#[cfg_attr(feature = "mock", automock)]
 #[allow(async_fn_in_trait)]
 pub trait DeviceServiceClient
 {

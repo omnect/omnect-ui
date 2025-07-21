@@ -3,6 +3,7 @@ use base64::{Engine, prelude::BASE64_STANDARD};
 use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
 use reqwest::blocking::get;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "mock")]
 use mockall::automock;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -24,7 +25,7 @@ macro_rules! keycloak_url {
     }};
 }
 
-#[automock]
+#[cfg_attr(feature = "mock", automock)]
 #[allow(async_fn_in_trait)]
 pub trait SingleSignOnProvider: Send + Sync {
     async fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims>;
