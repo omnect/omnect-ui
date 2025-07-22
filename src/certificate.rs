@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "mock", allow(dead_code, unused_imports))]
+
 use crate::{
     omnect_device_service_client::{DeviceServiceClient, OmnectDeviceServiceClient},
     socket_client::SocketClient,

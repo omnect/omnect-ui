@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "mock", allow(dead_code, unused_imports))]
+
 use crate::{common::centrifugo_config, socket_client::SocketClient};
 use anyhow::{Context, Result, anyhow, bail};
 use hyperlocal::Uri;
