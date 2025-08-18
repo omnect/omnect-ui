@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 name = "omnect-ui"
 readme = "README.md"
 repository = "git@github.com:omnect/omnect-ui.git"
-version = "0.15.2"
+version = "0.16.0"
 build = "src/build.rs"
 
 [dependencies]
@@ -44,6 +44,7 @@ log-panics = { version = "2.1", default-features = false, features = [
 mockall = { version = "0.13", optional = true, default-features = false }
 rand_core = { version = "0.9", default-features = false, features = ["std"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+rust-ini = { version = "0.21", default-features = false }
 rustls = { version = "0.23", default-features = false, features = [
   "aws_lc_rs",
   "std",
@@ -66,6 +67,8 @@ tokio = { version = "1.45", default-features = false, features = [
 uuid = { version = "1.17", default-features = false, features = [
   "v4",
 ] }
+actix-cors = { version = "0.7", default-features = false }
+serde_valid = { version = "1.0", default-features = false }
 
 [features]
 mock = ["dep:mockall"]

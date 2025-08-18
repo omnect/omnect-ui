@@ -4,12 +4,16 @@ mod common;
 mod keycloak_client;
 mod middleware;
 mod omnect_device_service_client;
+mod server_control;
 mod socket_client;
-
 use crate::{
-    api::Api, certificate::create_module_certificate,
+    api::Api,
+    certificate::create_module_certificate,
+    keycloak_client::KeycloakProvider,
     omnect_device_service_client::OmnectDeviceServiceClient,
+    server_control::{set_rollback_timer_handle, set_server_restart_tx},
 };
+use actix_cors::Cors;
 use actix_files::Files;
 use actix_multipart::form::MultipartFormConfig;
 use actix_server::ServerHandle;
@@ -26,13 +30,13 @@ use actix_web::{
 use anyhow::Result;
 use common::{centrifugo_config, config_path};
 use env_logger::{Builder, Env, Target};
-use keycloak_client::KeycloakProvider;
-use log::{debug, info};
+use log::{debug, error, info};
 use rustls::crypto::{CryptoProvider, ring::default_provider};
-use std::{fs, io::Write};
+use std::{fs, io::Write, sync::Arc};
 use tokio::{
     process::{Child, Command},
     signal::unix::{SignalKind, signal},
+    sync::{RwLock, broadcast},
 };
 
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
@@ -66,32 +70,57 @@ async fn main() {
         env!("GIT_SHORT_REV")
     );
 
-    create_module_certificate()
+    create_module_certificate(None)
         .await
         .expect("failed to create module certificate");
 
-    let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install SIGTERM handler");
-    let mut centrifugo = run_centrifugo();
-    let (server_handle, server_task) = run_server().await;
+    // Create restart signal channel
+    let (restart_tx, mut restart_rx) = broadcast::channel(1);
+    set_server_restart_tx(restart_tx).expect("Failed to set restart channel");
 
-    tokio::select! {
-        _ = tokio::signal::ctrl_c() => {
-            debug!("ctrl-c");
-            server_handle.stop(true).await;
-        },
-        _ = sigterm.recv() => {
-            debug!("SIGTERM received");
-            server_handle.stop(true).await;
-        },
-        _ = server_task => {
-            debug!("server stopped");
-            centrifugo.kill().await.expect("kill centrifugo failed");
-            debug!("centrifugo killed");
-        },
-        _ = centrifugo.wait() => {
-            debug!("centrifugo stopped");
-            server_handle.stop(true).await;
-            debug!("server stopped");
+    // Initialize rollback timer handle
+    set_rollback_timer_handle(Arc::new(RwLock::new(None))).expect("Failed to set rollback timer");
+
+    let mut sigterm = signal(SignalKind::terminate()).expect("Failed to install SIGTERM handler");
+
+    CryptoProvider::install_default(default_provider()).expect("failed to install crypto provider");
+
+    loop {
+        let mut centrifugo = run_centrifugo();
+        let (server_handle, server_task) = run_server().await;
+
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                debug!("ctrl-c");
+                server_handle.stop(true).await;
+                break;
+            },
+            _ = sigterm.recv() => {
+                debug!("SIGTERM received");
+                server_handle.stop(true).await;
+                break;
+            },
+            _ = restart_rx.recv() => {
+                debug!("Server restart requested");
+                server_handle.stop(true).await;
+                centrifugo.kill().await.expect("kill centrifugo failed");
+                info!("Server stopped, restarting...");
+            },
+            result = server_task => {
+                match result {
+                    Ok(_) => debug!("server stopped normally"),
+                    Err(e) => debug!("server stopped with error: {e}"),
+                }
+                centrifugo.kill().await.expect("kill centrifugo failed");
+                debug!("centrifugo killed");
+                break;
+            },
+            _ = centrifugo.wait() => {
+                debug!("centrifugo stopped");
+                server_handle.stop(true).await;
+                debug!("server stopped");
+                break;
+            }
         }
     }
 
@@ -102,8 +131,6 @@ async fn run_server() -> (
     ServerHandle,
     tokio::task::JoinHandle<Result<(), std::io::Error>>,
 ) {
-    CryptoProvider::install_default(default_provider()).expect("failed to install crypto provider");
-
     let Ok(true) = fs::exists("/data") else {
         panic!("data dir /data is missing");
     };
@@ -124,6 +151,14 @@ async fn run_server() -> (
     )
     .await
     .expect("failed to create api");
+
+    let api_clone = api.clone();
+
+    tokio::spawn(async move {
+        if let Err(e) = api_clone.check_and_execute_pending_rollback().await {
+            error!("Failed to check pending rollback: {e:#}");
+        }
+    });
 
     let mut tls_certs = std::io::BufReader::new(
         std::fs::File::open(certificate::cert_path()).expect("read certs_file"),
@@ -161,6 +196,14 @@ async fn run_server() -> (
 
     let server = HttpServer::new(move || {
         App::new()
+            .wrap(
+                Cors::default()
+                    .allow_any_origin()
+                    .allow_any_header()
+                    .allowed_methods(vec!["GET"])
+                    .supports_credentials()
+                    .max_age(3600),
+            )
             .wrap(
                 SessionMiddleware::builder(CookieSessionStore::default(), session_key.clone())
                     .cookie_name(String::from("omnect-ui-session"))
@@ -228,6 +271,7 @@ async fn run_server() -> (
             .route("/version", web::get().to(UiApi::version))
             .route("/logout", web::post().to(UiApi::logout))
             .route("/healthcheck", web::get().to(UiApi::healthcheck))
+            .route("/network", web::post().to(UiApi::set_network))
             .service(Files::new(
                 "/static",
                 std::fs::canonicalize("static").expect("static folder not found"),

@@ -1,8 +1,10 @@
 use crate::{
+    certificate,
     common::{centrifugo_config, config_path, validate_password},
     keycloak_client::SingleSignOnProvider,
     middleware::TOKEN_EXPIRE_HOURS,
     omnect_device_service_client::*,
+    server_control::{cancel_rollback_timer, trigger_server_restart},
 };
 use actix_files::NamedFile;
 use actix_multipart::form::{MultipartForm, tempfile::TempFile};
@@ -13,16 +15,21 @@ use argon2::{
     Argon2,
     password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
 };
+use ini::Ini;
 use jwt_simple::prelude::*;
-use log::{debug, error};
-use serde::Deserialize;
+use log::{debug, error, info};
+use serde::{Deserialize, Serialize};
+use serde_valid::Validate;
 use std::{
     fs::{self, File},
     io::Write,
+    net::Ipv4Addr,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     sync::Arc,
+    time::{Duration, SystemTime},
 };
+use tokio::{task, time::sleep};
 
 macro_rules! data_path {
     ($filename:expr) => {
@@ -42,6 +49,25 @@ macro_rules! tmp_path {
     };
 }
 
+macro_rules! network_path {
+    ($filename:expr) => {
+        Path::new("/network/").join($filename)
+    };
+}
+
+macro_rules! rollback_file_path {
+    () => {
+        Path::new("/tmp/network_rollback.json")
+    };
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct TokenClaims {
+    roles: Option<Vec<String>>,
+    tenant_list: Option<Vec<String>>,
+    fleet_list: Option<Vec<String>>,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetPasswordPayload {
@@ -55,6 +81,23 @@ pub struct UpdatePasswordPayload {
     password: String,
 }
 
+#[derive(Deserialize, Serialize, Clone, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkSetting {
+    is_server_addr: bool,
+    ip_changed: bool,
+    #[validate(min_length = 1)]
+    name: String,
+    dhcp: bool,
+    previous_ip: Ipv4Addr,
+    ip: Option<Ipv4Addr>,
+    #[validate(maximum = 32)]
+    #[validate(minimum = 0)]
+    netmask: Option<u8>,
+    gateway: Option<Vec<Ipv4Addr>>,
+    dns: Option<Vec<Ipv4Addr>>,
+}
+
 #[derive(MultipartForm)]
 pub struct UploadFormSingleFile {
     file: TempFile,
@@ -63,7 +106,7 @@ pub struct UploadFormSingleFile {
 #[derive(Clone)]
 pub struct Api<ServiceClient, SingleSignOn>
 where
-    ServiceClient: DeviceServiceClient,
+    ServiceClient: DeviceServiceClient + Send + Sync + 'static,
     SingleSignOn: SingleSignOnProvider,
 {
     pub service_client: Arc<ServiceClient>,
@@ -72,9 +115,15 @@ where
     pub tenant: String,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+struct PendingNetworkRollback {
+    network_setting: NetworkSetting,
+    rollback_time: SystemTime,
+}
+
 impl<ServiceClient, SingleSignOn> Api<ServiceClient, SingleSignOn>
 where
-    ServiceClient: DeviceServiceClient,
+    ServiceClient: DeviceServiceClient + Send + Sync + 'static,
     SingleSignOn: SingleSignOnProvider,
 {
     const UPDATE_FILE_NAME: &str = "update.tar";
@@ -164,9 +213,11 @@ where
         }
     }
 
-    pub async fn token(session: Session) -> impl Responder {
+    pub async fn token(session: Session, api: web::Data<Self>) -> impl Responder {
         debug!("token() called");
 
+        cancel_rollback_timer().await;
+        api.cancel_pending_rollback().await;
         Self::session_token(session)
     }
 
@@ -296,6 +347,250 @@ where
         HttpResponse::Ok().finish()
     }
 
+    pub async fn set_network(
+        network_settings: web::Json<NetworkSetting>,
+        api: web::Data<Self>,
+    ) -> impl Responder {
+        debug!("set_network() called");
+
+        if let Err(e) = network_settings.validate() {
+            error!("set_network() failed: {e:#}");
+            return HttpResponse::BadRequest().body(format!("{e:#}"));
+        }
+
+        if let Err(e) = api.configure_network_interface(&network_settings).await {
+            let _ = api.restore_network_setting(&network_settings);
+            error!("set_network() failed: {e:#}");
+            return HttpResponse::InternalServerError().body(format!("{e:#}"));
+        }
+
+        HttpResponse::Ok().finish()
+    }
+
+    fn restore_network_setting(&self, network: &NetworkSetting) -> Result<()> {
+        let config_file = network_path!(format!("10-{}.network", network.name));
+        let backup_file = network_path!(format!("10-{}.network.old", network.name));
+
+        if !fs::exists(&backup_file)? {
+            return Ok(());
+        }
+
+        fs::copy(&backup_file, &config_file).context("Failed to restore file")?;
+
+        let _ = fs::remove_file(&backup_file);
+
+        Ok(())
+    }
+
+    async fn restore_network_setting_and_reset_certificate(
+        &self,
+        network: &NetworkSetting,
+    ) -> Result<()> {
+        self.restore_network_setting(network)?;
+        self.service_client.reload_network().await?;
+        certificate::create_module_certificate(Some(network.previous_ip)).await?;
+        trigger_server_restart();
+
+        Ok(())
+    }
+
+    async fn configure_network_interface(&self, network: &NetworkSetting) -> Result<()> {
+        let config_file = network_path!(format!("10-{}.network", &network.name));
+        let backup_file = network_path!(format!("10-{}.network.old", &network.name));
+
+        if let Ok(true) = fs::exists(&config_file) {
+            fs::copy(config_file, backup_file).context("Failed to back up file")?;
+        } else {
+            let status = self
+                .service_client
+                .status()
+                .await
+                .context("Failed to get status")?;
+
+            let current_network = status
+                .network_status
+                .network_interfaces
+                .iter()
+                .find(|iface| iface.name == network.name)
+                .context("Failed to find current network interface")?;
+
+            debug!("Current network file is {}", current_network.file);
+
+            if let Some(current_network_file) = Path::new(&current_network.file).file_name() {
+                let config_file = network_path!(current_network_file);
+                debug!("Config file is {:?}", &config_file);
+                if let Ok(true) = fs::exists(&config_file) {
+                    fs::copy(&config_file, backup_file)
+                        .context("Failed to back up current network file")?;
+                }
+            }
+        }
+
+        if network.dhcp {
+            self.store_dhcp_network_setting(network.clone())?;
+        } else {
+            self.store_static_network_setting(network.clone())?;
+        }
+
+        let service_client = Arc::clone(&self.service_client);
+
+        task::spawn(async move {
+            let _ = service_client.reload_network().await;
+        });
+
+        if network.is_server_addr && network.ip_changed {
+            self.handle_server_restart_with_new_certificate(network)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    async fn handle_server_restart_with_new_certificate(
+        &self,
+        network: &NetworkSetting,
+    ) -> Result<()> {
+        let rollback_time = SystemTime::now() + Duration::from_secs(90);
+
+        let pending_rollback = PendingNetworkRollback {
+            network_setting: network.clone(),
+            rollback_time,
+        };
+
+        if let Err(e) = self.save_pending_rollback(&pending_rollback) {
+            error!("Failed to save pending rollback: {e:#}");
+        }
+
+        let network_clone = network.clone();
+
+        task::spawn(async move {
+            let ip = if network_clone.dhcp {
+                None
+            } else {
+                Some(network_clone.ip.unwrap())
+            };
+
+            if let Err(e) = certificate::create_module_certificate(ip).await {
+                error!("Failed to create certificate with new IP address: {e:#}");
+                return;
+            }
+            info!("Certificate updated with new IP address. Restarting server...");
+
+            trigger_server_restart();
+        });
+
+        Ok(())
+    }
+
+    fn save_pending_rollback(&self, rollback: &PendingNetworkRollback) -> Result<()> {
+        let rollback_json = serde_json::to_string_pretty(rollback)?;
+        fs::write(rollback_file_path!(), rollback_json).context("Failed to write rollback file")?;
+        Ok(())
+    }
+
+    fn load_pending_rollback(&self) -> Option<PendingNetworkRollback> {
+        if let Ok(contents) = fs::read_to_string(rollback_file_path!()) {
+            serde_json::from_str(&contents).ok()
+        } else {
+            None
+        }
+    }
+
+    fn clear_pending_rollback(&self) {
+        let _ = fs::remove_file(rollback_file_path!());
+    }
+
+    pub async fn check_and_execute_pending_rollback(&self) -> Result<()> {
+        if let Some(pending) = self.load_pending_rollback() {
+            let now = SystemTime::now();
+
+            if now >= pending.rollback_time {
+                info!("Executing pending network rollback");
+
+                if let Err(e) = self
+                    .restore_network_setting_and_reset_certificate(&pending.network_setting)
+                    .await
+                {
+                    error!("Failed to execute pending rollback: {e:#}");
+                } else {
+                    info!("Pending network rollback executed successfully");
+                }
+
+                self.clear_pending_rollback();
+            } else if let Ok(remaining_time) = pending.rollback_time.duration_since(now) {
+                let network_clone = pending.network_setting.clone();
+
+                sleep(Duration::from_secs(remaining_time.as_secs())).await;
+
+                if self.load_pending_rollback().is_some() {
+                    if let Err(e) = self
+                        .restore_network_setting_and_reset_certificate(&network_clone)
+                        .await
+                    {
+                        error!("Failed to execute scheduled rollback: {e:#}");
+                    } else {
+                        info!("Scheduled network rollback executed successfully");
+                    }
+                    self.clear_pending_rollback();
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn cancel_pending_rollback(&self) {
+        if self.load_pending_rollback().is_some() {
+            self.clear_pending_rollback();
+            info!("Pending network rollback cancelled");
+        }
+    }
+
+    fn store_dhcp_network_setting(&self, network: NetworkSetting) -> Result<()> {
+        let mut ini = Ini::new();
+
+        ini.with_section(Some("Match".to_owned()))
+            .set("Name", &network.name);
+
+        ini.with_section(Some("Network").to_owned())
+            .set("DHCP", "yes");
+
+        ini.write_to_file(network_path!(format!("10-{}.network", &network.name)))
+            .context("Failed to write dhcp network config file")?;
+
+        Ok(())
+    }
+
+    fn store_static_network_setting(&self, network: NetworkSetting) -> Result<()> {
+        let mut ini = Ini::new();
+
+        ini.with_section(Some("Match".to_owned()))
+            .set("Name", &network.name);
+
+        let mut network_section = ini.with_section(Some("Network").to_owned());
+
+        network_section.set(
+            "Address",
+            format!("{}/{}", network.ip.unwrap(), network.netmask.unwrap()),
+        );
+
+        if let Some(gateways) = network.gateway {
+            for gateway in gateways {
+                network_section.add("Gateway", gateway.to_string());
+            }
+        }
+
+        if let Some(dnss) = network.dns {
+            for dns in dnss {
+                network_section.add("DNS", dns.to_string());
+            }
+        }
+
+        ini.write_to_file(network_path!(format!("10-{}.network", network.name)))
+            .context("Failed to write static network config file")?;
+
+        Ok(())
+    }
+
     async fn validate_token_and_claims(&self, token: &str) -> Result<()> {
         let claims = self.single_sign_on.verify_token(token).await?;
         let Some(tenant_list) = &claims.tenant_list else {
@@ -376,8 +671,10 @@ where
 
     fn session_token(session: Session) -> HttpResponse {
         let key = HS256Key::from_bytes(centrifugo_config().client_token.as_bytes());
-        let claims =
-            Claims::create(Duration::from_hours(TOKEN_EXPIRE_HOURS)).with_subject("omnect-ui");
+        let claims = Claims::create(jwt_simple::prelude::Duration::from_hours(
+            TOKEN_EXPIRE_HOURS,
+        ))
+        .with_subject("omnect-ui");
 
         let Ok(token) = key.authenticate(claims) else {
             error!("failed to create token");

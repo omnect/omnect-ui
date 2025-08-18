@@ -60,6 +60,8 @@ pub struct NetworkStatus {
 pub struct NetworkInterface {
     pub online: bool,
     pub ipv4: Ipv4Info,
+    pub file: String,
+    pub name: String,
 }
 
 #[derive(Deserialize)]
@@ -119,7 +121,7 @@ pub trait DeviceServiceClient {
 
     async fn reboot(&self) -> Result<()>;
 
-    async fn reload_network(&self) -> Result<()>;
+    fn reload_network(&self) -> impl std::future::Future<Output = Result<()>> + Send;
 
     async fn load_update(&self, load_update: LoadUpdate) -> Result<String>;
 
@@ -206,10 +208,10 @@ impl DeviceServiceClient for OmnectDeviceServiceClient {
             .network_interfaces
             .iter()
             .filter_map(|iface| {
-                if iface.online
-                    && let Some(addr_info) = iface.ipv4.addrs.first()
-                {
-                    return Some(addr_info.addr.clone());
+                if iface.online {
+                    if let Some(addr_info) = iface.ipv4.addrs.first() {
+                        return Some(addr_info.addr.clone());
+                    }
                 }
                 None
             })
@@ -284,17 +286,19 @@ impl Drop for OmnectDeviceServiceClient {
             let socket_client = self.socket_client.clone();
             let socket_path = self.socket_path.clone();
 
-            tokio::spawn(async move {
-                socket_client
-                    .delete_with_empty_body(
-                        &Uri::new(
-                            &socket_path,
-                            concat!("/publish-endpoint/v1/", env!("CARGO_PKG_NAME")),
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                handle.spawn(async move {
+                    let _ = socket_client
+                        .delete_with_empty_body(
+                            &Uri::new(
+                                &socket_path,
+                                concat!("/publish-endpoint/v1/", env!("CARGO_PKG_NAME")),
+                            )
+                            .into(),
                         )
-                        .into(),
-                    )
-                    .await
-            });
+                        .await;
+                });
+            }
         }
     }
 }
