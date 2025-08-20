@@ -1905,7 +1905,7 @@ dependencies = [
 
 [[package]]
 name = "omnect-ui"
-version = "0.15.2"
+version = "0.15.4"
 dependencies = [
  "actix-files",
  "actix-http",
