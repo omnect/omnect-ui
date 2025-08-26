@@ -273,18 +273,18 @@ impl DeviceServiceClient for OmnectDeviceServiceClient {
 
     async fn healthcheck_info(&self) -> Result<HealthcheckInfo> {
         let status = self.status().await?;
-        let current = status.system_info.omnect_device_service_version;
+        let current_version = status.system_info.omnect_device_service_version;
 
-        let required = VersionReq::parse(Self::REQUIRED_CLIENT_VERSION)
+        let required_version = VersionReq::parse(Self::REQUIRED_CLIENT_VERSION)
             .map_err(|e| anyhow!("failed to parse required version: {e}"))?;
-        let current = Version::parse(&current)
+        let current_version = Version::parse(&current_version)
             .map_err(|e| anyhow!("failed to parse current version: {e}"))?;
 
         Ok(HealthcheckInfo {
             version_info: VersionInfo {
                 required: Self::REQUIRED_CLIENT_VERSION.to_string(),
-                current: current.to_string(),
-                mismatch: !required.matches(&current),
+                current: current_version.to_string(),
+                mismatch: !required_version.matches(&current_version),
             },
             update_validation_status: status.update_validation_status,
         })
