@@ -1,4 +1,7 @@
-use crate::common::{centrifugo_config, validate_password};
+use crate::{
+    auth::token_manager,
+    common::validate_password,
+};
 use actix_session::SessionExt;
 use actix_web::{
     Error, FromRequest, HttpMessage, HttpResponse,
@@ -7,16 +10,12 @@ use actix_web::{
 };
 use actix_web_httpauth::extractors::basic::BasicAuth;
 use anyhow::Result;
-use jwt_simple::prelude::*;
 use log::error;
 use std::{
     future::{Future, Ready, ready},
     pin::Pin,
     rc::Rc,
 };
-
-pub const TOKEN_EXPIRE_HOURS: u64 = 2;
-pub const TOKEN_SUBJECT: &str = "omnect-ui";
 
 pub struct AuthMw;
 
@@ -69,7 +68,7 @@ where
                 }
             };
 
-            if verify_token(&token) {
+            if token_manager().verify_token(&token) {
                 let res = service.call(req).await?;
                 return Ok(res.map_into_left_body());
             }
@@ -89,20 +88,6 @@ where
             Ok(res.map_into_left_body())
         })
     }
-}
-
-pub fn verify_token(token: &str) -> bool {
-    let key = HS256Key::from_bytes(centrifugo_config().client_token.as_bytes());
-    let options = VerificationOptions {
-        accept_future: true,
-        time_tolerance: Some(Duration::from_mins(15)),
-        max_validity: Some(Duration::from_hours(TOKEN_EXPIRE_HOURS)),
-        required_subject: Some(TOKEN_SUBJECT.to_string()),
-        ..Default::default()
-    };
-
-    key.verify_token::<NoCustomClaims>(token, Some(options))
-        .is_ok()
 }
 
 fn verify_user(auth: BasicAuth) -> bool {
@@ -128,6 +113,9 @@ fn unauthorized_error(req: ServiceRequest) -> ServiceResponse {
 pub mod tests {
     use super::*;
     use crate::common;
+
+    const TOKEN_SUBJECT: &str = "omnect-ui";
+    const TOKEN_EXPIRE_HOURS: u64 = 2;
     use actix_http::StatusCode;
     use actix_session::{
         SessionMiddleware,
@@ -148,6 +136,7 @@ pub mod tests {
     };
     use base64::prelude::*;
     use jwt_simple::claims::{JWTClaims, NoCustomClaims};
+    use jwt_simple::prelude::*;
     use std::{collections::HashMap, fs::File, io::Write};
 
     fn generate_valid_claim() -> JWTClaims<NoCustomClaims> {
@@ -441,7 +430,7 @@ pub mod tests {
         let claim = generate_valid_claim();
         let token = generate_token(claim);
 
-        assert!(verify_token(token.as_str()));
+        assert!(token_manager().verify_token(token.as_str()));
     }
 
     #[tokio::test]
@@ -449,7 +438,7 @@ pub mod tests {
         let claim = generate_expired_claim();
         let token = generate_token(claim);
 
-        assert!(!verify_token(token.as_str()));
+        assert!(!token_manager().verify_token(token.as_str()));
     }
 
     #[tokio::test]
@@ -457,12 +446,12 @@ pub mod tests {
         let claim = generate_unset_subject_claim();
         let token = generate_token(claim);
 
-        assert!(!verify_token(token.as_str()));
+        assert!(!token_manager().verify_token(token.as_str()));
 
         let claim = generate_invalid_subject_claim();
         let token = generate_token(claim);
 
-        assert!(!verify_token(token.as_str()));
+        assert!(!token_manager().verify_token(token.as_str()));
     }
 
     #[tokio::test]
@@ -471,7 +460,7 @@ pub mod tests {
         let _ = generate_token(claim);
         let token = "someinvalidtestbytes".to_string();
 
-        assert!(!verify_token(token.as_str()));
+        assert!(!token_manager().verify_token(token.as_str()));
     }
 
     #[tokio::test]

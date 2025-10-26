@@ -1,9 +1,7 @@
 use crate::{
-    common::{
-        centrifugo_config, config_path, data_path, host_data_path, tmp_path, validate_password,
-    },
+    auth::token_manager,
+    common::{config_path, data_path, host_data_path, tmp_path, validate_password},
     keycloak_client::SingleSignOnProvider,
-    middleware::TOKEN_EXPIRE_HOURS,
     omnect_device_service_client::{DeviceServiceClient, FactoryReset, LoadUpdate, RunUpdate},
 };
 use actix_files::NamedFile;
@@ -15,7 +13,6 @@ use argon2::{
     Argon2,
     password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
 };
-use jwt_simple::prelude::*;
 use log::{debug, error};
 use serde::Deserialize;
 use std::{
@@ -356,13 +353,12 @@ where
     }
 
     fn session_token(session: Session) -> HttpResponse {
-        let key = HS256Key::from_bytes(centrifugo_config().client_token.as_bytes());
-        let claims =
-            Claims::create(Duration::from_hours(TOKEN_EXPIRE_HOURS)).with_subject("omnect-ui");
-
-        let Ok(token) = key.authenticate(claims) else {
-            error!("failed to create token");
-            return HttpResponse::InternalServerError().body("failed to create token");
+        let token = match token_manager().create_token() {
+            Ok(token) => token,
+            Err(e) => {
+                error!("failed to create token: {e:#}");
+                return HttpResponse::InternalServerError().body("failed to create token");
+            }
         };
 
         if session.insert("token", &token).is_err() {
