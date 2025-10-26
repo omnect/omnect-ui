@@ -1,6 +1,7 @@
 mod api;
 mod certificate;
 mod common;
+mod http_client;
 mod keycloak_client;
 mod middleware;
 mod omnect_device_service_client;
