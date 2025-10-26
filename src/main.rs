@@ -1,4 +1,5 @@
 mod api;
+mod auth;
 mod certificate;
 mod common;
 mod http_client;
