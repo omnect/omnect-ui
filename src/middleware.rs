@@ -1,4 +1,7 @@
-use crate::common::{centrifugo_config, validate_password};
+use crate::{
+    auth::TokenManager,
+    common::{centrifugo_config, validate_password},
+};
 use actix_session::SessionExt;
 use actix_web::{
     Error, FromRequest, HttpMessage, HttpResponse,
@@ -7,15 +10,27 @@ use actix_web::{
 };
 use actix_web_httpauth::extractors::basic::BasicAuth;
 use anyhow::Result;
-use jwt_simple::prelude::*;
 use log::error;
 use std::{
     future::{Future, Ready, ready},
     pin::Pin,
     rc::Rc,
+    sync::OnceLock,
 };
 
 pub const TOKEN_EXPIRE_HOURS: u64 = 2;
+
+static TOKEN_MANAGER: OnceLock<TokenManager> = OnceLock::new();
+
+fn token_manager() -> &'static TokenManager {
+    TOKEN_MANAGER.get_or_init(|| {
+        TokenManager::new(
+            &centrifugo_config().client_token,
+            TOKEN_EXPIRE_HOURS,
+            env!("CARGO_PKG_NAME").to_string(),
+        )
+    })
+}
 
 pub struct AuthMw;
 
@@ -91,17 +106,7 @@ where
 }
 
 pub fn verify_token(token: &str) -> bool {
-    let key = HS256Key::from_bytes(centrifugo_config().client_token.as_bytes());
-    let options = VerificationOptions {
-        accept_future: true,
-        time_tolerance: Some(Duration::from_mins(15)),
-        max_validity: Some(Duration::from_hours(TOKEN_EXPIRE_HOURS)),
-        required_subject: Some(env!("CARGO_PKG_NAME").to_string()),
-        ..Default::default()
-    };
-
-    key.verify_token::<NoCustomClaims>(token, Some(options))
-        .is_ok()
+    token_manager().verify_token(token)
 }
 
 fn verify_user(auth: BasicAuth) -> bool {
@@ -147,6 +152,7 @@ pub mod tests {
     };
     use base64::prelude::*;
     use jwt_simple::claims::{JWTClaims, NoCustomClaims};
+    use jwt_simple::prelude::*;
     use std::{collections::HashMap, fs::File, io::Write};
 
     fn generate_valid_claim() -> JWTClaims<NoCustomClaims> {
