@@ -1,11 +1,10 @@
+use crate::http_client::HttpClientFactory;
 use anyhow::{Context, Result};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
 #[cfg(feature = "mock")]
 use mockall::automock;
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TokenClaims {
@@ -49,14 +48,8 @@ pub fn config() -> String {
     format!("window.__APP_CONFIG__ = {{KEYCLOAK_URL:\"{keycloak_url}\"}};")
 }
 
-static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
-
-fn http_client() -> &'static Client {
-    HTTP_CLIENT.get_or_init(Client::new)
-}
-
 pub async fn realm_public_key() -> Result<RS256PublicKey> {
-    let client = http_client();
+    let client = HttpClientFactory::https_client();
     let resp = client
         .get(keycloak_url!())
         .send()
