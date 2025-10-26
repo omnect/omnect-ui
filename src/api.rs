@@ -1,4 +1,5 @@
 use crate::{
+    auth::TokenManager,
     common::{
         centrifugo_config, config_path, data_path, host_data_path, tmp_path, validate_password,
     },
@@ -15,9 +16,9 @@ use argon2::{
     Argon2,
     password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
 };
-use jwt_simple::prelude::*;
 use log::{debug, error};
 use serde::Deserialize;
+use std::sync::OnceLock;
 use std::{
     fs::{self, File},
     io::Write,
@@ -61,6 +62,17 @@ where
     SingleSignOn: SingleSignOnProvider,
 {
     const UPDATE_FILE_NAME: &str = "update.tar";
+
+    fn token_manager() -> &'static TokenManager {
+        static TOKEN_MANAGER: OnceLock<TokenManager> = OnceLock::new();
+        TOKEN_MANAGER.get_or_init(|| {
+            TokenManager::new(
+                &centrifugo_config().client_token,
+                TOKEN_EXPIRE_HOURS,
+                env!("CARGO_PKG_NAME").to_string(),
+            )
+        })
+    }
 
     /// Helper to handle service client results with consistent error logging
     fn handle_service_result(result: Result<()>, operation: &str) -> HttpResponse {
@@ -356,13 +368,12 @@ where
     }
 
     fn session_token(session: Session) -> HttpResponse {
-        let key = HS256Key::from_bytes(centrifugo_config().client_token.as_bytes());
-        let claims =
-            Claims::create(Duration::from_hours(TOKEN_EXPIRE_HOURS)).with_subject("omnect-ui");
-
-        let Ok(token) = key.authenticate(claims) else {
-            error!("failed to create token");
-            return HttpResponse::InternalServerError().body("failed to create token");
+        let token = match Self::token_manager().create_token() {
+            Ok(token) => token,
+            Err(e) => {
+                error!("failed to create token: {e:#}");
+                return HttpResponse::InternalServerError().body("failed to create token");
+            }
         };
 
         if session.insert("token", &token).is_err() {
