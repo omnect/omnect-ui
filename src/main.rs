@@ -5,6 +5,7 @@ mod common;
 mod http_client;
 mod keycloak_client;
 mod middleware;
+mod network;
 mod omnect_device_service_client;
 
 use crate::{
@@ -12,8 +13,10 @@ use crate::{
     certificate::create_module_certificate,
     common::{centrifugo_config, config_path},
     keycloak_client::KeycloakProvider,
+    network::NetworkConfigService,
     omnect_device_service_client::{DeviceServiceClient, OmnectDeviceServiceClient},
 };
+use actix_cors::Cors;
 use actix_files::Files;
 use actix_multipart::form::MultipartFormConfig;
 use actix_server::ServerHandle;
@@ -35,6 +38,7 @@ use std::{fs, io::Write};
 use tokio::{
     process::{Child, Command},
     signal::unix::{SignalKind, signal},
+    sync::broadcast,
 };
 
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
@@ -68,31 +72,59 @@ async fn main() {
         env!("GIT_SHORT_REV")
     );
 
-    create_module_certificate()
-        .await
-        .expect("failed to create module certificate");
+    // Create restart signal channel
+    let (restart_tx, mut restart_rx) = broadcast::channel(1);
+    NetworkConfigService::init_server_restart_channel(restart_tx).expect("failed to set restart channel");
 
     let mut sigterm = signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");
+
+    CryptoProvider::install_default(default_provider()).expect("failed to install crypto provider");
+
+    while run_until_shutdown(&mut restart_rx, &mut sigterm).await {
+        info!("restarting server...");
+    }
+
+    debug!("good bye");
+}
+
+async fn run_until_shutdown(
+    restart_rx: &mut broadcast::Receiver<()>,
+    sigterm: &mut tokio::signal::unix::Signal,
+) -> bool {
     let mut centrifugo = run_centrifugo();
     let (server_handle, server_task, service_client) = run_server().await;
 
-    tokio::select! {
+    let should_restart = tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             debug!("ctrl-c received");
+            false
         },
         _ = sigterm.recv() => {
             debug!("SIGTERM received");
+            false
         },
-        _ = server_task => {
-            debug!("server stopped unexpectedly");
+        _ = restart_rx.recv() => {
+            debug!("server restart requested");
+            true
+        },
+        result = server_task => {
+            match result {
+                Ok(Ok(())) => debug!("server stopped normally"),
+                Ok(Err(e)) => debug!("server stopped with error: {e}"),
+                Err(e) => debug!("server task panicked: {e}"),
+            }
+            false
         },
         _ = centrifugo.wait() => {
             debug!("centrifugo stopped unexpectedly");
+            false
         }
-    }
+    };
 
     // Unified cleanup sequence - ensures consistent shutdown regardless of exit reason
-    info!("shutting down...");
+    if !should_restart {
+        info!("shutting down...");
+    }
 
     // 1. Shutdown service client first (unregister from omnect-device-service)
     if let Err(e) = service_client.shutdown().await {
@@ -101,13 +133,19 @@ async fn main() {
 
     // 2. Stop the server gracefully
     server_handle.stop(true).await;
-    info!("server stopped");
+    if !should_restart {
+        info!("server stopped");
+    }
 
     // 3. Kill centrifugo
     if let Err(e) = centrifugo.kill().await {
         error!("failed to kill centrifugo: {e:#}");
     }
-    info!("centrifugo stopped");
+    if !should_restart {
+        info!("centrifugo stopped");
+    }
+
+    should_restart
 }
 
 async fn run_server() -> (
@@ -115,8 +153,6 @@ async fn run_server() -> (
     tokio::task::JoinHandle<Result<(), std::io::Error>>,
     OmnectDeviceServiceClient,
 ) {
-    CryptoProvider::install_default(default_provider()).expect("failed to install crypto provider");
-
     let Ok(true) = fs::exists("/data") else {
         panic!("failed to find required data directory: /data is missing");
     };
@@ -136,6 +172,15 @@ async fn run_server() -> (
     let api = UiApi::new(service_client.clone(), Default::default())
         .await
         .expect("failed to create api");
+
+    create_module_certificate(&service_client)
+        .await
+        .expect("failed to create module certificate");
+
+    if let Err(e) = network::NetworkConfigService::process_pending_rollback(&service_client).await
+    {
+        error!("failed to check pending rollback: {e:#}");
+    }
 
     let mut tls_certs = std::io::BufReader::new(
         std::fs::File::open(certificate::cert_path()).expect("failed to read certificate file"),
@@ -173,6 +218,14 @@ async fn run_server() -> (
 
     let server = HttpServer::new(move || {
         App::new()
+            .wrap(
+                Cors::default()
+                    .allow_any_origin()
+                    .allow_any_header()
+                    .allowed_methods(vec!["GET"])
+                    .supports_credentials()
+                    .max_age(3600),
+            )
             .wrap(
                 SessionMiddleware::builder(CookieSessionStore::default(), session_key.clone())
                     .cookie_name(String::from("omnect-ui-session"))
@@ -240,6 +293,7 @@ async fn run_server() -> (
             .route("/version", web::get().to(UiApi::version))
             .route("/logout", web::post().to(UiApi::logout))
             .route("/healthcheck", web::get().to(UiApi::healthcheck))
+            .route("/network", web::post().to(UiApi::set_network_config))
             .service(Files::new(
                 "/static",
                 std::fs::canonicalize("static").expect("failed to find static folder"),

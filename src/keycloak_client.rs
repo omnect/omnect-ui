@@ -5,6 +5,7 @@ use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
 #[cfg(feature = "mock")]
 use mockall::automock;
 use serde::{Deserialize, Serialize};
+use trait_variant::make;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TokenClaims {
@@ -26,9 +27,9 @@ macro_rules! keycloak_url {
     }};
 }
 
+#[make(Send + Sync)]
 #[cfg_attr(feature = "mock", automock)]
-#[allow(async_fn_in_trait)]
-pub trait SingleSignOnProvider: Send + Sync {
+pub trait SingleSignOnProvider {
     async fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims>;
 }
 
