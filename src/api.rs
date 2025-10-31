@@ -5,6 +5,7 @@ use crate::{
     },
     keycloak_client::SingleSignOnProvider,
     middleware::TOKEN_EXPIRE_HOURS,
+    network_config::{self, NetworkConfig},
     omnect_device_service_client::{DeviceServiceClient, FactoryReset, LoadUpdate, RunUpdate},
 };
 use actix_files::NamedFile;
@@ -18,6 +19,7 @@ use argon2::{
 };
 use log::{debug, error};
 use serde::Deserialize;
+use serde_valid::Validate;
 use std::sync::OnceLock;
 use std::{
     fs::{self, File},
@@ -161,6 +163,7 @@ where
     pub async fn token(session: Session) -> impl Responder {
         debug!("token() called");
 
+        network_config::cancel_rollback();
         Self::session_token(session)
     }
 
@@ -286,6 +289,30 @@ where
             error!("validate_portal_token() failed: {e:#}");
             return HttpResponse::Unauthorized().finish();
         }
+        HttpResponse::Ok().finish()
+    }
+
+    pub async fn set_network_config(
+        network_config: web::Json<NetworkConfig>,
+        api: web::Data<Self>,
+    ) -> impl Responder {
+        debug!("set_network_config() called");
+
+        if let Err(e) = network_config.validate() {
+            error!("set_network_config() failed: {e:#}");
+            return HttpResponse::BadRequest().body(format!("{e:#}"));
+        }
+
+        if let Err(e) =
+            network_config::apply_network_config(&api.service_client, &network_config).await
+        {
+            error!("set_network_config() failed: {e:#}");
+            if let Err(err) = network_config::rollback_network_config(&network_config) {
+                error!("Failed to restore network config: {err:#}");
+            }
+            return HttpResponse::InternalServerError().body(format!("{e:#}"));
+        }
+
         HttpResponse::Ok().finish()
     }
 

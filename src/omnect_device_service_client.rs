@@ -10,6 +10,7 @@ use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{env, sync::OnceLock};
+use trait_variant::make;
 
 #[derive(Clone, Debug, Default, Deserialize_repr, PartialEq, Serialize_repr)]
 #[repr(u8)]
@@ -68,6 +69,8 @@ pub struct NetworkStatus {
 pub struct NetworkInterface {
     pub online: bool,
     pub ipv4: Ipv4Info,
+    pub file: String,
+    pub name: String,
 }
 
 #[derive(Deserialize)]
@@ -117,8 +120,8 @@ pub struct OmnectDeviceServiceClient {
     register_publish_endpoint: bool,
 }
 
+#[make(Send)]
 #[cfg_attr(feature = "mock", automock)]
-#[allow(async_fn_in_trait)]
 pub trait DeviceServiceClient {
     async fn fleet_id(&self) -> Result<String>;
 
@@ -175,7 +178,9 @@ impl OmnectDeviceServiceClient {
             register_publish_endpoint,
         };
 
-        omnect_client.register_publish_endpoint().await?;
+        if register_publish_endpoint {
+            omnect_client.register_publish_endpoint().await?;
+        }
         Ok(omnect_client)
     }
 
