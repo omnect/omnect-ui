@@ -1,9 +1,7 @@
 #![cfg_attr(feature = "mock", allow(dead_code, unused_imports))]
 
 use crate::{
-    common::handle_http_response,
-    http_client::HttpClientFactory,
-    omnect_device_service_client::{DeviceServiceClient, OmnectDeviceServiceClient},
+    common::handle_http_response, http_client, omnect_device_service_client::DeviceServiceClient,
 };
 use anyhow::{Context, Result};
 use log::info;
@@ -42,14 +40,20 @@ pub fn key_path() -> String {
 }
 
 #[cfg(feature = "mock")]
-pub async fn create_module_certificate() -> Result<()> {
+pub async fn create_module_certificate<T>(_service_client: &T) -> Result<()>
+where
+    T: DeviceServiceClient,
+{
     Ok(())
 }
 
 #[cfg(not(feature = "mock"))]
-pub async fn create_module_certificate() -> Result<()> {
+pub async fn create_module_certificate<T>(service_client: &T) -> Result<()>
+where
+    T: DeviceServiceClient,
+{
     info!("create module certificate");
-    let ods_client = OmnectDeviceServiceClient::new(false).await?;
+
     let id = std::env::var("IOTEDGE_MODULEID")
         .context("failed to read IOTEDGE_MODULEID environment variable")?;
     let gen_id = std::env::var("IOTEDGE_MODULEGENERATIONID")
@@ -60,13 +64,13 @@ pub async fn create_module_certificate() -> Result<()> {
         .context("failed to read IOTEDGE_WORKLOADURI environment variable")?;
 
     let payload = CreateCertPayload {
-        common_name: ods_client.ip_address().await?,
+        common_name: service_client.ip_address().await?,
     };
 
     let path = format!("/modules/{id}/genid/{gen_id}/certificate/server?api-version={api_version}");
 
     // Create a client for the IoT Edge workload socket
-    let client = HttpClientFactory::workload_client(&workload_uri)?;
+    let client = http_client::unix_socket_client(&workload_uri)?;
 
     let url = format!("http://localhost{}", path);
     info!("POST {url} (IoT Edge workload API)");

@@ -1,10 +1,8 @@
 use crate::{
     auth::TokenManager,
-    common::{
-        centrifugo_config, config_path, data_path, host_data_path, tmp_path, validate_password,
-    },
+    common::{config_path, data_path, host_data_path, tmp_path, validate_password},
     keycloak_client::SingleSignOnProvider,
-    middleware::TOKEN_EXPIRE_HOURS,
+    network::{NetworkConfig, NetworkConfigService},
     omnect_device_service_client::{DeviceServiceClient, FactoryReset, LoadUpdate, RunUpdate},
 };
 use actix_files::NamedFile;
@@ -18,7 +16,7 @@ use argon2::{
 };
 use log::{debug, error};
 use serde::Deserialize;
-use std::sync::OnceLock;
+use serde_valid::Validate;
 use std::{
     fs::{self, File},
     io::Write,
@@ -62,17 +60,6 @@ where
     SingleSignOn: SingleSignOnProvider,
 {
     const UPDATE_FILE_NAME: &str = "update.tar";
-
-    fn token_manager() -> &'static TokenManager {
-        static TOKEN_MANAGER: OnceLock<TokenManager> = OnceLock::new();
-        TOKEN_MANAGER.get_or_init(|| {
-            TokenManager::new(
-                &centrifugo_config().client_token,
-                TOKEN_EXPIRE_HOURS,
-                env!("CARGO_PKG_NAME").to_string(),
-            )
-        })
-    }
 
     /// Helper to handle service client results with consistent error logging
     fn handle_service_result(result: Result<()>, operation: &str) -> HttpResponse {
@@ -158,10 +145,11 @@ where
         Self::handle_service_result(api.service_client.reload_network().await, "reload_network")
     }
 
-    pub async fn token(session: Session) -> impl Responder {
+    pub async fn token(session: Session, token_manager: web::Data<TokenManager>) -> impl Responder {
         debug!("token() called");
 
-        Self::session_token(session)
+        NetworkConfigService::cancel_rollback();
+        Self::session_token(session, token_manager)
     }
 
     pub async fn logout(session: Session) -> impl Responder {
@@ -231,6 +219,7 @@ where
     pub async fn set_password(
         body: web::Json<SetPasswordPayload>,
         session: Session,
+        token_manager: web::Data<TokenManager>,
     ) -> impl Responder {
         debug!("set_password() called");
 
@@ -245,7 +234,7 @@ where
             return HttpResponse::InternalServerError().body(e.to_string());
         }
 
-        Self::session_token(session)
+        Self::session_token(session, token_manager)
     }
 
     pub async fn update_password(
@@ -286,6 +275,30 @@ where
             error!("validate_portal_token() failed: {e:#}");
             return HttpResponse::Unauthorized().finish();
         }
+        HttpResponse::Ok().finish()
+    }
+
+    pub async fn set_network_config(
+        network_config: web::Json<NetworkConfig>,
+        api: web::Data<Self>,
+    ) -> impl Responder {
+        debug!("set_network_config() called");
+
+        if let Err(e) = network_config.validate() {
+            error!("set_network_config() failed: {e:#}");
+            return HttpResponse::BadRequest().body(format!("{e:#}"));
+        }
+
+        if let Err(e) =
+            NetworkConfigService::apply_network_config(&api.service_client, &network_config).await
+        {
+            error!("set_network_config() failed: {e:#}");
+            if let Err(err) = NetworkConfigService::rollback_network_config(&network_config) {
+                error!("Failed to restore network config: {err:#}");
+            }
+            return HttpResponse::InternalServerError().body(format!("{e:#}"));
+        }
+
         HttpResponse::Ok().finish()
     }
 
@@ -367,8 +380,8 @@ where
             .context("failed to write password file")
     }
 
-    fn session_token(session: Session) -> HttpResponse {
-        let token = match Self::token_manager().create_token() {
+    fn session_token(session: Session, token_manager: web::Data<TokenManager>) -> HttpResponse {
+        let token = match token_manager.create_token() {
             Ok(token) => token,
             Err(e) => {
                 error!("failed to create token: {e:#}");
