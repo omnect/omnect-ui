@@ -1,8 +1,6 @@
 use crate::{
-    auth::TokenManager,
-    common::{
-        centrifugo_config, config_path, data_path, host_data_path, tmp_path, validate_password,
-    },
+    auth::{TokenManager, validate_password},
+    config::AppConfig,
     keycloak_client::SingleSignOnProvider,
     middleware::TOKEN_EXPIRE_HOURS,
     network_config::{self, NetworkConfig},
@@ -69,7 +67,7 @@ where
         static TOKEN_MANAGER: OnceLock<TokenManager> = OnceLock::new();
         TOKEN_MANAGER.get_or_init(|| {
             TokenManager::new(
-                &centrifugo_config().client_token,
+                &AppConfig::get().centrifugo.client_token,
                 TOKEN_EXPIRE_HOURS,
                 env!("CARGO_PKG_NAME").to_string(),
             )
@@ -90,7 +88,8 @@ where
     pub async fn new(service_client: ServiceClient, single_sign_on: SingleSignOn) -> Result<Self> {
         let index_html = std::fs::canonicalize("static/index.html")
             .context("failed to find static/index.html")?;
-        let tenant = std::env::var("TENANT").unwrap_or_else(|_| "cp".to_string());
+        let tenant = AppConfig::get().tenant.clone();
+
         Ok(Api {
             service_client,
             single_sign_on,
@@ -113,7 +112,9 @@ where
     }
 
     pub async fn config() -> actix_web::Result<NamedFile> {
-        Ok(NamedFile::open(config_path!("app_config.js"))?)
+        Ok(NamedFile::open(
+            AppConfig::get().paths.config_dir.join("app_config.js"),
+        )?)
     }
 
     pub async fn healthcheck(api: web::Data<Self>) -> impl Responder {
@@ -191,10 +192,11 @@ where
             // Continue anyway as this is not critical
         }
 
+        let paths = &AppConfig::get().paths;
         if let Err(e) = Self::persist_uploaded_file(
             form.file,
-            &tmp_path!(&filename),
-            &data_path!(&Self::UPDATE_FILE_NAME),
+            &paths.tmp_dir.join(&filename),
+            &paths.data_dir.join(Self::UPDATE_FILE_NAME),
         ) {
             error!("save_file() failed: {e:#}");
             return HttpResponse::InternalServerError().body(e.to_string());
@@ -209,7 +211,10 @@ where
         match api
             .service_client
             .load_update(LoadUpdate {
-                update_file_path: host_data_path!(&Self::UPDATE_FILE_NAME)
+                update_file_path: AppConfig::get()
+                    .paths
+                    .host_data_dir
+                    .join(Self::UPDATE_FILE_NAME)
                     .display()
                     .to_string(),
             })
@@ -237,7 +242,7 @@ where
     ) -> impl Responder {
         debug!("set_password() called");
 
-        if config_path!("password").exists() {
+        if AppConfig::get().paths.config_dir.join("password").exists() {
             return HttpResponse::Found()
                 .append_header(("Location", "/login"))
                 .finish();
@@ -274,7 +279,7 @@ where
     pub async fn require_set_password() -> impl Responder {
         debug!("require_set_password() called");
 
-        if !config_path!("password").exists() {
+        if !AppConfig::get().paths.config_dir.join("password").exists() {
             return HttpResponse::Created()
                 .append_header(("Location", "/set-password"))
                 .finish();
@@ -386,7 +391,7 @@ where
     fn store_or_update_password(password: &str) -> Result<()> {
         debug!("store_or_update_password() called");
 
-        let password_file = config_path!("password");
+        let password_file = AppConfig::get().paths.config_dir.join("password");
         let hash = Self::hash_password(password)?;
         let mut file = File::create(&password_file).context("failed to create password file")?;
 

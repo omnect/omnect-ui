@@ -49,10 +49,10 @@ async fn start_mock_workload_server(socket_path: PathBuf) -> std::io::Result<()>
                     break;
                 }
 
-                if line.to_lowercase().starts_with("content-length:") {
-                    if let Some(len_str) = line.split(':').nth(1) {
-                        content_length = len_str.trim().parse().unwrap_or(0);
-                    }
+                if line.to_lowercase().starts_with("content-length:")
+                    && let Some(len_str) = line.split(':').nth(1)
+                {
+                    content_length = len_str.trim().parse().unwrap_or(0);
                 }
 
                 headers.push(line);
@@ -60,10 +60,8 @@ async fn start_mock_workload_server(socket_path: PathBuf) -> std::io::Result<()>
 
             // Read the request body if present
             let mut body = vec![0u8; content_length];
-            if content_length > 0 {
-                if reader.read_exact(&mut body).await.is_err() {
-                    return;
-                }
+            if content_length > 0 && reader.read_exact(&mut body).await.is_err() {
+                return;
             }
 
             // Parse the payload to extract common_name

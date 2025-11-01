@@ -1,4 +1,4 @@
-use crate::http_client::HttpClientFactory;
+use crate::{config::AppConfig, http_client::HttpClientFactory};
 use anyhow::{Context, Result};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
@@ -19,14 +19,6 @@ struct RealmInfo {
     public_key: String,
 }
 
-macro_rules! keycloak_url {
-    () => {{
-        std::env::var("KEYCLOAK_URL").unwrap_or_else(|_| {
-            "https://keycloak.omnect.conplement.cloud/realms/cp-prod".to_string()
-        })
-    }};
-}
-
 #[make(Send + Sync)]
 #[cfg_attr(feature = "mock", automock)]
 pub trait SingleSignOnProvider {
@@ -45,14 +37,27 @@ impl SingleSignOnProvider for KeycloakProvider {
 }
 
 pub fn config() -> String {
-    let keycloak_url = &keycloak_url!();
+    let keycloak_url = &AppConfig::get().keycloak.url;
     format!("window.__APP_CONFIG__ = {{KEYCLOAK_URL:\"{keycloak_url}\"}};")
+}
+
+pub fn create_frontend_config_file() -> Result<()> {
+    use anyhow::Context;
+    use std::io::Write;
+
+    let mut config_file =
+        std::fs::File::create(AppConfig::get().paths.config_dir.join("app_config.js"))
+            .context("failed to create frontend config file")?;
+
+    config_file
+        .write_all(config().as_bytes())
+        .context("failed to write frontend config file")
 }
 
 pub async fn realm_public_key() -> Result<RS256PublicKey> {
     let client = HttpClientFactory::https_client();
     let resp = client
-        .get(keycloak_url!())
+        .get(&AppConfig::get().keycloak.url)
         .send()
         .await
         .context("failed to fetch from url")?
