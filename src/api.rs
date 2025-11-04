@@ -1,30 +1,21 @@
 use crate::{
-    auth::{TokenManager, validate_password},
     config::AppConfig,
     keycloak_client::SingleSignOnProvider,
-    middleware::TOKEN_EXPIRE_HOURS,
-    network_config::{self, NetworkConfig},
-    omnect_device_service_client::{DeviceServiceClient, FactoryReset, LoadUpdate, RunUpdate},
+    omnect_device_service_client::{DeviceServiceClient, FactoryReset, RunUpdate},
+    services::{
+        ServiceResultResponse,
+        auth::{AuthorizationService, PasswordService, TokenManager},
+        firmware::FirmwareService,
+        network::{NetworkConfig, NetworkConfigService},
+    },
 };
 use actix_files::NamedFile;
 use actix_multipart::form::{MultipartForm, tempfile::TempFile};
 use actix_session::Session;
 use actix_web::{HttpResponse, Responder, web};
-use anyhow::{Context, Result, anyhow, bail};
-use argon2::{
-    Argon2,
-    password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
-};
+use anyhow::Result;
 use log::{debug, error};
 use serde::Deserialize;
-use serde_valid::Validate;
-use std::sync::OnceLock;
-use std::{
-    fs::{self, File},
-    io::Write,
-    os::unix::fs::PermissionsExt,
-    path::{Path, PathBuf},
-};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,8 +43,6 @@ where
 {
     pub service_client: ServiceClient,
     pub single_sign_on: SingleSignOn,
-    pub index_html: PathBuf,
-    pub tenant: String,
 }
 
 impl<ServiceClient, SingleSignOn> Api<ServiceClient, SingleSignOn>
@@ -61,60 +50,27 @@ where
     ServiceClient: DeviceServiceClient,
     SingleSignOn: SingleSignOnProvider,
 {
-    const UPDATE_FILE_NAME: &str = "update.tar";
-
-    fn token_manager() -> &'static TokenManager {
-        static TOKEN_MANAGER: OnceLock<TokenManager> = OnceLock::new();
-        TOKEN_MANAGER.get_or_init(|| {
-            TokenManager::new(
-                &AppConfig::get().centrifugo.client_token,
-                TOKEN_EXPIRE_HOURS,
-                env!("CARGO_PKG_NAME").to_string(),
-            )
-        })
-    }
-
-    /// Helper to handle service client results with consistent error logging
-    fn handle_service_result(result: Result<()>, operation: &str) -> HttpResponse {
-        match result {
-            Ok(_) => HttpResponse::Ok().finish(),
-            Err(e) => {
-                error!("{operation} failed: {e:#}");
-                HttpResponse::InternalServerError().body(e.to_string())
-            }
-        }
-    }
-
+    // Public methods
     pub async fn new(service_client: ServiceClient, single_sign_on: SingleSignOn) -> Result<Self> {
-        let index_html = std::fs::canonicalize("static/index.html")
-            .context("failed to find static/index.html")?;
-        let tenant = AppConfig::get().tenant.clone();
-
         Ok(Api {
             service_client,
             single_sign_on,
-            index_html,
-            tenant,
         })
     }
 
     pub async fn index(api: web::Data<Self>) -> actix_web::Result<NamedFile> {
         debug!("index() called");
 
-        if let Err(e) = api.service_client.republish().await {
+        api.service_client.republish().await.map_err(|e| {
             error!("republish failed: {e:#}");
-            return Err(actix_web::error::ErrorInternalServerError(
-                "republish failed",
-            ));
-        }
+            actix_web::error::ErrorInternalServerError("republish failed")
+        })?;
 
-        Ok(NamedFile::open(&api.index_html)?)
+        Ok(NamedFile::open(&AppConfig::get().paths.index_html)?)
     }
 
     pub async fn config() -> actix_web::Result<NamedFile> {
-        Ok(NamedFile::open(
-            AppConfig::get().paths.config_dir.join("app_config.js"),
-        )?)
+        Ok(NamedFile::open(&AppConfig::get().paths.app_config_path)?)
     }
 
     pub async fn healthcheck(api: web::Data<Self>) -> impl Responder {
@@ -126,7 +82,7 @@ where
             }
             Ok(info) => HttpResponse::Ok().json(&info),
             Err(e) => {
-                error!("healthcheck: {e:#}");
+                error!("healthcheck failed: {e:#}");
                 HttpResponse::InternalServerError().body(e.to_string())
             }
         }
@@ -139,16 +95,13 @@ where
     ) -> impl Responder {
         debug!("factory_reset() called: {body:?}");
 
-        match api.service_client.factory_reset(body.into_inner()).await {
-            Ok(_) => {
-                session.purge();
-                HttpResponse::Ok().finish()
-            }
-            Err(e) => {
-                error!("factory_reset: {e:#}");
-                HttpResponse::InternalServerError().body(e.to_string())
-            }
+        let result = api.service_client.factory_reset(body.into_inner()).await;
+
+        if result.is_ok() {
+            session.purge();
         }
+
+        Self::handle_service_result(result, "factory_reset")
     }
 
     pub async fn reboot(api: web::Data<Self>) -> impl Responder {
@@ -161,11 +114,11 @@ where
         Self::handle_service_result(api.service_client.reload_network().await, "reload_network")
     }
 
-    pub async fn token(session: Session) -> impl Responder {
+    pub async fn token(session: Session, token_manager: web::Data<TokenManager>) -> impl Responder {
         debug!("token() called");
 
-        network_config::cancel_rollback();
-        Self::session_token(session)
+        NetworkConfigService::cancel_rollback();
+        Self::session_token(session, token_manager)
     }
 
     pub async fn logout(session: Session) -> impl Responder {
@@ -178,60 +131,30 @@ where
         HttpResponse::Ok().body(env!("CARGO_PKG_VERSION"))
     }
 
-    pub async fn save_file(
+    pub async fn upload_firmware_file(
         MultipartForm(form): MultipartForm<UploadFormSingleFile>,
     ) -> impl Responder {
-        debug!("save_file() called");
+        debug!("upload_firmware_file() called");
 
-        let Some(filename) = form.file.file_name.clone() else {
-            return HttpResponse::BadRequest().body("update file is missing");
-        };
-
-        if let Err(e) = Self::clear_data_folder() {
-            error!("failed to clear data folder: {e:#}");
-            // Continue anyway as this is not critical
-        }
-
-        let paths = &AppConfig::get().paths;
-        if let Err(e) = Self::persist_uploaded_file(
-            form.file,
-            &paths.tmp_dir.join(&filename),
-            &paths.data_dir.join(Self::UPDATE_FILE_NAME),
-        ) {
-            error!("save_file() failed: {e:#}");
-            return HttpResponse::InternalServerError().body(e.to_string());
-        }
-
-        HttpResponse::Ok().finish()
+        Self::handle_service_result(
+            FirmwareService::handle_uploaded_firmware(form.file),
+            "upload_firmware_file",
+        )
     }
 
     pub async fn load_update(api: web::Data<Self>) -> impl Responder {
-        debug!("load_update() called with path");
+        debug!("load_update() called");
 
-        match api
-            .service_client
-            .load_update(LoadUpdate {
-                update_file_path: AppConfig::get()
-                    .paths
-                    .host_data_dir
-                    .join(Self::UPDATE_FILE_NAME)
-                    .display()
-                    .to_string(),
-            })
-            .await
-        {
-            Ok(data) => HttpResponse::Ok().body(data),
-            Err(e) => {
-                error!("load_update failed: {e:#}");
-                HttpResponse::InternalServerError().body(e.to_string())
-            }
-        }
+        Self::handle_service_result(
+            FirmwareService::load_update(&api.service_client).await,
+            "load_update",
+        )
     }
 
     pub async fn run_update(body: web::Json<RunUpdate>, api: web::Data<Self>) -> impl Responder {
         debug!("run_update() called with validate_iothub_connection: {body:?}");
         Self::handle_service_result(
-            api.service_client.run_update(body.into_inner()).await,
+            FirmwareService::run_update(&api.service_client, body.into_inner()).await,
             "run_update",
         )
     }
@@ -239,21 +162,23 @@ where
     pub async fn set_password(
         body: web::Json<SetPasswordPayload>,
         session: Session,
+        token_manager: web::Data<TokenManager>,
     ) -> impl Responder {
         debug!("set_password() called");
 
-        if AppConfig::get().paths.config_dir.join("password").exists() {
+        if PasswordService::password_exists() {
             return HttpResponse::Found()
                 .append_header(("Location", "/login"))
                 .finish();
         }
 
-        if let Err(e) = Self::store_or_update_password(&body.password) {
-            error!("set_password() failed: {e:#}");
-            return HttpResponse::InternalServerError().body(e.to_string());
+        match PasswordService::store_or_update_password(&body.password) {
+            Ok(_) => Self::session_token(session, token_manager),
+            Err(e) => {
+                error!("set_password failed: {e:#}");
+                HttpResponse::InternalServerError().body(e.to_string())
+            }
         }
-
-        Self::session_token(session)
     }
 
     pub async fn update_password(
@@ -262,24 +187,24 @@ where
     ) -> impl Responder {
         debug!("update_password() called");
 
-        if let Err(e) = validate_password(&body.current_password) {
-            error!("update_password() failed: {e:#}");
+        if let Err(e) = PasswordService::validate_password(&body.current_password) {
+            error!("validate_password failed: {e:#}");
             return HttpResponse::BadRequest().body("current password is not correct");
         }
 
-        if let Err(e) = Self::store_or_update_password(&body.password) {
-            error!("update_password() failed: {e:#}");
-            return HttpResponse::InternalServerError().body(e.to_string());
+        let result = PasswordService::store_or_update_password(&body.password);
+
+        if result.is_ok() {
+            session.purge();
         }
 
-        session.purge();
-        HttpResponse::Ok().finish()
+        Self::handle_service_result(result, "update_password")
     }
 
     pub async fn require_set_password() -> impl Responder {
         debug!("require_set_password() called");
 
-        if !AppConfig::get().paths.config_dir.join("password").exists() {
+        if !PasswordService::password_exists() {
             return HttpResponse::Created()
                 .append_header(("Location", "/set-password"))
                 .finish();
@@ -290,11 +215,20 @@ where
 
     pub async fn validate_portal_token(body: String, api: web::Data<Self>) -> impl Responder {
         debug!("validate_portal_token() called");
-        if let Err(e) = api.validate_token_and_claims(&body).await {
-            error!("validate_portal_token() failed: {e:#}");
-            return HttpResponse::Unauthorized().finish();
+
+        match AuthorizationService::validate_token_and_claims(
+            &api.single_sign_on,
+            &api.service_client,
+            &body,
+        )
+        .await
+        {
+            Ok(_) => HttpResponse::Ok().finish(),
+            Err(e) => {
+                error!("validate_portal_token failed: {e:#}");
+                HttpResponse::Unauthorized().finish()
+            }
         }
-        HttpResponse::Ok().finish()
     }
 
     pub async fn set_network_config(
@@ -303,104 +237,29 @@ where
     ) -> impl Responder {
         debug!("set_network_config() called");
 
-        if let Err(e) = network_config.validate() {
-            error!("set_network_config() failed: {e:#}");
-            return HttpResponse::BadRequest().body(format!("{e:#}"));
-        }
-
-        if let Err(e) =
-            network_config::apply_network_config(&api.service_client, &network_config).await
-        {
-            error!("set_network_config() failed: {e:#}");
-            if let Err(err) = network_config::rollback_network_config(&network_config) {
-                error!("Failed to restore network config: {err:#}");
-            }
-            return HttpResponse::InternalServerError().body(format!("{e:#}"));
-        }
-
-        HttpResponse::Ok().finish()
+        Self::handle_service_result(
+            NetworkConfigService::set_network_config(&api.service_client, &network_config).await,
+            "set_network_config",
+        )
     }
 
-    async fn validate_token_and_claims(&self, token: &str) -> Result<()> {
-        let claims = self.single_sign_on.verify_token(token).await?;
-        let Some(tenant_list) = &claims.tenant_list else {
-            bail!("failed to authorize user: no tenant list in token");
-        };
-        if !tenant_list.contains(&self.tenant) {
-            bail!("failed to authorize user: insufficient permissions for tenant");
-        }
-        let Some(roles) = &claims.roles else {
-            bail!("failed to authorize user: no roles in token");
-        };
-        if roles.contains(&String::from("FleetAdministrator")) {
-            return Ok(());
-        }
-        if roles.contains(&String::from("FleetOperator")) {
-            let Some(fleet_list) = &claims.fleet_list else {
-                bail!("failed to authorize user: no fleet list in token");
-            };
-            let fleet_id = self.service_client.fleet_id().await?;
-            if !fleet_list.contains(&fleet_id) {
-                bail!("failed to authorize user: insufficient permissions for fleet");
-            }
-            return Ok(());
-        }
-        bail!("failed to authorize user: insufficient role permissions")
-    }
-
-    fn clear_data_folder() -> Result<()> {
-        debug!("clear_data_folder() called");
-        for entry in fs::read_dir("/data")? {
-            let entry = entry?;
-            if entry.path().is_file() {
-                fs::remove_file(entry.path())?;
+    // Private methods
+    /// Helper to handle service results with consistent error logging
+    fn handle_service_result<T>(result: Result<T>, operation: &str) -> HttpResponse
+    where
+        T: ServiceResultResponse,
+    {
+        match result {
+            Ok(data) => data.into_response(),
+            Err(e) => {
+                error!("{operation} failed: {e:#}");
+                HttpResponse::InternalServerError().body(e.to_string())
             }
         }
-
-        Ok(())
     }
 
-    fn persist_uploaded_file(tmp_file: TempFile, temp_path: &Path, data_path: &Path) -> Result<()> {
-        debug!("persist_uploaded_file() called");
-
-        tmp_file
-            .file
-            .persist(temp_path)
-            .context("failed to persist tmp file")?;
-
-        fs::copy(temp_path, data_path).context("failed to copy file to data dir")?;
-
-        let metadata = fs::metadata(data_path).context("failed to get file metadata")?;
-        let mut perm = metadata.permissions();
-        perm.set_mode(0o750);
-        fs::set_permissions(data_path, perm).context("failed to set file permission")
-    }
-
-    fn hash_password(password: &str) -> Result<String> {
-        debug!("hash_password() called");
-
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-
-        match argon2.hash_password(password.as_bytes(), &salt) {
-            Ok(hash) => Ok(hash.to_string()),
-            Err(e) => Err(anyhow!(e).context("failed to hash password")),
-        }
-    }
-
-    fn store_or_update_password(password: &str) -> Result<()> {
-        debug!("store_or_update_password() called");
-
-        let password_file = AppConfig::get().paths.config_dir.join("password");
-        let hash = Self::hash_password(password)?;
-        let mut file = File::create(&password_file).context("failed to create password file")?;
-
-        file.write_all(hash.as_bytes())
-            .context("failed to write password file")
-    }
-
-    fn session_token(session: Session) -> HttpResponse {
-        let token = match Self::token_manager().create_token() {
+    fn session_token(session: Session, token_manager: web::Data<TokenManager>) -> HttpResponse {
+        let token = match token_manager.create_token() {
             Ok(token) => token,
             Err(e) => {
                 error!("failed to create token: {e:#}");

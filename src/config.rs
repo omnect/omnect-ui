@@ -2,8 +2,6 @@ use anyhow::{Context, Result};
 use std::{env, path::PathBuf, sync::OnceLock};
 use uuid::Uuid;
 
-static APP_CONFIG: OnceLock<AppConfig> = OnceLock::new();
-
 /// Application configuration loaded and validated at startup
 #[derive(Clone, Debug)]
 pub struct AppConfig {
@@ -43,6 +41,7 @@ pub struct CentrifugoConfig {
     pub port: String,
     pub client_token: String,
     pub api_key: String,
+    pub publish_endpoint: crate::omnect_device_service_client::PublishEndpoint,
 }
 
 #[derive(Clone, Debug)]
@@ -72,10 +71,12 @@ pub struct IoTEdgeConfig {
 
 #[derive(Clone, Debug)]
 pub struct PathConfig {
-    pub config_dir: PathBuf,
+    pub app_config_path: PathBuf,
     pub data_dir: PathBuf,
-    pub host_data_dir: PathBuf,
-    pub tmp_dir: PathBuf,
+    pub index_html: PathBuf,
+    pub password_file: PathBuf,
+    pub update_file: PathBuf,
+    pub update_file_internal: PathBuf,
 }
 
 impl AppConfig {
@@ -89,8 +90,9 @@ impl AppConfig {
     /// Panics if configuration loading fails. This is intentional as the
     /// application cannot function without valid configuration.
     pub fn get() -> &'static Self {
+        static APP_CONFIG: OnceLock<AppConfig> = OnceLock::new();
         APP_CONFIG.get_or_init(|| {
-            Self::load_internal().expect("Failed to load application configuration")
+            Self::load_internal().expect("failed to load application configuration")
         })
     }
 
@@ -100,9 +102,12 @@ impl AppConfig {
     /// required environment variables and returns an error if any are missing
     /// or invalid.
     fn load_internal() -> Result<Self> {
-        // Validate critical paths exist before proceeding (skip in test mode)
-        #[cfg(not(test))]
-        Self::validate_filesystem()?;
+        // Validate critical paths exist before proceeding (skip in test/mock mode)
+        #[cfg(not(any(test, feature = "mock")))]
+        anyhow::ensure!(
+            PathBuf::from("/data").try_exists().unwrap_or(false),
+            "failed to find required data directory: /data is missing"
+        );
 
         let ui = UiConfig::load()?;
         let centrifugo = CentrifugoConfig::load()?;
@@ -124,20 +129,12 @@ impl AppConfig {
             tenant,
         })
     }
-
-    #[cfg(not(test))]
-    fn validate_filesystem() -> Result<()> {
-        if !std::fs::exists("/data").is_ok_and(|ok| ok) {
-            anyhow::bail!("failed to find required data directory: /data is missing");
-        }
-        Ok(())
-    }
 }
 
 impl UiConfig {
     fn load() -> Result<Self> {
         let port = env::var("UI_PORT")
-            .unwrap_or_else(|_| "443".to_string())
+            .unwrap_or_else(|_| "1977".to_string())
             .parse::<u16>()
             .context("failed to parse UI_PORT: invalid format")?;
 
@@ -153,10 +150,25 @@ impl CentrifugoConfig {
         let client_token = Uuid::new_v4().to_string();
         let api_key = Uuid::new_v4().to_string();
 
+        let publish_endpoint = crate::omnect_device_service_client::PublishEndpoint {
+            url: format!("https://localhost:{}/api/publish", port),
+            headers: vec![
+                crate::omnect_device_service_client::HeaderKeyValue {
+                    name: String::from("Content-Type"),
+                    value: String::from("application/json"),
+                },
+                crate::omnect_device_service_client::HeaderKeyValue {
+                    name: String::from("X-API-Key"),
+                    value: api_key.clone(),
+                },
+            ],
+        };
+
         Ok(Self {
             port,
             client_token,
             api_key,
+            publish_endpoint,
         })
     }
 }
@@ -199,20 +211,43 @@ impl CertificateConfig {
 
 impl IoTEdgeConfig {
     fn load() -> Result<Self> {
-        let module_id = env::var("IOTEDGE_MODULEID").unwrap_or_else(|_| "test-module".to_string());
-        let module_generation_id =
-            env::var("IOTEDGE_MODULEGENERATIONID").unwrap_or_else(|_| "1".to_string());
-        let api_version =
-            env::var("IOTEDGE_APIVERSION").unwrap_or_else(|_| "2021-12-07".to_string());
-        let workload_uri = env::var("IOTEDGE_WORKLOADURI")
-            .unwrap_or_else(|_| "unix:///var/run/iotedge/workload.sock".to_string());
+        #[cfg(any(test, feature = "mock"))]
+        {
+            let module_id =
+                env::var("IOTEDGE_MODULEID").unwrap_or_else(|_| "test-module".to_string());
+            let module_generation_id =
+                env::var("IOTEDGE_MODULEGENERATIONID").unwrap_or_else(|_| "1".to_string());
+            let api_version =
+                env::var("IOTEDGE_APIVERSION").unwrap_or_else(|_| "2021-12-07".to_string());
+            let workload_uri = env::var("IOTEDGE_WORKLOADURI")
+                .unwrap_or_else(|_| "unix:///var/run/iotedge/workload.sock".to_string());
 
-        Ok(Self {
-            module_id,
-            module_generation_id,
-            api_version,
-            workload_uri,
-        })
+            Ok(Self {
+                module_id,
+                module_generation_id,
+                api_version,
+                workload_uri,
+            })
+        }
+
+        #[cfg(not(any(test, feature = "mock")))]
+        {
+            let module_id =
+                env::var("IOTEDGE_MODULEID").context("failed to get IOTEDGE_MODULEID")?;
+            let module_generation_id = env::var("IOTEDGE_MODULEGENERATIONID")
+                .context("failed to get IOTEDGE_MODULEGENERATIONID")?;
+            let api_version =
+                env::var("IOTEDGE_APIVERSION").context("failed to get IOTEDGE_APIVERSION")?;
+            let workload_uri =
+                env::var("IOTEDGE_WORKLOADURI").context("failed to get IOTEDGE_WORKLOADURI")?;
+
+            Ok(Self {
+                module_id,
+                module_generation_id,
+                api_version,
+                workload_uri,
+            })
+        }
     }
 }
 
@@ -220,29 +255,48 @@ impl PathConfig {
     fn load() -> Result<Self> {
         // In test mode, use temp directory as default to avoid /data requirement
         #[cfg(test)]
-        let default_config = std::env::temp_dir()
-            .join("omnect-test-config")
-            .display()
-            .to_string();
+        let data_dir = std::env::temp_dir().join("test");
         #[cfg(not(test))]
-        let default_config = "/data/config".to_string();
-
-        let config_dir = env::var("CONFIG_PATH")
-            .unwrap_or(default_config)
-            .into();
-
         let data_dir = PathBuf::from("/data/");
+
+        let config_dir = data_dir.join("config");
+
+        // Ensure config directory exists (skip in test/mock mode as it may not have permissions)
+        #[cfg(not(any(test, feature = "mock")))]
+        std::fs::create_dir_all(&config_dir).context("failed to create config directory")?;
+
+        let app_config_path = config_dir.join("app_config.js");
         let host_data_dir = PathBuf::from(format!("/var/lib/{}/", env!("CARGO_PKG_NAME")));
-        let tmp_dir = PathBuf::from("/tmp/");
+
+        // In test/mock mode, use a dummy path since static/index.html won't exist
+        #[cfg(any(test, feature = "mock"))]
+        let index_html = PathBuf::from("/dev/null");
+
+        #[cfg(not(any(test, feature = "mock")))]
+        let index_html = std::fs::canonicalize("static/index.html")
+            .context("failed to find static/index.html")?;
+
+        let password_file = config_dir.join("password");
+        let update_file = host_data_dir.join("update.tar");
+        let update_file_internal = data_dir.join("update.tar");
+
+        #[cfg(not(any(test, feature = "mock")))]
+        {
+            use std::{fs, os::unix::fs::PermissionsExt};
+
+            let metadata = fs::metadata(&data_dir).context("failed to get file metadata")?;
+            let mut perm = metadata.permissions();
+            perm.set_mode(0o750);
+            fs::set_permissions(&data_dir, perm).context("failed to set file permission")?;
+        }
 
         Ok(Self {
-            config_dir,
+            app_config_path,
             data_dir,
-            host_data_dir,
-            tmp_dir,
+            index_html,
+            password_file,
+            update_file,
+            update_file_internal,
         })
     }
 }
-
-// Tests removed due to unsafe env var usage
-// Integration tests will verify configuration loading in practice

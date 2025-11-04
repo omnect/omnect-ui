@@ -2,7 +2,8 @@
 
 use crate::{
     config::AppConfig,
-    http_client::{HttpClientFactory, handle_http_response},
+    http_client::{handle_http_response, unix_socket_client},
+    services::certificate::CreateCertPayload,
 };
 use anyhow::{Context, Result, anyhow, bail};
 use log::info;
@@ -12,7 +13,7 @@ use reqwest::Client;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::sync::OnceLock;
+use std::{env, fmt::Debug, path::PathBuf, sync::OnceLock};
 use trait_variant::make;
 
 #[derive(Clone, Debug, Default, Deserialize_repr, PartialEq, Serialize_repr)]
@@ -33,7 +34,7 @@ pub struct FactoryReset {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoadUpdate {
-    pub update_file_path: String,
+    pub update_file_path: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -68,7 +69,7 @@ pub struct NetworkStatus {
     pub network_interfaces: Vec<NetworkInterface>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct NetworkInterface {
     pub online: bool,
     pub ipv4: Ipv4Info,
@@ -76,12 +77,12 @@ pub struct NetworkInterface {
     pub name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Ipv4Info {
     pub addrs: Vec<Ipv4AddrInfo>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Ipv4AddrInfo {
     pub addr: String,
 }
@@ -99,19 +100,19 @@ pub struct HealthcheckInfo {
     pub update_validation_status: UpdateValidationStatus,
 }
 
-#[derive(Serialize)]
-struct HeaderKeyValue {
-    name: String,
-    value: String,
+#[derive(Clone, Debug, Serialize)]
+pub struct HeaderKeyValue {
+    pub name: String,
+    pub value: String,
 }
 
-#[derive(Serialize)]
-struct PublishEndpoint {
-    url: String,
-    headers: Vec<HeaderKeyValue>,
+#[derive(Clone, Debug, Serialize)]
+pub struct PublishEndpoint {
+    pub url: String,
+    pub headers: Vec<HeaderKeyValue>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct PublishIdEndpoint {
     id: &'static str,
     endpoint: PublishEndpoint,
@@ -120,36 +121,82 @@ struct PublishIdEndpoint {
 #[derive(Clone)]
 pub struct OmnectDeviceServiceClient {
     client: Client,
-    register_publish_endpoint: bool,
+    has_publish_endpoint: bool,
+}
+
+type CertSetupFuture = std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>>>>;
+type CertSetupFn = Box<dyn FnOnce(CreateCertPayload) -> CertSetupFuture>;
+
+#[derive(Default)]
+pub struct OmnectDeviceServiceClientBuilder {
+    publish_endpoint: Option<PublishEndpoint>,
+    certificate_setup: Option<CertSetupFn>,
+}
+
+impl OmnectDeviceServiceClientBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_publish_endpoint(mut self, endpoint: PublishEndpoint) -> Self {
+        self.publish_endpoint = Some(endpoint);
+        self
+    }
+
+    pub fn with_certificate_setup<F, Fut>(mut self, setup_fn: F) -> Self
+    where
+        F: FnOnce(CreateCertPayload) -> Fut + 'static,
+        Fut: std::future::Future<Output = Result<()>> + 'static,
+    {
+        self.certificate_setup = Some(Box::new(move |payload| Box::pin(setup_fn(payload))));
+        self
+    }
+
+    pub async fn build(self) -> Result<OmnectDeviceServiceClient> {
+        let client = unix_socket_client(
+            &AppConfig::get()
+                .device_service
+                .socket_path
+                .to_string_lossy(),
+        )?;
+
+        let mut omnect_client = OmnectDeviceServiceClient {
+            client,
+            has_publish_endpoint: false,
+        };
+
+        // Setup certificate if provided
+        if let Some(setup_fn) = self.certificate_setup {
+            let common_name = omnect_client.ip_address().await?;
+            let payload = CreateCertPayload { common_name };
+            setup_fn(payload).await?;
+        }
+
+        // Register publish endpoint if provided
+        if let Some(endpoint) = self.publish_endpoint {
+            omnect_client.register_publish_endpoint(endpoint).await?;
+            omnect_client.has_publish_endpoint = true;
+        }
+
+        Ok(omnect_client)
+    }
 }
 
 #[make(Send)]
 #[cfg_attr(feature = "mock", automock)]
 pub trait DeviceServiceClient {
     async fn fleet_id(&self) -> Result<String>;
-
     async fn ip_address(&self) -> Result<String>;
-
     async fn status(&self) -> Result<Status>;
-
     async fn republish(&self) -> Result<()>;
-
     async fn factory_reset(&self, factory_reset: FactoryReset) -> Result<()>;
-
     async fn reboot(&self) -> Result<()>;
-
     async fn reload_network(&self) -> Result<()>;
-
     async fn load_update(&self, load_update: LoadUpdate) -> Result<String>;
-
     async fn run_update(&self, run_update: RunUpdate) -> Result<()>;
-
     async fn healthcheck_info(&self) -> Result<HealthcheckInfo>;
-
     async fn shutdown(&self) -> Result<()>;
 }
-
-static REQUIRED_VERSION: OnceLock<VersionReq> = OnceLock::new();
 
 impl OmnectDeviceServiceClient {
     const REQUIRED_CLIENT_VERSION: &str = ">=0.39.0";
@@ -165,59 +212,27 @@ impl OmnectDeviceServiceClient {
     const PUBLISH_ENDPOINT: &str = "/publish-endpoint/v1";
 
     fn required_version() -> &'static VersionReq {
+        static REQUIRED_VERSION: OnceLock<VersionReq> = OnceLock::new();
         REQUIRED_VERSION.get_or_init(|| {
             VersionReq::parse(Self::REQUIRED_CLIENT_VERSION)
                 .expect("invalid REQUIRED_CLIENT_VERSION constant")
         })
     }
 
-    pub async fn new(register_publish_endpoint: bool) -> Result<Self> {
-        let client =
-            HttpClientFactory::unix_socket_client(&AppConfig::get().device_service.socket_path)?;
-
-        let omnect_client = OmnectDeviceServiceClient {
-            client,
-            register_publish_endpoint,
-        };
-
-        if register_publish_endpoint {
-            omnect_client.register_publish_endpoint().await?;
-        }
-        Ok(omnect_client)
-    }
-
-    async fn register_publish_endpoint(&self) -> Result<()> {
-        if !self.register_publish_endpoint {
-            return Ok(());
-        }
-
-        let centrifugo = &AppConfig::get().centrifugo;
-
-        let headers = vec![
-            HeaderKeyValue {
-                name: String::from("Content-Type"),
-                value: String::from("application/json"),
-            },
-            HeaderKeyValue {
-                name: String::from("X-API-Key"),
-                value: centrifugo.api_key.clone(),
-            },
-        ];
-
-        let body = PublishIdEndpoint {
+    async fn register_publish_endpoint(&self, endpoint: PublishEndpoint) -> Result<()> {
+        let publish_id_endpoint = PublishIdEndpoint {
             id: env!("CARGO_PKG_NAME"),
-            endpoint: PublishEndpoint {
-                url: format!("https://localhost:{}/api/publish", centrifugo.port),
-                headers,
-            },
+            endpoint,
         };
-
-        self.post_json(Self::PUBLISH_ENDPOINT, body).await?;
+        self.post_json(Self::PUBLISH_ENDPOINT, publish_id_endpoint)
+            .await?;
         Ok(())
     }
 
     fn build_url(&self, path: &str) -> String {
-        format!("http://localhost{}", path)
+        // Normalize path to always start with a single "/"
+        let normalized_path = path.trim_start_matches('/');
+        format!("http://localhost/{normalized_path}")
     }
 
     /// GET request to the device service API
@@ -232,7 +247,7 @@ impl OmnectDeviceServiceClient {
             .await
             .context(format!("failed to send GET request to {url}"))?;
 
-        handle_http_response(res, &format!("request to {}", url)).await
+        handle_http_response(res, &format!("GET {url}")).await
     }
 
     /// POST request to the device service API (empty body)
@@ -247,13 +262,13 @@ impl OmnectDeviceServiceClient {
             .await
             .context(format!("failed to send POST request to {url}"))?;
 
-        handle_http_response(res, &format!("request to {}", url)).await
+        handle_http_response(res, &format!("POST {url}")).await
     }
 
     /// POST request to the device service API with JSON body
-    async fn post_json(&self, path: &str, body: impl Serialize) -> Result<String> {
+    async fn post_json(&self, path: &str, body: impl Debug + Serialize) -> Result<String> {
         let url = self.build_url(path);
-        info!("POST {url} (with JSON body)");
+        info!("POST {url} with body: {body:?}");
 
         let res = self
             .client
@@ -263,7 +278,7 @@ impl OmnectDeviceServiceClient {
             .await
             .context(format!("failed to send POST request to {url}"))?;
 
-        handle_http_response(res, &format!("request to {}", url)).await
+        handle_http_response(res, &format!("POST {url}")).await
     }
 }
 
@@ -284,13 +299,12 @@ impl DeviceServiceClient for OmnectDeviceServiceClient {
             .await?
             .network_status
             .network_interfaces
-            .into_iter()
+            .iter()
             .find_map(|iface| {
-                if iface.online {
-                    iface.ipv4.addrs.into_iter().next().map(|addr| addr.addr)
-                } else {
-                    None
-                }
+                iface
+                    .online
+                    .then(|| iface.ipv4.addrs.first().map(|addr| addr.addr.clone()))
+                    .flatten()
             })
             .context("failed to get ip address from status")
     }
@@ -340,6 +354,7 @@ impl DeviceServiceClient for OmnectDeviceServiceClient {
     async fn healthcheck_info(&self) -> Result<HealthcheckInfo> {
         let status = self.status().await?;
         let current_version = status.system_info.omnect_device_service_version;
+
         let required_version = Self::required_version();
         let parsed_current = Version::parse(&current_version)
             .map_err(|e| anyhow!("failed to parse current version: {e}"))?;
@@ -355,10 +370,10 @@ impl DeviceServiceClient for OmnectDeviceServiceClient {
     }
 
     async fn shutdown(&self) -> Result<()> {
-        if self.register_publish_endpoint {
+        if self.has_publish_endpoint {
             let path = format!("{}/{}", Self::PUBLISH_ENDPOINT, env!("CARGO_PKG_NAME"));
             let url = self.build_url(&path);
-            info!("DELETE {url} (explicit shutdown)");
+            info!("DELETE {url}");
 
             self.client
                 .delete(&url)

@@ -1,12 +1,10 @@
-use crate::{
-    auth::{TokenManager, validate_password},
-    config::AppConfig,
-};
+use crate::services::auth::{TokenManager, password::PasswordService};
 use actix_session::SessionExt;
 use actix_web::{
     Error, FromRequest, HttpMessage, HttpResponse,
     body::EitherBody,
     dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
+    web,
 };
 use actix_web_httpauth::extractors::basic::BasicAuth;
 use anyhow::Result;
@@ -15,22 +13,7 @@ use std::{
     future::{Future, Ready, ready},
     pin::Pin,
     rc::Rc,
-    sync::OnceLock,
 };
-
-pub const TOKEN_EXPIRE_HOURS: u64 = 2;
-
-static TOKEN_MANAGER: OnceLock<TokenManager> = OnceLock::new();
-
-fn token_manager() -> &'static TokenManager {
-    TOKEN_MANAGER.get_or_init(|| {
-        TokenManager::new(
-            &AppConfig::get().centrifugo.client_token,
-            TOKEN_EXPIRE_HOURS,
-            env!("CARGO_PKG_NAME").to_string(),
-        )
-    })
-}
 
 pub struct AuthMw;
 
@@ -83,7 +66,13 @@ where
                 }
             };
 
-            if verify_token(&token) {
+            // Extract TokenManager from app data
+            let Some(token_manager) = req.app_data::<web::Data<TokenManager>>() else {
+                error!("failed to get TokenManager.");
+                return Ok(unauthorized_error(req).map_into_right_body());
+            };
+
+            if token_manager.verify_token(&token) {
                 let res = service.call(req).await?;
                 return Ok(res.map_into_left_body());
             }
@@ -105,16 +94,12 @@ where
     }
 }
 
-pub fn verify_token(token: &str) -> bool {
-    token_manager().verify_token(token)
-}
-
 fn verify_user(auth: BasicAuth) -> bool {
     let Some(password) = auth.password() else {
         return false;
     };
 
-    if let Err(e) = validate_password(password) {
+    if let Err(e) = PasswordService::validate_password(password) {
         error!("verify_user() failed: {e:#}");
         return false;
     }
@@ -129,8 +114,12 @@ fn unauthorized_error(req: ServiceRequest) -> ServiceResponse {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
+    use crate::config::AppConfig;
+
+    const TOKEN_SUBJECT: &str = "omnect-ui";
+    const TOKEN_EXPIRE_HOURS: u64 = 2;
     use actix_http::StatusCode;
     use actix_session::{
         SessionMiddleware,
@@ -145,14 +134,10 @@ mod tests {
         test, web,
     };
     use actix_web_httpauth::headers::authorization::Basic;
-    use argon2::{
-        Argon2,
-        password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
-    };
     use base64::prelude::*;
     use jwt_simple::claims::{JWTClaims, NoCustomClaims};
     use jwt_simple::prelude::*;
-    use std::{collections::HashMap, fs::File, io::Write};
+    use std::collections::HashMap;
 
     fn generate_valid_claim() -> JWTClaims<NoCustomClaims> {
         let issued_at = Clock::now_since_epoch();
@@ -165,7 +150,7 @@ mod tests {
             expires_at: Some(expires_at),
             invalid_before: None,
             issuer: None,
-            subject: Some(env!("CARGO_PKG_NAME").to_string()),
+            subject: Some(TOKEN_SUBJECT.to_string()),
             audiences: None,
             jwt_id: None,
             nonce: None,
@@ -187,7 +172,7 @@ mod tests {
             expires_at: Some(expires_at),
             invalid_before: None,
             issuer: None,
-            subject: Some(env!("CARGO_PKG_NAME").to_string()),
+            subject: Some(TOKEN_SUBJECT.to_string()),
             audiences: None,
             jwt_id: None,
             nonce: None,
@@ -265,8 +250,11 @@ mod tests {
             .cookie_http_only(true)
             .build();
 
+        let token_manager = TokenManager::new(AppConfig::get().centrifugo.client_token.as_str());
+
         test::init_service(
             App::new()
+                .app_data(web::Data::new(token_manager))
                 .wrap(session_middleware)
                 .route("/", web::get().to(index).wrap(AuthMw)),
         )
@@ -385,24 +373,15 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
-    fn create_password_file(password: &str) {
-        let config_dir = &crate::config::AppConfig::get().paths.config_dir;
-        std::fs::create_dir_all(config_dir).unwrap();
-
-        let argon2 = Argon2::default();
-        let salt = SaltString::generate(&mut OsRng);
-        let hashed_password = argon2.hash_password(password.as_bytes(), &salt).unwrap();
-        let file_path = config_dir.join("password");
-        let mut file = File::create(&file_path).unwrap();
-
-        file.write_all(hashed_password.to_string().as_bytes())
-            .unwrap();
+    fn setup_password_file(password: &str) {
+        PasswordService::store_or_update_password(password)
+            .expect("failed to setup password file for test");
     }
 
     #[tokio::test]
     async fn middleware_correct_user_credentials_should_succeed_and_return_valid_token() {
         let password = "some-password";
-        create_password_file(password);
+        setup_password_file(password);
 
         let app = create_service().await;
 
@@ -421,7 +400,7 @@ mod tests {
     #[tokio::test]
     async fn middleware_invalid_user_credentials_should_return_unauthorized_error() {
         let password = "some-password";
-        create_password_file(password);
+        setup_password_file(password);
 
         let app = create_service().await;
 
@@ -440,29 +419,32 @@ mod tests {
     async fn verify_correct_token_should_succeed() {
         let claim = generate_valid_claim();
         let token = generate_token(claim);
+        let token_manager = TokenManager::new(AppConfig::get().centrifugo.client_token.as_str());
 
-        assert!(verify_token(token.as_str()));
+        assert!(token_manager.verify_token(token.as_str()));
     }
 
     #[tokio::test]
     async fn verify_expired_token_should_fail() {
         let claim = generate_expired_claim();
         let token = generate_token(claim);
+        let token_manager = TokenManager::new(AppConfig::get().centrifugo.client_token.as_str());
 
-        assert!(!verify_token(token.as_str()));
+        assert!(!token_manager.verify_token(token.as_str()));
     }
 
     #[tokio::test]
     async fn verify_token_with_invalid_subject_should_fail() {
         let claim = generate_unset_subject_claim();
         let token = generate_token(claim);
+        let token_manager = TokenManager::new(AppConfig::get().centrifugo.client_token.as_str());
 
-        assert!(!verify_token(token.as_str()));
+        assert!(!token_manager.verify_token(token.as_str()));
 
         let claim = generate_invalid_subject_claim();
         let token = generate_token(claim);
 
-        assert!(!verify_token(token.as_str()));
+        assert!(!token_manager.verify_token(token.as_str()));
     }
 
     #[tokio::test]
@@ -470,8 +452,9 @@ mod tests {
         let claim = generate_invalid_subject_claim();
         let _ = generate_token(claim);
         let token = "someinvalidtestbytes".to_string();
+        let token_manager = TokenManager::new(AppConfig::get().centrifugo.client_token.as_str());
 
-        assert!(!verify_token(token.as_str()));
+        assert!(!token_manager.verify_token(token.as_str()));
     }
 
     #[tokio::test]
