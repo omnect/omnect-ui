@@ -1,7 +1,10 @@
 #![cfg_attr(feature = "mock", allow(dead_code, unused_imports))]
 
-use crate::{common::centrifugo_config, http_client::HttpClientFactory};
-use anyhow::{Context, Result, anyhow, bail, ensure};
+use crate::{
+    config::AppConfig,
+    http_client::{HttpClientFactory, handle_http_response},
+};
+use anyhow::{Context, Result, anyhow, bail};
 use log::info;
 #[cfg(feature = "mock")]
 use mockall::automock;
@@ -9,7 +12,7 @@ use reqwest::Client;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::{env, sync::OnceLock};
+use std::sync::OnceLock;
 use trait_variant::make;
 
 #[derive(Clone, Debug, Default, Deserialize_repr, PartialEq, Serialize_repr)]
@@ -169,9 +172,8 @@ impl OmnectDeviceServiceClient {
     }
 
     pub async fn new(register_publish_endpoint: bool) -> Result<Self> {
-        let socket_path =
-            env::var("SOCKET_PATH").unwrap_or_else(|_| "/socket/api.sock".to_string());
-        let client = HttpClientFactory::unix_socket_client(std::path::Path::new(&socket_path))?;
+        let client =
+            HttpClientFactory::unix_socket_client(&AppConfig::get().device_service.socket_path)?;
 
         let omnect_client = OmnectDeviceServiceClient {
             client,
@@ -189,7 +191,7 @@ impl OmnectDeviceServiceClient {
             return Ok(());
         }
 
-        let centrifugo_config = centrifugo_config();
+        let centrifugo = &AppConfig::get().centrifugo;
 
         let headers = vec![
             HeaderKeyValue {
@@ -198,14 +200,14 @@ impl OmnectDeviceServiceClient {
             },
             HeaderKeyValue {
                 name: String::from("X-API-Key"),
-                value: centrifugo_config.api_key.clone(),
+                value: centrifugo.api_key.clone(),
             },
         ];
 
         let body = PublishIdEndpoint {
             id: env!("CARGO_PKG_NAME"),
             endpoint: PublishEndpoint {
-                url: format!("https://localhost:{}/api/publish", centrifugo_config.port),
+                url: format!("https://localhost:{}/api/publish", centrifugo.port),
                 headers,
             },
         };
@@ -230,7 +232,7 @@ impl OmnectDeviceServiceClient {
             .await
             .context(format!("failed to send GET request to {url}"))?;
 
-        self.handle_response(res, &url).await
+        handle_http_response(res, &format!("request to {}", url)).await
     }
 
     /// POST request to the device service API (empty body)
@@ -245,7 +247,7 @@ impl OmnectDeviceServiceClient {
             .await
             .context(format!("failed to send POST request to {url}"))?;
 
-        self.handle_response(res, &url).await
+        handle_http_response(res, &format!("request to {}", url)).await
     }
 
     /// POST request to the device service API with JSON body
@@ -261,22 +263,7 @@ impl OmnectDeviceServiceClient {
             .await
             .context(format!("failed to send POST request to {url}"))?;
 
-        self.handle_response(res, &url).await
-    }
-
-    async fn handle_response(&self, res: reqwest::Response, url: &str) -> Result<String> {
-        let status = res.status();
-        let body = res.text().await.context("failed to read response body")?;
-
-        ensure!(
-            status.is_success(),
-            "request to {} failed with status {} and body: {}",
-            url,
-            status,
-            body
-        );
-
-        Ok(body)
+        handle_http_response(res, &format!("request to {}", url)).await
     }
 }
 
@@ -353,7 +340,6 @@ impl DeviceServiceClient for OmnectDeviceServiceClient {
     async fn healthcheck_info(&self) -> Result<HealthcheckInfo> {
         let status = self.status().await?;
         let current_version = status.system_info.omnect_device_service_version;
-
         let required_version = Self::required_version();
         let parsed_current = Version::parse(&current_version)
             .map_err(|e| anyhow!("failed to parse current version: {e}"))?;

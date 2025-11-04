@@ -1,4 +1,4 @@
-use crate::http_client::HttpClientFactory;
+use crate::{config::AppConfig, http_client::HttpClientFactory};
 use anyhow::{Context, Result};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
@@ -19,14 +19,6 @@ struct RealmInfo {
     public_key: String,
 }
 
-macro_rules! keycloak_url {
-    () => {{
-        std::env::var("KEYCLOAK_URL").unwrap_or_else(|_| {
-            "https://keycloak.omnect.conplement.cloud/realms/cp-prod".to_string()
-        })
-    }};
-}
-
 #[make(Send + Sync)]
 #[cfg_attr(feature = "mock", automock)]
 pub trait SingleSignOnProvider {
@@ -38,31 +30,47 @@ pub struct KeycloakProvider;
 
 impl SingleSignOnProvider for KeycloakProvider {
     async fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims> {
-        let pub_key = crate::keycloak_client::realm_public_key().await?;
+        let pub_key = Self::realm_public_key().await?;
         let claims = pub_key.verify_token::<TokenClaims>(token, None)?;
         Ok(claims.custom)
     }
 }
 
-pub fn config() -> String {
-    let keycloak_url = &keycloak_url!();
-    format!("window.__APP_CONFIG__ = {{KEYCLOAK_URL:\"{keycloak_url}\"}};")
-}
+impl KeycloakProvider {
+    pub fn create_frontend_config_file() -> Result<()> {
+        use anyhow::Context;
+        use std::io::Write;
 
-pub async fn realm_public_key() -> Result<RS256PublicKey> {
-    let client = HttpClientFactory::https_client();
-    let resp = client
-        .get(keycloak_url!())
-        .send()
-        .await
-        .context("failed to fetch from url")?
-        .json::<RealmInfo>()
-        .await
-        .context("failed to parse realm info")?;
+        let mut config_file =
+            std::fs::File::create(AppConfig::get().paths.config_dir.join("app_config.js"))
+                .context("failed to create frontend config file")?;
 
-    let decoded = BASE64_STANDARD
-        .decode(resp.public_key.as_bytes())
-        .context("failed to decode public key from base64")?;
+        config_file
+            .write_all(
+                format!(
+                    "window.__APP_CONFIG__ = {{KEYCLOAK_URL:\"{}\"}};",
+                    AppConfig::get().keycloak.url
+                )
+                .as_bytes(),
+            )
+            .context("failed to write frontend config file")
+    }
 
-    RS256PublicKey::from_der(&decoded).context("failed to parse public key from DER format")
+    async fn realm_public_key() -> Result<RS256PublicKey> {
+        let client = HttpClientFactory::https_client();
+        let resp = client
+            .get(&AppConfig::get().keycloak.url)
+            .send()
+            .await
+            .context("failed to fetch from url")?
+            .json::<RealmInfo>()
+            .await
+            .context("failed to parse realm info")?;
+
+        let decoded = BASE64_STANDARD
+            .decode(resp.public_key.as_bytes())
+            .context("failed to decode public key from base64")?;
+
+        RS256PublicKey::from_der(&decoded).context("failed to parse public key from DER format")
+    }
 }

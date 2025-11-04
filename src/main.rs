@@ -1,7 +1,7 @@
 mod api;
 mod auth;
 mod certificate;
-mod common;
+mod config;
 mod http_client;
 mod keycloak_client;
 mod middleware;
@@ -11,7 +11,7 @@ mod omnect_device_service_client;
 use crate::{
     api::Api,
     certificate::create_module_certificate,
-    common::{centrifugo_config, config_path},
+    config::AppConfig,
     keycloak_client::KeycloakProvider,
     network::init_server_restart_channel,
     omnect_device_service_client::{DeviceServiceClient, OmnectDeviceServiceClient},
@@ -43,6 +43,8 @@ use tokio::{
 
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
 const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
+
+type UiApi = Api<OmnectDeviceServiceClient, KeycloakProvider>;
 
 #[actix_web::main]
 async fn main() {
@@ -157,13 +159,12 @@ async fn run_server() -> (
         panic!("failed to find required data directory: /data is missing");
     };
 
-    if !fs::exists(config_path!()).is_ok_and(|ok| ok) {
-        fs::create_dir_all(config_path!()).expect("failed to create config directory");
+    let config_dir = &AppConfig::get().paths.config_dir;
+    if !fs::exists(config_dir).is_ok_and(|ok| ok) {
+        fs::create_dir_all(config_dir).expect("failed to create config directory");
     };
 
-    common::create_frontend_config_file().expect("failed to create frontend config file");
-
-    type UiApi = Api<OmnectDeviceServiceClient, KeycloakProvider>;
+    KeycloakProvider::create_frontend_config_file().expect("failed to create frontend config file");
 
     let service_client = OmnectDeviceServiceClient::new(true)
         .await
@@ -173,12 +174,6 @@ async fn run_server() -> (
         .await
         .expect("failed to create api");
 
-    #[cfg(feature = "mock")]
-    create_module_certificate()
-        .await
-        .expect("failed to create module certificate");
-
-    #[cfg(not(feature = "mock"))]
     create_module_certificate(&service_client)
         .await
         .expect("failed to create module certificate");
@@ -186,17 +181,21 @@ async fn run_server() -> (
     tokio::spawn({
         let service_client = service_client.clone();
         async move {
-            if let Err(e) = network::NetworkConfigService::process_pending_rollback(&service_client).await {
+            if let Err(e) =
+                network::NetworkConfigService::process_pending_rollback(&service_client).await
+            {
                 error!("failed to check pending rollback: {e:#}");
             }
         }
     });
 
     let mut tls_certs = std::io::BufReader::new(
-        std::fs::File::open(certificate::cert_path()).expect("failed to read certificate file"),
+        std::fs::File::open(&AppConfig::get().certificate.cert_path)
+            .expect("failed to read certificate file"),
     );
     let mut tls_key = std::io::BufReader::new(
-        std::fs::File::open(certificate::key_path()).expect("failed to read key file"),
+        std::fs::File::open(&AppConfig::get().certificate.key_path)
+            .expect("failed to read key file"),
     );
 
     let tls_certs = rustls_pemfile::certs(&mut tls_certs)
@@ -218,11 +217,6 @@ async fn run_server() -> (
             .expect("failed to create TLS config"),
         _ => panic!("failed to parse key pem file: unexpected item type found"),
     };
-
-    let ui_port = std::env::var("UI_PORT")
-        .expect("failed to read UI_PORT environment variable")
-        .parse::<u64>()
-        .expect("failed to parse UI_PORT: invalid format");
 
     let session_key = Key::generate();
 
@@ -310,7 +304,7 @@ async fn run_server() -> (
             ))
             .default_service(web::route().to(UiApi::index))
     })
-    .bind_rustls_0_23(format!("0.0.0.0:{ui_port}"), tls_config)
+    .bind_rustls_0_23(format!("0.0.0.0:{}", AppConfig::get().ui.port), tls_config)
     .expect("failed to bind server with TLS")
     .disable_signals()
     .run();
@@ -324,28 +318,26 @@ fn run_centrifugo() -> Child {
     )
     .arg("-c")
     .arg("/centrifugo_config.json")
-    .envs(vec![
-        (
-            "CENTRIFUGO_HTTP_SERVER_TLS_CERT_PEM",
-            certificate::cert_path(),
-        ),
-        (
-            "CENTRIFUGO_HTTP_SERVER_TLS_KEY_PEM",
-            certificate::key_path(),
-        ),
-        (
-            "CENTRIFUGO_HTTP_SERVER_PORT",
-            centrifugo_config().port.clone(),
-        ),
-        (
-            "CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY",
-            centrifugo_config().client_token.clone(),
-        ),
-        (
-            "CENTRIFUGO_HTTP_API_KEY",
-            centrifugo_config().api_key.clone(),
-        ),
-    ])
+    .env(
+        "CENTRIFUGO_HTTP_SERVER_TLS_CERT_PEM",
+        &AppConfig::get().certificate.cert_path,
+    )
+    .env(
+        "CENTRIFUGO_HTTP_SERVER_TLS_KEY_PEM",
+        &AppConfig::get().certificate.key_path,
+    )
+    .env(
+        "CENTRIFUGO_HTTP_SERVER_PORT",
+        &AppConfig::get().centrifugo.port,
+    )
+    .env(
+        "CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY",
+        &AppConfig::get().centrifugo.client_token,
+    )
+    .env(
+        "CENTRIFUGO_HTTP_API_KEY",
+        &AppConfig::get().centrifugo.api_key,
+    )
     .spawn()
     .expect("failed to spawn centrifugo process");
 

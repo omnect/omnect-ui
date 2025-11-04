@@ -1,9 +1,9 @@
 #![cfg_attr(feature = "mock", allow(dead_code, unused_imports))]
 
 use crate::{
-    common::handle_http_response,
-    http_client::HttpClientFactory,
-    omnect_device_service_client::{DeviceServiceClient},
+    config::AppConfig,
+    http_client::{HttpClientFactory, handle_http_response},
+    omnect_device_service_client::DeviceServiceClient,
 };
 use anyhow::{Context, Result};
 use log::info;
@@ -33,16 +33,11 @@ struct CreateCertResponse {
     expiration: String,
 }
 
-pub fn cert_path() -> String {
-    std::env::var("CERT_PATH").unwrap_or_else(|_| "/cert/cert.pem".to_string())
-}
-
-pub fn key_path() -> String {
-    std::env::var("KEY_PATH").unwrap_or_else(|_| "/cert/key.pem".to_string())
-}
-
 #[cfg(feature = "mock")]
-pub async fn create_module_certificate() -> Result<()> {
+pub async fn create_module_certificate<T>(_service_client: &T) -> Result<()>
+where
+    T: DeviceServiceClient,
+{
     Ok(())
 }
 
@@ -53,23 +48,19 @@ where
 {
     info!("create module certificate");
 
-    let id = std::env::var("IOTEDGE_MODULEID")
-        .context("failed to read IOTEDGE_MODULEID environment variable")?;
-    let gen_id = std::env::var("IOTEDGE_MODULEGENERATIONID")
-        .context("failed to read IOTEDGE_MODULEGENERATIONID environment variable")?;
-    let api_version = std::env::var("IOTEDGE_APIVERSION")
-        .context("failed to read IOTEDGE_APIVERSION environment variable")?;
-    let workload_uri = std::env::var("IOTEDGE_WORKLOADURI")
-        .context("failed to read IOTEDGE_WORKLOADURI environment variable")?;
+    let iot_edge = &AppConfig::get().iot_edge;
 
     let payload = CreateCertPayload {
         common_name: service_client.ip_address().await?,
     };
 
-    let path = format!("/modules/{id}/genid/{gen_id}/certificate/server?api-version={api_version}");
+    let path = format!(
+        "/modules/{}/genid/{}/certificate/server?api-version={}",
+        iot_edge.module_id, iot_edge.module_generation_id, iot_edge.api_version
+    );
 
     // Create a client for the IoT Edge workload socket
-    let client = HttpClientFactory::workload_client(&workload_uri)?;
+    let client = HttpClientFactory::workload_client(&iot_edge.workload_uri)?;
 
     let url = format!("http://localhost{}", path);
     info!("POST {url} (IoT Edge workload API)");
@@ -82,15 +73,17 @@ where
         .context("failed to send certificate request to IoT Edge workload API")?;
 
     let body = handle_http_response(res, "certificate request").await?;
-
     let response: CreateCertResponse =
         serde_json::from_str(&body).context("failed to parse CreateCertResponse")?;
 
-    let mut file = File::create(cert_path()).context("failed to create cert file")?;
+    let config = AppConfig::get();
+    let mut file =
+        File::create(&config.certificate.cert_path).context("failed to create cert file")?;
     file.write_all(response.certificate.as_bytes())
         .context("failed to write certificate to file")?;
 
-    let mut file = File::create(key_path()).context("failed to create key file")?;
+    let mut file =
+        File::create(&config.certificate.key_path).context("failed to create key file")?;
     file.write_all(response.private_key.bytes.as_bytes())
         .context("failed to write private key to file")
 }
