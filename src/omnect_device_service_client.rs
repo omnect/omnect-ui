@@ -143,8 +143,6 @@ pub trait DeviceServiceClient {
     async fn shutdown(&self) -> Result<()>;
 }
 
-static REQUIRED_VERSION: OnceLock<VersionReq> = OnceLock::new();
-
 impl OmnectDeviceServiceClient {
     const REQUIRED_CLIENT_VERSION: &str = ">=0.39.0";
 
@@ -159,6 +157,7 @@ impl OmnectDeviceServiceClient {
     const PUBLISH_ENDPOINT: &str = "/publish-endpoint/v1";
 
     fn required_version() -> &'static VersionReq {
+        static REQUIRED_VERSION: OnceLock<VersionReq> = OnceLock::new();
         REQUIRED_VERSION.get_or_init(|| {
             VersionReq::parse(Self::REQUIRED_CLIENT_VERSION)
                 .expect("invalid REQUIRED_CLIENT_VERSION constant")
@@ -213,7 +212,9 @@ impl OmnectDeviceServiceClient {
     }
 
     fn build_url(&self, path: &str) -> String {
-        format!("http://localhost{}", path)
+        // Normalize path to always start with a single "/"
+        let normalized_path = path.trim_start_matches('/');
+        format!("http://localhost/{}", normalized_path)
     }
 
     /// GET request to the device service API
@@ -295,13 +296,12 @@ impl DeviceServiceClient for OmnectDeviceServiceClient {
             .await?
             .network_status
             .network_interfaces
-            .into_iter()
+            .iter()
             .find_map(|iface| {
-                if iface.online {
-                    iface.ipv4.addrs.into_iter().next().map(|addr| addr.addr)
-                } else {
-                    None
-                }
+                iface
+                    .online
+                    .then(|| iface.ipv4.addrs.first().map(|addr| addr.addr.clone()))
+                    .flatten()
             })
             .context("failed to get ip address from status")
     }

@@ -49,9 +49,8 @@ pub fn config() -> String {
     format!("window.__APP_CONFIG__ = {{KEYCLOAK_URL:\"{keycloak_url}\"}};")
 }
 
-static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
-
 fn http_client() -> &'static Client {
+    static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
     HTTP_CLIENT.get_or_init(Client::new)
 }
 

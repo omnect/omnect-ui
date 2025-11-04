@@ -9,8 +9,6 @@ use std::{
 };
 use uuid::Uuid;
 
-static CENTRIFUGO_CONFIG: OnceLock<Arc<CentrifugoConfig>> = OnceLock::new();
-
 #[derive(Clone)]
 pub struct CentrifugoConfig {
     pub port: String,
@@ -19,6 +17,7 @@ pub struct CentrifugoConfig {
 }
 
 pub fn centrifugo_config() -> Arc<CentrifugoConfig> {
+    static CENTRIFUGO_CONFIG: OnceLock<Arc<CentrifugoConfig>> = OnceLock::new();
     CENTRIFUGO_CONFIG
         .get_or_init(|| {
             let port = var("CENTRIFUGO_HTTP_SERVER_PORT").unwrap_or_else(|_| "8000".to_string());
