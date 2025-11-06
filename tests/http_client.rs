@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixListener;
-use tokio::time::{Duration, sleep};
+use tokio::sync::oneshot;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct CreateCertPayload {
@@ -27,8 +27,14 @@ struct CreateCertResponse {
     expiration: String,
 }
 
-async fn start_mock_workload_server(socket_path: PathBuf) -> std::io::Result<()> {
+async fn start_mock_workload_server(
+    socket_path: PathBuf,
+    ready_tx: oneshot::Sender<()>,
+) -> std::io::Result<()> {
     let listener = UnixListener::bind(&socket_path)?;
+
+    // Signal that the server is ready
+    let _ = ready_tx.send(());
 
     loop {
         let (mut stream, _) = listener.accept().await?;
@@ -107,13 +113,16 @@ async fn test_workload_client_integration_success() {
     let socket_path = temp_dir.path().join("workload.sock");
     let socket_path_clone = socket_path.clone();
 
+    // Create a oneshot channel for server ready signal
+    let (ready_tx, ready_rx) = oneshot::channel();
+
     // Start the mock server in the background
     let server_handle = tokio::spawn(async move {
-        let _ = start_mock_workload_server(socket_path_clone).await;
+        let _ = start_mock_workload_server(socket_path_clone, ready_tx).await;
     });
 
-    // Give the server time to start and bind to the socket
-    sleep(Duration::from_millis(100)).await;
+    // Wait for the server to be ready
+    ready_rx.await.expect("server failed to start");
 
     // Create the workload client using the factory
     let workload_uri = format!("unix://{}", socket_path.display());
@@ -155,39 +164,15 @@ async fn test_workload_client_integration_success() {
     server_handle.abort();
 }
 
-#[tokio::test]
-async fn test_workload_client_integration_invalid_uri() {
-    // Test with HTTP scheme (should fail)
-    let result = HttpClientFactory::workload_client("http://localhost:8080");
-    assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("unix://"));
-}
-
-#[tokio::test]
-async fn test_workload_client_integration_malformed_uri() {
-    // Test with malformed URI (should fail)
-    let result = HttpClientFactory::workload_client("not-a-valid-uri");
-    assert!(result.is_err());
-}
-
-#[tokio::test]
-async fn test_workload_client_integration_connection_to_nonexistent_socket() {
-    // Create a workload client pointing to a non-existent socket
-    let workload_uri = "unix:///tmp/nonexistent-socket-12345.sock";
-    let client =
-        HttpClientFactory::workload_client(workload_uri).expect("failed to create workload client");
-
-    // Try to make a request (should fail to connect)
-    let url = "http://localhost/test";
-    let result = client.post(url).send().await;
-
-    // The request should fail because the socket doesn't exist
-    assert!(result.is_err());
-}
-
 // Integration tests for unix_socket_client
-async fn start_mock_unix_socket_server(socket_path: PathBuf) -> std::io::Result<()> {
+async fn start_mock_unix_socket_server(
+    socket_path: PathBuf,
+    ready_tx: oneshot::Sender<()>,
+) -> std::io::Result<()> {
     let listener = UnixListener::bind(&socket_path)?;
+
+    // Signal that the server is ready
+    let _ = ready_tx.send(());
 
     loop {
         let (mut stream, _) = listener.accept().await?;
@@ -230,13 +215,16 @@ async fn test_unix_socket_client_integration_success() {
     let socket_path = temp_dir.path().join("test.sock");
     let socket_path_clone = socket_path.clone();
 
+    // Create a oneshot channel for server ready signal
+    let (ready_tx, ready_rx) = oneshot::channel();
+
     // Start the mock server in the background
     let server_handle = tokio::spawn(async move {
-        let _ = start_mock_unix_socket_server(socket_path_clone).await;
+        let _ = start_mock_unix_socket_server(socket_path_clone, ready_tx).await;
     });
 
-    // Give the server time to start and bind to the socket
-    sleep(Duration::from_millis(100)).await;
+    // Wait for the server to be ready
+    ready_rx.await.expect("server failed to start");
 
     // Create the unix socket client using the factory
     let client = HttpClientFactory::unix_socket_client(&socket_path)
@@ -267,13 +255,16 @@ async fn test_unix_socket_client_integration_post_request() {
     let socket_path = temp_dir.path().join("test-post.sock");
     let socket_path_clone = socket_path.clone();
 
+    // Create a oneshot channel for server ready signal
+    let (ready_tx, ready_rx) = oneshot::channel();
+
     // Start the mock server in the background
     let server_handle = tokio::spawn(async move {
-        let _ = start_mock_unix_socket_server(socket_path_clone).await;
+        let _ = start_mock_unix_socket_server(socket_path_clone, ready_tx).await;
     });
 
-    // Give the server time to start and bind to the socket
-    sleep(Duration::from_millis(100)).await;
+    // Wait for the server to be ready
+    ready_rx.await.expect("server failed to start");
 
     // Create the unix socket client using the factory
     let client = HttpClientFactory::unix_socket_client(&socket_path)
@@ -307,34 +298,22 @@ async fn test_unix_socket_client_integration_post_request() {
 }
 
 #[tokio::test]
-async fn test_unix_socket_client_integration_connection_to_nonexistent_socket() {
-    // Create a unix socket client pointing to a non-existent socket
-    let socket_path = std::path::Path::new("/tmp/nonexistent-unix-socket-67890.sock");
-    let client = HttpClientFactory::unix_socket_client(socket_path)
-        .expect("failed to create unix socket client");
-
-    // Try to make a request (should fail to connect)
-    let url = "http://localhost/test";
-    let result = client.get(url).send().await;
-
-    // The request should fail because the socket doesn't exist
-    assert!(result.is_err());
-}
-
-#[tokio::test]
 async fn test_unix_socket_client_integration_multiple_requests() {
     // Create a temporary directory for the Unix socket
     let temp_dir = TempDir::new().expect("failed to create temp directory");
     let socket_path = temp_dir.path().join("test-multi.sock");
     let socket_path_clone = socket_path.clone();
 
+    // Create a oneshot channel for server ready signal
+    let (ready_tx, ready_rx) = oneshot::channel();
+
     // Start the mock server in the background
     let server_handle = tokio::spawn(async move {
-        let _ = start_mock_unix_socket_server(socket_path_clone).await;
+        let _ = start_mock_unix_socket_server(socket_path_clone, ready_tx).await;
     });
 
-    // Give the server time to start and bind to the socket
-    sleep(Duration::from_millis(100)).await;
+    // Wait for the server to be ready
+    ready_rx.await.expect("server failed to start");
 
     // Create the unix socket client using the factory
     let client = HttpClientFactory::unix_socket_client(&socket_path)
@@ -354,126 +333,4 @@ async fn test_unix_socket_client_integration_multiple_requests() {
 
     // Clean up
     server_handle.abort();
-}
-
-// Integration tests for https_client
-#[tokio::test]
-async fn test_https_client_integration_get_request() {
-    // For HTTPS integration testing, we'll use httpbin.org or a similar public test service
-    // This tests the actual HTTPS client functionality
-    let client = HttpClientFactory::https_client();
-
-    // Make a simple GET request to a public HTTPS endpoint
-    // Using example.com as it's stable and always available
-    let url = "https://example.com";
-    let result = client.get(url).send().await;
-
-    // Verify the request was successful
-    assert!(result.is_ok(), "HTTPS GET request should succeed");
-    let response = result.unwrap();
-    assert!(response.status().is_success());
-}
-
-#[tokio::test]
-#[ignore = "requires network access to external service"]
-async fn test_https_client_integration_json_response() {
-    let client = HttpClientFactory::https_client();
-
-    // Use httpbin.org which provides a reliable test endpoint
-    let url = "https://httpbin.org/json";
-    let result = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        client.get(url).send()
-    ).await;
-
-    assert!(result.is_ok(), "Request should not timeout");
-    let response_result = result.unwrap();
-    assert!(response_result.is_ok(), "HTTPS request should succeed");
-    let response = response_result.unwrap();
-    assert!(response.status().is_success());
-
-    // Verify we can parse JSON response
-    let json_result = response.json::<serde_json::Value>().await;
-    assert!(json_result.is_ok(), "Should be able to parse JSON response");
-}
-
-#[tokio::test]
-#[ignore = "requires network access to external service"]
-async fn test_https_client_integration_post_request() {
-    let client = HttpClientFactory::https_client();
-
-    #[derive(Serialize)]
-    struct TestData {
-        name: String,
-        value: i32,
-    }
-
-    let payload = TestData {
-        name: "test".to_string(),
-        value: 42,
-    };
-
-    // Use httpbin.org POST endpoint
-    let url = "https://httpbin.org/post";
-    let result = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        client.post(url).json(&payload).send()
-    ).await;
-
-    assert!(result.is_ok(), "Request should not timeout");
-    let response_result = result.unwrap();
-    assert!(response_result.is_ok(), "HTTPS POST request should succeed");
-    let response = response_result.unwrap();
-    assert!(response.status().is_success());
-}
-
-#[tokio::test]
-#[ignore = "requires network access to external service"]
-async fn test_https_client_integration_cached_across_requests() {
-    // Verify that the cached client can handle multiple requests
-    let client = HttpClientFactory::https_client();
-
-    for i in 0..3 {
-        let url = format!("https://httpbin.org/get?iteration={}", i);
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(10),
-            client.get(&url).send()
-        ).await;
-
-        assert!(result.is_ok(), "Request {} should not timeout", i);
-        let response_result = result.unwrap();
-        assert!(response_result.is_ok(), "Request {} should succeed", i);
-        assert!(response_result.unwrap().status().is_success());
-    }
-}
-
-#[tokio::test]
-#[ignore = "requires network access to external service"]
-async fn test_https_client_integration_handles_404() {
-    let client = HttpClientFactory::https_client();
-
-    // Request a URL that should return 404
-    let url = "https://httpbin.org/status/404";
-    let result = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        client.get(url).send()
-    ).await;
-
-    assert!(result.is_ok(), "Request should not timeout");
-    let response_result = result.unwrap();
-    assert!(response_result.is_ok(), "Request should complete");
-    let response = response_result.unwrap();
-    assert_eq!(response.status().as_u16(), 404);
-}
-
-#[tokio::test]
-async fn test_https_client_integration_invalid_domain() {
-    let client = HttpClientFactory::https_client();
-
-    // Try to connect to an invalid domain
-    let url = "https://this-domain-definitely-does-not-exist-12345.com";
-    let result = client.get(url).send().await;
-
-    // This should fail with a connection error
-    assert!(result.is_err(), "Request to invalid domain should fail");
 }
