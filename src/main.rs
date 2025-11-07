@@ -10,6 +10,7 @@ mod omnect_device_service_client;
 
 use crate::{
     api::Api,
+    auth::TokenManager,
     certificate::create_module_certificate,
     common::{centrifugo_config, config_path},
     keycloak_client::KeycloakProvider,
@@ -83,8 +84,6 @@ async fn main() {
     while run_until_shutdown(&mut restart_rx, &mut sigterm).await {
         info!("restarting server...");
     }
-
-    debug!("good bye");
 }
 
 async fn run_until_shutdown(
@@ -216,6 +215,9 @@ async fn run_server() -> (
 
     let session_key = Key::generate();
 
+    // Create TokenManager with centrifugo client token
+    let token_manager = TokenManager::new(&centrifugo_config().client_token);
+
     let server = HttpServer::new(move || {
         App::new()
             .wrap(
@@ -241,6 +243,7 @@ async fn run_server() -> (
                     .total_limit(UPLOAD_LIMIT_BYTES)
                     .memory_limit(MEMORY_LIMIT_BYTES),
             )
+            .app_data(Data::new(token_manager.clone()))
             .app_data(Data::new(api.clone()))
             .route("/", web::get().to(UiApi::index))
             .route("/config.js", web::get().to(UiApi::config))

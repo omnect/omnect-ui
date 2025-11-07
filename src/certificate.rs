@@ -1,8 +1,9 @@
 #![cfg_attr(feature = "mock", allow(dead_code, unused_imports))]
 
 use crate::{
-    common::handle_http_response, http_client::HttpClientFactory,
-    omnect_device_service_client::DeviceServiceClient,
+    common::handle_http_response,
+    http_client,
+    omnect_device_service_client::{DeviceServiceClient, OmnectDeviceServiceClient},
 };
 use anyhow::{Context, Result};
 use log::info;
@@ -71,7 +72,7 @@ where
     let path = format!("/modules/{id}/genid/{gen_id}/certificate/server?api-version={api_version}");
 
     // Create a client for the IoT Edge workload socket
-    let client = HttpClientFactory::workload_client(&workload_uri)?;
+    let client = http_client::unix_socket_client(&workload_uri)?;
 
     let url = format!("http://localhost{}", path);
     info!("POST {url} (IoT Edge workload API)");
