@@ -1,5 +1,5 @@
 use crate::{
-    auth::token_manager,
+    auth::TokenManager,
     common::{config_path, data_path, host_data_path, tmp_path, validate_password},
     keycloak_client::SingleSignOnProvider,
     omnect_device_service_client::{DeviceServiceClient, FactoryReset, LoadUpdate, RunUpdate},
@@ -143,10 +143,10 @@ where
         Self::handle_service_result(api.service_client.reload_network().await, "reload_network")
     }
 
-    pub async fn token(session: Session) -> impl Responder {
+    pub async fn token(session: Session, token_manager: web::Data<TokenManager>) -> impl Responder {
         debug!("token() called");
 
-        Self::session_token(session)
+        Self::session_token(session, token_manager)
     }
 
     pub async fn logout(session: Session) -> impl Responder {
@@ -216,6 +216,7 @@ where
     pub async fn set_password(
         body: web::Json<SetPasswordPayload>,
         session: Session,
+        token_manager: web::Data<TokenManager>,
     ) -> impl Responder {
         debug!("set_password() called");
 
@@ -230,7 +231,7 @@ where
             return HttpResponse::InternalServerError().body(e.to_string());
         }
 
-        Self::session_token(session)
+        Self::session_token(session, token_manager)
     }
 
     pub async fn update_password(
@@ -352,8 +353,8 @@ where
             .context("failed to write password file")
     }
 
-    fn session_token(session: Session) -> HttpResponse {
-        let token = match token_manager().create_token() {
+    fn session_token(session: Session, token_manager: web::Data<TokenManager>) -> HttpResponse {
+        let token = match token_manager.create_token() {
             Ok(token) => token,
             Err(e) => {
                 error!("failed to create token: {e:#}");

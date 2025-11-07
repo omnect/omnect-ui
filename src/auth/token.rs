@@ -1,19 +1,26 @@
 use anyhow::Result;
 use jwt_simple::prelude::*;
-use std::sync::OnceLock;
+use std::sync::Arc;
 
 const TOKEN_SUBJECT: &str = "omnect-ui";
 const TOKEN_EXPIRE_HOURS: u64 = 2;
+const TOKEN_TIME_TOLERANCE_MINS: u64 = 15;
 
 /// Centralized token management for session tokens
 ///
 /// Handles creation and verification of JWT tokens used for:
 /// - Session authentication
 /// - Centrifugo WebSocket authentication
+///
+/// This struct is cheap to clone (uses Arc internally) and can be safely
+/// shared across threads and added to application data.
+#[derive(Clone)]
 pub struct TokenManager {
+    inner: Arc<TokenManagerInner>,
+}
+
+struct TokenManagerInner {
     key: HS256Key,
-    expire_hours: u64,
-    subject: String,
 }
 
 impl TokenManager {
@@ -22,11 +29,10 @@ impl TokenManager {
     /// # Arguments
     /// * `secret` - Secret key for HMAC-SHA256 signing
     pub fn new(secret: &str) -> Self {
-        let key = HS256Key::from_bytes(secret.as_bytes());
         Self {
-            key,
-            expire_hours: TOKEN_EXPIRE_HOURS,
-            subject: TOKEN_SUBJECT.to_string(),
+            inner: Arc::new(TokenManagerInner {
+                key: HS256Key::from_bytes(secret.as_bytes()),
+            }),
         }
     }
 
@@ -35,9 +41,10 @@ impl TokenManager {
     /// Returns a signed JWT token string
     pub fn create_token(&self) -> Result<String> {
         let claims =
-            Claims::create(Duration::from_hours(self.expire_hours)).with_subject(&self.subject);
+            Claims::create(Duration::from_hours(TOKEN_EXPIRE_HOURS)).with_subject(TOKEN_SUBJECT);
 
-        self.key
+        self.inner
+            .key
             .authenticate(claims)
             .map_err(|e| anyhow::anyhow!("failed to create token: {}", e))
     }
@@ -46,7 +53,7 @@ impl TokenManager {
     ///
     /// Validates:
     /// - Signature
-    /// - Expiration (with 15 minute tolerance)
+    /// - Expiration (with configurable time tolerance)
     /// - Max validity (token age)
     /// - Required subject claim
     ///
@@ -54,26 +61,17 @@ impl TokenManager {
     pub fn verify_token(&self, token: &str) -> bool {
         let options = VerificationOptions {
             accept_future: true,
-            time_tolerance: Some(Duration::from_mins(15)),
-            max_validity: Some(Duration::from_hours(self.expire_hours)),
-            required_subject: Some(self.subject.clone()),
+            time_tolerance: Some(Duration::from_mins(TOKEN_TIME_TOLERANCE_MINS)),
+            max_validity: Some(Duration::from_hours(TOKEN_EXPIRE_HOURS)),
+            required_subject: Some(TOKEN_SUBJECT.to_string()),
             ..Default::default()
         };
 
-        self.key
+        self.inner
+            .key
             .verify_token::<NoCustomClaims>(token, Some(options))
             .is_ok()
     }
-}
-
-/// Get or create the global TokenManager instance
-///
-/// Uses the centrifugo client token from config
-pub fn token_manager() -> &'static TokenManager {
-    use crate::common::centrifugo_config;
-
-    static TOKEN_MANAGER: OnceLock<TokenManager> = OnceLock::new();
-    TOKEN_MANAGER.get_or_init(|| TokenManager::new(&centrifugo_config().client_token))
 }
 
 #[cfg(test)]

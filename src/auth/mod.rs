@@ -1,3 +1,3 @@
 pub mod token;
 
-pub use token::token_manager;
+pub use token::TokenManager;
