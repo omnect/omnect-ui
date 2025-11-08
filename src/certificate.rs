@@ -2,7 +2,7 @@
 
 use crate::{
     config::AppConfig,
-    http_client::{HttpClientFactory, handle_http_response},
+    http_client::{unix_socket_client, handle_http_response},
     omnect_device_service_client::DeviceServiceClient,
 };
 use anyhow::{Context, Result};
@@ -60,7 +60,7 @@ where
     );
 
     // Create a client for the IoT Edge workload socket
-    let client = HttpClientFactory::workload_client(&iot_edge.workload_uri)?;
+    let client = unix_socket_client(&iot_edge.workload_uri)?;
 
     let url = format!("http://localhost{}", path);
     info!("POST {url} (IoT Edge workload API)");

@@ -1,9 +1,10 @@
-use crate::{config::AppConfig, http_client::HttpClientFactory};
+use crate::config::AppConfig;
 use anyhow::{Context, Result};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use jwt_simple::prelude::{RS256PublicKey, RSAPublicKeyLike};
 #[cfg(feature = "mock")]
 use mockall::automock;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use trait_variant::make;
 
@@ -49,7 +50,7 @@ impl KeycloakProvider {
     }
 
     async fn realm_public_key(&self) -> Result<RS256PublicKey> {
-        let client = HttpClientFactory::https_client();
+        let client = Client::new();
         let resp = client
             .get(&AppConfig::get().keycloak.url)
             .send()

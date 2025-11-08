@@ -2,7 +2,7 @@
 
 use crate::{
     config::AppConfig,
-    http_client::{HttpClientFactory, handle_http_response},
+    http_client::{unix_socket_client, handle_http_response},
 };
 use anyhow::{Context, Result, anyhow, bail};
 use log::info;
@@ -173,7 +173,7 @@ impl OmnectDeviceServiceClient {
 
     pub async fn new(register_publish_endpoint: bool) -> Result<Self> {
         let client =
-            HttpClientFactory::unix_socket_client(&AppConfig::get().device_service.socket_path)?;
+            unix_socket_client(&AppConfig::get().device_service.socket_path.to_string_lossy())?;
 
         let omnect_client = OmnectDeviceServiceClient {
             client,
