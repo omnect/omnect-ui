@@ -35,7 +35,6 @@ fn make_claims(role: &str, tenant: &str, fleets: Option<Vec<&str>>) -> TokenClai
 fn make_api(
     fleet_id: &'static str,
     claims: TokenClaims,
-    tenant: &str,
 ) -> Api<DeviceServiceClient, SingleSignOnProvider> {
     let mut device_service_client_mock = DeviceServiceClient::default();
     device_service_client_mock
@@ -53,7 +52,6 @@ fn make_api(
         service_client: device_service_client_mock,
         single_sign_on: single_sign_on_provider_mock,
         index_html: PathBuf::from("/dev/null"),
-        tenant: tenant.to_string(),
     }
 }
 
@@ -68,34 +66,34 @@ async fn assert_status(
 #[tokio::test]
 async fn validate_portal_token_fleet_admin_should_succeed() {
     let claims = make_claims("FleetAdministrator", "cp", None);
-    let api = make_api("Fleet1", claims, "cp");
+    let api = make_api("Fleet1", claims);
     assert_status(api, actix_web::http::StatusCode::OK).await;
 }
 
 #[tokio::test]
 async fn validate_portal_token_fleet_admin_invalid_tenant_should_fail() {
     let claims = make_claims("FleetAdministrator", "invalid_tenant", None);
-    let api = make_api("Fleet1", claims, "cp");
+    let api = make_api("Fleet1", claims);
     assert_status(api, actix_web::http::StatusCode::UNAUTHORIZED).await;
 }
 
 #[tokio::test]
 async fn validate_portal_token_fleet_operator_should_succeed() {
     let claims = make_claims("FleetOperator", "cp", Some(vec!["Fleet1", "Fleet2"]));
-    let api = make_api("Fleet1", claims, "cp");
+    let api = make_api("Fleet1", claims);
     assert_status(api, actix_web::http::StatusCode::OK).await;
 }
 
 #[tokio::test]
 async fn validate_portal_token_fleet_operator_invalid_fleet_should_fail() {
     let claims = make_claims("FleetOperator", "cp", Some(vec!["Fleet2"]));
-    let api = make_api("Fleet1", claims, "cp");
+    let api = make_api("Fleet1", claims);
     assert_status(api, actix_web::http::StatusCode::UNAUTHORIZED).await;
 }
 
 #[tokio::test]
 async fn validate_portal_token_fleet_observer_should_fail() {
     let claims = make_claims("FleetObserver", "cp", None);
-    let api = make_api("Fleet1", claims, "cp");
+    let api = make_api("Fleet1", claims);
     assert_status(api, actix_web::http::StatusCode::UNAUTHORIZED).await;
 }

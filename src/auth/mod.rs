@@ -6,14 +6,14 @@ use crate::config::AppConfig;
 use anyhow::{Result, bail};
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 
+/// Validate a password against the stored hash
 pub fn validate_password(password: &str) -> Result<()> {
     if password.is_empty() {
         bail!("failed to validate password: empty");
     }
 
-    let Ok(password_hash) =
-        std::fs::read_to_string(AppConfig::get().paths.config_dir.join("password"))
-    else {
+    let password_file = AppConfig::get().paths.config_dir.join("password");
+    let Ok(password_hash) = std::fs::read_to_string(&password_file) else {
         bail!("failed to read password file");
     };
 

@@ -100,8 +100,8 @@ impl AppConfig {
     /// required environment variables and returns an error if any are missing
     /// or invalid.
     fn load_internal() -> Result<Self> {
-        // Validate critical paths exist before proceeding (skip in test mode)
-        #[cfg(not(test))]
+        // Validate critical paths exist before proceeding (skip in test/mock mode)
+        #[cfg(not(any(test, feature = "mock")))]
         Self::validate_filesystem()?;
 
         let ui = UiConfig::load()?;
@@ -125,7 +125,7 @@ impl AppConfig {
         })
     }
 
-    #[cfg(not(test))]
+    #[cfg(not(any(test, feature = "mock")))]
     fn validate_filesystem() -> Result<()> {
         if !std::fs::exists("/data").is_ok_and(|ok| ok) {
             anyhow::bail!("failed to find required data directory: /data is missing");
@@ -227,7 +227,14 @@ impl PathConfig {
         #[cfg(not(test))]
         let default_config = "/data/config".to_string();
 
-        let config_dir = env::var("CONFIG_PATH").unwrap_or(default_config).into();
+        let config_dir: PathBuf = env::var("CONFIG_PATH").unwrap_or(default_config).into();
+
+        // Ensure config directory exists (skip in test/mock mode as it may not have permissions)
+        #[cfg(not(any(test, feature = "mock")))]
+        if !std::fs::exists(&config_dir).is_ok_and(|ok| ok) {
+            std::fs::create_dir_all(&config_dir)
+                .context("failed to create config directory")?;
+        }
 
         let data_dir = PathBuf::from("/data/");
         let host_data_dir = PathBuf::from(format!("/var/lib/{}/", env!("CARGO_PKG_NAME")));
@@ -241,6 +248,3 @@ impl PathConfig {
         })
     }
 }
-
-// Tests removed due to unsafe env var usage
-// Integration tests will verify configuration loading in practice

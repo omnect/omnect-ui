@@ -2,7 +2,6 @@ use crate::{
     auth::{TokenManager, validate_password},
     config::AppConfig,
     keycloak_client::SingleSignOnProvider,
-    middleware::TOKEN_EXPIRE_HOURS,
     network::{NetworkConfig, NetworkConfigService},
     omnect_device_service_client::{DeviceServiceClient, FactoryReset, LoadUpdate, RunUpdate},
 };
@@ -18,7 +17,6 @@ use argon2::{
 use log::{debug, error};
 use serde::Deserialize;
 use serde_valid::Validate;
-use std::sync::OnceLock;
 use std::{
     fs::{self, File},
     io::Write,
@@ -53,7 +51,6 @@ where
     pub service_client: ServiceClient,
     pub single_sign_on: SingleSignOn,
     pub index_html: PathBuf,
-    pub tenant: String,
 }
 
 impl<ServiceClient, SingleSignOn> Api<ServiceClient, SingleSignOn>
@@ -62,17 +59,6 @@ where
     SingleSignOn: SingleSignOnProvider,
 {
     const UPDATE_FILE_NAME: &str = "update.tar";
-
-    fn token_manager() -> &'static TokenManager {
-        static TOKEN_MANAGER: OnceLock<TokenManager> = OnceLock::new();
-        TOKEN_MANAGER.get_or_init(|| {
-            TokenManager::new(
-                &AppConfig::get().centrifugo.client_token,
-                TOKEN_EXPIRE_HOURS,
-                env!("CARGO_PKG_NAME").to_string(),
-            )
-        })
-    }
 
     /// Helper to handle service client results with consistent error logging
     fn handle_service_result(result: Result<()>, operation: &str) -> HttpResponse {
@@ -88,13 +74,10 @@ where
     pub async fn new(service_client: ServiceClient, single_sign_on: SingleSignOn) -> Result<Self> {
         let index_html = std::fs::canonicalize("static/index.html")
             .context("failed to find static/index.html")?;
-        let tenant = AppConfig::get().tenant.clone();
-
         Ok(Api {
             service_client,
             single_sign_on,
             index_html,
-            tenant,
         })
     }
 
@@ -161,11 +144,11 @@ where
         Self::handle_service_result(api.service_client.reload_network().await, "reload_network")
     }
 
-    pub async fn token(session: Session) -> impl Responder {
+    pub async fn token(session: Session, token_manager: web::Data<TokenManager>) -> impl Responder {
         debug!("token() called");
 
         NetworkConfigService::cancel_rollback();
-        Self::session_token(session)
+        Self::session_token(session, token_manager)
     }
 
     pub async fn logout(session: Session) -> impl Responder {
@@ -192,13 +175,12 @@ where
             // Continue anyway as this is not critical
         }
 
-        let paths = &AppConfig::get().paths;
         if let Err(e) = Self::persist_uploaded_file(
             form.file,
-            &paths.tmp_dir.join(&filename),
-            &paths.data_dir.join(Self::UPDATE_FILE_NAME),
+            &AppConfig::get().paths.tmp_dir.join(&filename),
+            &AppConfig::get().paths.data_dir.join(Self::UPDATE_FILE_NAME),
         ) {
-            error!("save_file() failed: {e:#}");
+            error!("failed to save uploaded file: {e:#}");
             return HttpResponse::InternalServerError().body(e.to_string());
         }
 
@@ -239,6 +221,7 @@ where
     pub async fn set_password(
         body: web::Json<SetPasswordPayload>,
         session: Session,
+        token_manager: web::Data<TokenManager>,
     ) -> impl Responder {
         debug!("set_password() called");
 
@@ -253,7 +236,7 @@ where
             return HttpResponse::InternalServerError().body(e.to_string());
         }
 
-        Self::session_token(session)
+        Self::session_token(session, token_manager)
     }
 
     pub async fn update_password(
@@ -326,7 +309,7 @@ where
         let Some(tenant_list) = &claims.tenant_list else {
             bail!("failed to authorize user: no tenant list in token");
         };
-        if !tenant_list.contains(&self.tenant) {
+        if !tenant_list.contains(&AppConfig::get().tenant) {
             bail!("failed to authorize user: insufficient permissions for tenant");
         }
         let Some(roles) = &claims.roles else {
@@ -399,8 +382,8 @@ where
             .context("failed to write password file")
     }
 
-    fn session_token(session: Session) -> HttpResponse {
-        let token = match Self::token_manager().create_token() {
+    fn session_token(session: Session, token_manager: web::Data<TokenManager>) -> HttpResponse {
+        let token = match token_manager.create_token() {
             Ok(token) => token,
             Err(e) => {
                 error!("failed to create token: {e:#}");

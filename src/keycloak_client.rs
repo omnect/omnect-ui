@@ -28,14 +28,6 @@ pub trait SingleSignOnProvider {
 #[derive(Clone, Default)]
 pub struct KeycloakProvider;
 
-impl SingleSignOnProvider for KeycloakProvider {
-    async fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims> {
-        let pub_key = Self::realm_public_key().await?;
-        let claims = pub_key.verify_token::<TokenClaims>(token, None)?;
-        Ok(claims.custom)
-    }
-}
-
 impl KeycloakProvider {
     pub fn create_frontend_config_file() -> Result<()> {
         use anyhow::Context;
@@ -56,7 +48,7 @@ impl KeycloakProvider {
             .context("failed to write frontend config file")
     }
 
-    async fn realm_public_key() -> Result<RS256PublicKey> {
+    async fn realm_public_key(&self) -> Result<RS256PublicKey> {
         let client = HttpClientFactory::https_client();
         let resp = client
             .get(&AppConfig::get().keycloak.url)
@@ -72,5 +64,13 @@ impl KeycloakProvider {
             .context("failed to decode public key from base64")?;
 
         RS256PublicKey::from_der(&decoded).context("failed to parse public key from DER format")
+    }
+}
+
+impl SingleSignOnProvider for KeycloakProvider {
+    async fn verify_token(&self, token: &str) -> anyhow::Result<TokenClaims> {
+        let pub_key = self.realm_public_key().await?;
+        let claims = pub_key.verify_token::<TokenClaims>(token, None)?;
+        Ok(claims.custom)
     }
 }
