@@ -377,32 +377,26 @@ pub mod tests {
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
-    fn setup_temp_password_file(password: &str) -> tempfile::TempDir {
+    fn setup_password_file(password: &str) {
+        use crate::config::AppConfig;
+
         let argon2 = Argon2::default();
         let salt = SaltString::generate(&mut OsRng);
         let hashed_password = argon2.hash_password(password.as_bytes(), &salt).unwrap();
-        let config_path = tempfile::tempdir().unwrap();
-        let file_path = config_path.path().join("password");
-        let mut file = File::create(&file_path).unwrap();
+
+        let config_dir = &AppConfig::get().paths.config_dir;
+        std::fs::create_dir_all(config_dir).unwrap();
+        let password_file = config_dir.join("password");
+        let mut file = File::create(&password_file).unwrap();
 
         file.write_all(hashed_password.to_string().as_bytes())
             .unwrap();
-
-        config_path
     }
 
     #[tokio::test]
     async fn middleware_correct_user_credentials_should_succeed_and_return_valid_token() {
-        use crate::config::AppConfig;
-
         let password = "some-password";
-        let _config_path = setup_temp_password_file(password);
-
-        // Copy the password file to where AppConfig expects it
-        let target_dir = AppConfig::get().paths.config_dir.clone();
-        std::fs::create_dir_all(&target_dir).unwrap();
-        let target_file = target_dir.join("password");
-        std::fs::copy(_config_path.path().join("password"), &target_file).unwrap();
+        setup_password_file(password);
 
         let app = create_service().await;
 
@@ -416,23 +410,12 @@ pub mod tests {
         let resp = test::call_service(&app, req).await;
 
         assert!(resp.status().is_success());
-
-        // Cleanup
-        let _ = std::fs::remove_file(&target_file);
     }
 
     #[tokio::test]
     async fn middleware_invalid_user_credentials_should_return_unauthorized_error() {
-        use crate::config::AppConfig;
-
         let password = "some-password";
-        let _config_path = setup_temp_password_file(password);
-
-        // Copy the password file to where AppConfig expects it
-        let target_dir = AppConfig::get().paths.config_dir.clone();
-        std::fs::create_dir_all(&target_dir).unwrap();
-        let target_file = target_dir.join("password");
-        std::fs::copy(_config_path.path().join("password"), &target_file).unwrap();
+        setup_password_file(password);
 
         let app = create_service().await;
 
@@ -445,9 +428,6 @@ pub mod tests {
         let resp = test::call_service(&app, req).await;
 
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
-
-        // Cleanup
-        let _ = std::fs::remove_file(&target_file);
     }
 
     #[tokio::test]
