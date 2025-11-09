@@ -377,7 +377,7 @@ pub mod tests {
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
-    fn create_password_file(password: &str) -> tempfile::TempDir {
+    fn setup_temp_password_file(password: &str) -> tempfile::TempDir {
         let argon2 = Argon2::default();
         let salt = SaltString::generate(&mut OsRng);
         let hashed_password = argon2.hash_password(password.as_bytes(), &salt).unwrap();
@@ -396,7 +396,7 @@ pub mod tests {
         use crate::config::AppConfig;
 
         let password = "some-password";
-        let _config_path = create_password_file(password);
+        let _config_path = setup_temp_password_file(password);
 
         // Copy the password file to where AppConfig expects it
         let target_dir = AppConfig::get().paths.config_dir.clone();
@@ -426,7 +426,7 @@ pub mod tests {
         use crate::config::AppConfig;
 
         let password = "some-password";
-        let _config_path = create_password_file(password);
+        let _config_path = setup_temp_password_file(password);
 
         // Copy the password file to where AppConfig expects it
         let target_dir = AppConfig::get().paths.config_dir.clone();
