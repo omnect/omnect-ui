@@ -102,7 +102,9 @@ impl AppConfig {
     fn load_internal() -> Result<Self> {
         // Validate critical paths exist before proceeding (skip in test/mock mode)
         #[cfg(not(any(test, feature = "mock")))]
-        Self::validate_filesystem()?;
+        if !std::fs::exists("/data").is_ok_and(|ok| ok) {
+            anyhow::bail!("failed to find required data directory: /data is missing");
+        }
 
         let ui = UiConfig::load()?;
         let centrifugo = CentrifugoConfig::load()?;
@@ -123,14 +125,6 @@ impl AppConfig {
             paths,
             tenant,
         })
-    }
-
-    #[cfg(not(any(test, feature = "mock")))]
-    fn validate_filesystem() -> Result<()> {
-        if !std::fs::exists("/data").is_ok_and(|ok| ok) {
-            anyhow::bail!("failed to find required data directory: /data is missing");
-        }
-        Ok(())
     }
 }
 
