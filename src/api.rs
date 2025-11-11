@@ -16,7 +16,6 @@ use argon2::{
 };
 use log::{debug, error};
 use serde::Deserialize;
-use serde_valid::Validate;
 use std::{
     fs::{self, File},
     io::Write,
@@ -284,22 +283,10 @@ where
     ) -> impl Responder {
         debug!("set_network_config() called");
 
-        if let Err(e) = network_config.validate() {
-            error!("set_network_config() failed: {e:#}");
-            return HttpResponse::BadRequest().body(format!("{e:#}"));
-        }
-
-        if let Err(e) =
-            NetworkConfigService::apply_network_config(&api.service_client, &network_config).await
-        {
-            error!("set_network_config() failed: {e:#}");
-            if let Err(err) = NetworkConfigService::rollback_network_config(&network_config) {
-                error!("Failed to restore network config: {err:#}");
-            }
-            return HttpResponse::InternalServerError().body(format!("{e:#}"));
-        }
-
-        HttpResponse::Ok().finish()
+        Self::handle_service_result(
+            NetworkConfigService::set_network_config(&api.service_client, &network_config).await,
+            "set_network_config",
+        )
     }
 
     async fn validate_token_and_claims(&self, token: &str) -> Result<()> {

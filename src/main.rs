@@ -11,11 +11,13 @@ mod omnect_device_service_client;
 use crate::{
     api::Api,
     auth::TokenManager,
-    certificate::create_module_certificate,
-    common::{centrifugo_config, config_path},
+    certificate::{CreateCertPayload, create_module_certificate},
+    common::{centrifugo_config, centrifugo_publish_endpoint, config_path},
     keycloak_client::KeycloakProvider,
     network::NetworkConfigService,
-    omnect_device_service_client::{DeviceServiceClient, OmnectDeviceServiceClient},
+    omnect_device_service_client::{
+        DeviceServiceClient, OmnectDeviceServiceClient, OmnectDeviceServiceClientBuilder,
+    },
 };
 use actix_cors::Cors;
 use actix_files::Files;
@@ -45,8 +47,23 @@ use tokio::{
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
 const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
 
+type UiApi = Api<OmnectDeviceServiceClient, KeycloakProvider>;
+
 #[actix_web::main]
 async fn main() {
+    initialize();
+
+    let mut restart_rx = NetworkConfigService::setup_restart_receiver()
+        .expect("failed to setup restart receiver");
+
+    let mut sigterm = signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");
+
+    while run_until_shutdown(&mut restart_rx, &mut sigterm).await {
+        info!("restarting server...");
+    }
+}
+
+fn initialize() {
     log_panics::init();
 
     let mut builder = if cfg!(debug_assertions) {
@@ -73,18 +90,17 @@ async fn main() {
         env!("GIT_SHORT_REV")
     );
 
-    // Create restart signal channel
-    let (restart_tx, mut restart_rx) = broadcast::channel(1);
-    NetworkConfigService::init_server_restart_channel(restart_tx)
-        .expect("failed to set restart channel");
-
-    let mut sigterm = signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");
-
     CryptoProvider::install_default(default_provider()).expect("failed to install crypto provider");
 
-    while run_until_shutdown(&mut restart_rx, &mut sigterm).await {
-        info!("restarting server...");
-    }
+    let Ok(true) = fs::exists("/data") else {
+        panic!("failed to find required data directory: /data is missing");
+    };
+
+    if !fs::exists(config_path!()).is_ok_and(|ok| ok) {
+        fs::create_dir_all(config_path!()).expect("failed to create config directory");
+    };
+
+    common::create_frontend_config_file().expect("failed to create frontend config file");
 }
 
 async fn run_until_shutdown(
@@ -92,7 +108,15 @@ async fn run_until_shutdown(
     sigterm: &mut tokio::signal::unix::Signal,
 ) -> bool {
     let mut centrifugo = run_centrifugo();
-    let (server_handle, server_task, service_client) = run_server().await;
+    let service_client = OmnectDeviceServiceClientBuilder::new()
+        .with_certificate_setup(|payload: CreateCertPayload| async move {
+            create_module_certificate(payload).await
+        })
+        .with_publish_endpoint(centrifugo_publish_endpoint())
+        .build()
+        .await
+        .expect("failed to create device service client");
+    let (server_handle, server_task) = run_server(service_client.clone()).await;
 
     let should_restart = tokio::select! {
         _ = tokio::signal::ctrl_c() => {
@@ -148,65 +172,21 @@ async fn run_until_shutdown(
     should_restart
 }
 
-async fn run_server() -> (
+async fn run_server(
+    service_client: OmnectDeviceServiceClient,
+) -> (
     ServerHandle,
     tokio::task::JoinHandle<Result<(), std::io::Error>>,
-    OmnectDeviceServiceClient,
 ) {
-    let Ok(true) = fs::exists("/data") else {
-        panic!("failed to find required data directory: /data is missing");
-    };
-
-    if !fs::exists(config_path!()).is_ok_and(|ok| ok) {
-        fs::create_dir_all(config_path!()).expect("failed to create config directory");
-    };
-
-    common::create_frontend_config_file().expect("failed to create frontend config file");
-
-    type UiApi = Api<OmnectDeviceServiceClient, KeycloakProvider>;
-
-    let service_client = OmnectDeviceServiceClient::new(true)
-        .await
-        .expect("failed to create client to device service");
-
     let api = UiApi::new(service_client.clone(), Default::default())
         .await
         .expect("failed to create api");
 
-    create_module_certificate(&service_client)
-        .await
-        .expect("failed to create module certificate");
+    let tls_config = load_tls_config();
 
     if let Err(e) = network::NetworkConfigService::process_pending_rollback(&service_client).await {
         error!("failed to check pending rollback: {e:#}");
     }
-
-    let mut tls_certs = std::io::BufReader::new(
-        std::fs::File::open(certificate::cert_path()).expect("failed to read certificate file"),
-    );
-    let mut tls_key = std::io::BufReader::new(
-        std::fs::File::open(certificate::key_path()).expect("failed to read key file"),
-    );
-
-    let tls_certs = rustls_pemfile::certs(&mut tls_certs)
-        .collect::<Result<Vec<_>, _>>()
-        .expect("failed to parse cert pem");
-
-    // set up TLS config options
-    let tls_config = match rustls_pemfile::read_one(&mut tls_key)
-        .expect("failed to read key pem file")
-        .expect("failed to parse key pem file: no valid key found")
-    {
-        rustls_pemfile::Item::Pkcs1Key(key) => rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs1(key))
-            .expect("failed to create TLS config"),
-        rustls_pemfile::Item::Pkcs8Key(key) => rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(key))
-            .expect("failed to create TLS config"),
-        _ => panic!("failed to parse key pem file: unexpected item type found"),
-    };
 
     let ui_port = std::env::var("UI_PORT")
         .expect("failed to read UI_PORT environment variable")
@@ -308,7 +288,7 @@ async fn run_server() -> (
     .disable_signals()
     .run();
 
-    (server.handle(), tokio::spawn(server), service_client)
+    (server.handle(), tokio::spawn(server))
 }
 
 fn run_centrifugo() -> Child {
@@ -350,4 +330,32 @@ fn run_centrifugo() -> Child {
     );
 
     centrifugo
+}
+
+fn load_tls_config() -> rustls::ServerConfig {
+    let mut tls_certs = std::io::BufReader::new(
+        std::fs::File::open(certificate::cert_path()).expect("failed to read certificate file"),
+    );
+    let mut tls_key = std::io::BufReader::new(
+        std::fs::File::open(certificate::key_path()).expect("failed to read key file"),
+    );
+
+    let tls_certs = rustls_pemfile::certs(&mut tls_certs)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("failed to parse cert pem");
+
+    match rustls_pemfile::read_one(&mut tls_key)
+        .expect("failed to read key pem file")
+        .expect("failed to parse key pem file: no valid key found")
+    {
+        rustls_pemfile::Item::Pkcs1Key(key) => rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs1(key))
+            .expect("failed to create TLS config"),
+        rustls_pemfile::Item::Pkcs8Key(key) => rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(key))
+            .expect("failed to create TLS config"),
+        _ => panic!("failed to parse key pem file: unexpected item type found"),
+    }
 }

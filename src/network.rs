@@ -112,62 +112,23 @@ struct PendingRollback {
 pub struct NetworkConfigService;
 
 impl NetworkConfigService {
-    /// Initialize the server restart channel
-    ///
-    /// # Arguments
-    /// * `tx` - Broadcast sender for restart signals
-    ///
-    /// # Returns
-    /// Result indicating success or error with the sender if already initialized
-    pub fn init_server_restart_channel(
-        tx: broadcast::Sender<()>,
-    ) -> Result<(), broadcast::Sender<()>> {
-        SERVER_RESTART_TX.set(tx)
-    }
+    // ========================================================================
+    // Public methods
+    // ========================================================================
 
-    /// Trigger a server restart by sending signal through the restart channel
+    /// Setup the server restart channel and return a receiver for restart signals
     ///
     /// # Returns
-    /// Result indicating success or failure
-    ///
-    /// # Errors
-    /// Returns error if the restart channel has not been initialized or if sending fails
-    pub fn trigger_server_restart() -> Result<()> {
-        let tx = SERVER_RESTART_TX
-            .get()
-            .context("failed to trigger restart: channel not initialized")?;
-
-        tx.send(()).context("failed to send restart signal")?;
-
-        Ok(())
-    }
-    /// Rollback network configuration to the previous backup
-    ///
-    /// # Arguments
-    /// * `network` - Network configuration to rollback
-    ///
-    /// # Returns
-    /// Result indicating success or failure
-    pub fn rollback_network_config(network: &NetworkConfig) -> Result<()> {
-        let config_file = network_config_file!(network.name);
-        let backup_file = network_backup_file!(network.name);
-
-        if !backup_file.exists() {
-            return Ok(());
-        }
-
-        fs::copy(&backup_file, &config_file).context(format!(
-            "failed to restore {} from {}",
-            config_file.display(),
-            backup_file.display()
-        ))?;
-
-        let _ = fs::remove_file(&backup_file);
-
-        Ok(())
+    /// Receiver for restart signals, or error if already initialized
+    pub fn setup_restart_receiver() -> Result<broadcast::Receiver<()>, broadcast::Sender<()>> {
+        let (tx, rx) = broadcast::channel(1);
+        SERVER_RESTART_TX.set(tx).map(|_| rx)
     }
 
-    /// Apply network configuration to systemd-networkd
+    /// Set network configuration with validation and rollback on error
+    ///
+    /// This is the main entry point for applying network configuration.
+    /// It validates, applies, and handles rollback if needed.
     ///
     /// # Arguments
     /// * `service_client` - Device service client for network reload
@@ -175,16 +136,17 @@ impl NetworkConfigService {
     ///
     /// # Returns
     /// Result indicating success or failure
-    pub async fn apply_network_config<T>(service_client: &T, network: &NetworkConfig) -> Result<()>
+    pub async fn set_network_config<T>(service_client: &T, network: &NetworkConfig) -> Result<()>
     where
         T: DeviceServiceClient,
     {
-        Self::backup_current_network_config(service_client, network).await?;
-        Self::write_network_config(network)?;
-        service_client.reload_network().await?;
+        network.validate().context("validation failed")?;
 
-        if network.is_server_addr && network.ip_changed {
-            Self::schedule_server_restart(network).await?;
+        if let Err(e) = Self::apply_network_config(service_client, network).await {
+            if let Err(err) = Self::rollback_network_config(network) {
+                error!("failed to restore network config: {err:#}");
+            }
+            return Err(e);
         }
 
         Ok(())
@@ -222,9 +184,75 @@ impl NetworkConfigService {
         }
     }
 
+    /// Rollback network configuration to the previous backup
+    ///
+    /// # Arguments
+    /// * `network` - Network configuration to rollback
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    pub fn rollback_network_config(network: &NetworkConfig) -> Result<()> {
+        let config_file = network_config_file!(network.name);
+        let backup_file = network_backup_file!(network.name);
+
+        if !backup_file.try_exists().unwrap_or(false) {
+            return Ok(());
+        }
+
+        fs::copy(&backup_file, &config_file).context(format!(
+            "failed to restore {} from {}",
+            config_file.display(),
+            backup_file.display()
+        ))?;
+
+        let _ = fs::remove_file(&backup_file);
+
+        Ok(())
+    }
+
     // ========================================================================
     // Private helper methods
     // ========================================================================
+
+    /// Trigger a server restart by sending signal through the restart channel
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    ///
+    /// # Errors
+    /// Returns error if the restart channel has not been initialized or if sending fails
+    fn trigger_server_restart() -> Result<()> {
+        let tx = SERVER_RESTART_TX
+            .get()
+            .context("failed to trigger restart: channel not initialized")?;
+
+        tx.send(()).context("failed to send restart signal")?;
+
+        Ok(())
+    }
+
+    /// Apply network configuration to systemd-networkd
+    ///
+    /// # Arguments
+    /// * `service_client` - Device service client for network reload
+    /// * `network` - Network configuration to apply
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    async fn apply_network_config<T>(service_client: &T, network: &NetworkConfig) -> Result<()>
+    where
+        T: DeviceServiceClient,
+    {
+        Self::backup_current_network_config(service_client, network).await?;
+        Self::write_network_config(network)?;
+        service_client.reload_network().await?;
+
+        if network.is_server_addr && network.ip_changed {
+            Self::schedule_server_restart(network).await?;
+        }
+
+        Ok(())
+    }
 
     async fn backup_current_network_config<T>(
         service_client: &T,
