@@ -34,9 +34,9 @@ impl KeycloakProvider {
         use anyhow::Context;
         use std::io::Write;
 
-        let mut config_file =
-            std::fs::File::create(AppConfig::get().paths.config_dir.join("app_config.js"))
-                .context("failed to create frontend config file")?;
+        // ToDo AppConfig::get().paths.app_config
+        let mut config_file = std::fs::File::create(&AppConfig::get().paths.app_config_path)
+            .context("failed to create frontend config file")?;
 
         config_file
             .write_all(

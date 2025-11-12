@@ -1,11 +1,12 @@
 use crate::omnect_device_service_client::DeviceServiceClient;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use ini::Ini;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_valid::Validate;
 use std::{
     fs,
+    io::ErrorKind,
     net::Ipv4Addr,
     path::Path,
     time::{Duration, SystemTime},
@@ -112,62 +113,23 @@ struct PendingRollback {
 pub struct NetworkConfigService;
 
 impl NetworkConfigService {
-    /// Initialize the server restart channel
-    ///
-    /// # Arguments
-    /// * `tx` - Broadcast sender for restart signals
-    ///
-    /// # Returns
-    /// Result indicating success or error with the sender if already initialized
-    pub fn init_server_restart_channel(
-        tx: broadcast::Sender<()>,
-    ) -> Result<(), broadcast::Sender<()>> {
-        SERVER_RESTART_TX.set(tx)
-    }
+    // ========================================================================
+    // Public methods
+    // ========================================================================
 
-    /// Trigger a server restart by sending signal through the restart channel
+    /// Setup the server restart channel and return a receiver for restart signals
     ///
     /// # Returns
-    /// Result indicating success or failure
-    ///
-    /// # Errors
-    /// Returns error if the restart channel has not been initialized or if sending fails
-    pub fn trigger_server_restart() -> Result<()> {
-        let tx = SERVER_RESTART_TX
-            .get()
-            .context("failed to trigger restart: channel not initialized")?;
-
-        tx.send(()).context("failed to send restart signal")?;
-
-        Ok(())
-    }
-    /// Rollback network configuration to the previous backup
-    ///
-    /// # Arguments
-    /// * `network` - Network configuration to rollback
-    ///
-    /// # Returns
-    /// Result indicating success or failure
-    pub fn rollback_network_config(network: &NetworkConfig) -> Result<()> {
-        let config_file = network_config_file!(network.name);
-        let backup_file = network_backup_file!(network.name);
-
-        if !backup_file.exists() {
-            return Ok(());
-        }
-
-        fs::copy(&backup_file, &config_file).context(format!(
-            "failed to restore {} from {}",
-            config_file.display(),
-            backup_file.display()
-        ))?;
-
-        let _ = fs::remove_file(&backup_file);
-
-        Ok(())
+    /// Receiver for restart signals, or error if already initialized
+    pub fn setup_restart_receiver() -> Result<broadcast::Receiver<()>, broadcast::Sender<()>> {
+        let (tx, rx) = broadcast::channel(1);
+        SERVER_RESTART_TX.set(tx).map(|_| rx)
     }
 
-    /// Apply network configuration to systemd-networkd
+    /// Set network configuration with validation and rollback on error
+    ///
+    /// This is the main entry point for applying network configuration.
+    /// It validates, applies, and handles rollback if needed.
     ///
     /// # Arguments
     /// * `service_client` - Device service client for network reload
@@ -175,16 +137,17 @@ impl NetworkConfigService {
     ///
     /// # Returns
     /// Result indicating success or failure
-    pub async fn apply_network_config<T>(service_client: &T, network: &NetworkConfig) -> Result<()>
+    pub async fn set_network_config<T>(service_client: &T, network: &NetworkConfig) -> Result<()>
     where
         T: DeviceServiceClient,
     {
-        Self::backup_current_network_config(service_client, network).await?;
-        Self::write_network_config(network)?;
-        service_client.reload_network().await?;
+        network.validate().context("validation failed")?;
 
-        if network.is_server_addr && network.ip_changed {
-            Self::schedule_server_restart(network).await?;
+        if let Err(e) = Self::apply_network_config(service_client, network).await {
+            if let Err(err) = Self::rollback_network_config(network) {
+                error!("failed to restore network config: {err:#}");
+            }
+            return Err(e);
         }
 
         Ok(())
@@ -222,9 +185,96 @@ impl NetworkConfigService {
         }
     }
 
+    /// Rollback network configuration to the previous backup
+    ///
+    /// # Arguments
+    /// * `network` - Network configuration to rollback
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    pub fn rollback_network_config(network: &NetworkConfig) -> Result<()> {
+        let config_file = network_config_file!(network.name);
+        let backup_file = network_backup_file!(network.name);
+
+        Self::try_rename_if_exists(&backup_file, &config_file)?;
+        Ok(())
+    }
+
     // ========================================================================
     // Private helper methods
     // ========================================================================
+
+    /// Atomically copy a file if it exists
+    ///
+    /// # Arguments
+    /// * `src` - Source file path
+    /// * `dest` - Destination file path
+    ///
+    /// # Returns
+    /// Result with bool indicating if copy happened (true) or source didn't exist (false)
+    fn try_copy_if_exists(src: &Path, dest: &Path) -> Result<bool> {
+        match fs::copy(src, dest) {
+            Ok(_) => Ok(true),
+            Err(e) if e.kind() == ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(e).context(format!("failed to copy {src:?} to {dest:?}")),
+        }
+    }
+
+    /// Atomically rename a file if it exists
+    ///
+    /// # Arguments
+    /// * `src` - Source file path
+    /// * `dest` - Destination file path
+    ///
+    /// # Returns
+    /// Result with bool indicating if rename happened (true) or source didn't exist (false)
+    fn try_rename_if_exists(src: &Path, dest: &Path) -> Result<bool> {
+        match fs::rename(src, dest) {
+            Ok(_) => Ok(true),
+            Err(e) if e.kind() == ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(e).context(format!("failed to rename {src:?} to {dest:?}")),
+        }
+    }
+
+    /// Trigger a server restart by sending signal through the restart channel
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    ///
+    /// # Errors
+    /// Returns error if the restart channel has not been initialized or if sending fails
+    fn trigger_server_restart() -> Result<()> {
+        let tx = SERVER_RESTART_TX
+            .get()
+            .context("failed to trigger restart: channel not initialized")?;
+
+        tx.send(()).context("failed to send restart signal")?;
+
+        Ok(())
+    }
+
+    /// Apply network configuration to systemd-networkd
+    ///
+    /// # Arguments
+    /// * `service_client` - Device service client for network reload
+    /// * `network` - Network configuration to apply
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    async fn apply_network_config<T>(service_client: &T, network: &NetworkConfig) -> Result<()>
+    where
+        T: DeviceServiceClient,
+    {
+        Self::backup_current_network_config(service_client, network).await?;
+        Self::write_network_config(network)?;
+        service_client.reload_network().await?;
+
+        if network.is_server_addr && network.ip_changed {
+            Self::schedule_server_restart(network).await?;
+        }
+
+        Ok(())
+    }
 
     async fn backup_current_network_config<T>(
         service_client: &T,
@@ -236,10 +286,7 @@ impl NetworkConfigService {
         let config_file = network_config_file!(&network.name);
         let backup_file = network_backup_file!(&network.name);
 
-        if let Ok(true) = fs::exists(&config_file) {
-            fs::copy(&config_file, &backup_file)
-                .context(format!("failed to back up {}", config_file.display()))?;
-        } else {
+        if !Self::try_copy_if_exists(&config_file, &backup_file)? {
             let status = service_client
                 .status()
                 .await
@@ -252,18 +299,18 @@ impl NetworkConfigService {
                 .find(|iface| iface.name == network.name)
                 .context("failed to find current network interface")?;
 
-            log::debug!("current network file is {}", current_network.file);
+            log::debug!("current network is {current_network:?}");
 
-            if let Some(current_network_file) = Path::new(&current_network.file).file_name() {
-                let config_file = network_path!(current_network_file);
-                log::debug!("config file is {:?}", &config_file);
-                if let Ok(true) = fs::exists(&config_file) {
-                    fs::copy(&config_file, &backup_file).context(format!(
-                        "failed to back up current network file {}",
-                        config_file.display()
-                    ))?;
-                }
-            }
+            let file_name = Path::new(&current_network.file)
+                .file_name()
+                .context("context")?;
+
+            let config_file = network_path!(file_name);
+            log::debug!("config file is {config_file:?}");
+            ensure!(
+                Self::try_copy_if_exists(&config_file, &backup_file)?,
+                "failed to backup config"
+            );
         }
 
         Ok(())
@@ -287,7 +334,7 @@ impl NetworkConfigService {
         info!("executing {} network rollback", label);
 
         if let Err(e) = Self::rollback_and_restart(service_client, network).await {
-            error!("failed to execute {} rollback: {e:#}", label);
+            error!("failed to execute {label} rollback: {e:#}");
         } else {
             info!("{} network rollback executed successfully", label);
         }
@@ -324,8 +371,7 @@ impl NetworkConfigService {
 
         let config_path = network_config_file!(&network.name);
         ini.write_to_file(&config_path).context(format!(
-            "failed to write network config file {}",
-            config_path.display()
+            "failed to write network config file {config_path:?}"
         ))?;
 
         Ok(())

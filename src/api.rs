@@ -16,12 +16,11 @@ use argon2::{
 };
 use log::{debug, error};
 use serde::Deserialize;
-use serde_valid::Validate;
 use std::{
     fs::{self, File},
     io::Write,
     os::unix::fs::PermissionsExt,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 #[derive(Deserialize)]
@@ -50,7 +49,6 @@ where
 {
     pub service_client: ServiceClient,
     pub single_sign_on: SingleSignOn,
-    pub index_html: PathBuf,
 }
 
 impl<ServiceClient, SingleSignOn> Api<ServiceClient, SingleSignOn>
@@ -58,8 +56,6 @@ where
     ServiceClient: DeviceServiceClient,
     SingleSignOn: SingleSignOnProvider,
 {
-    const UPDATE_FILE_NAME: &str = "update.tar";
-
     /// Helper to handle service client results with consistent error logging
     fn handle_service_result(result: Result<()>, operation: &str) -> HttpResponse {
         match result {
@@ -72,12 +68,9 @@ where
     }
 
     pub async fn new(service_client: ServiceClient, single_sign_on: SingleSignOn) -> Result<Self> {
-        let index_html = std::fs::canonicalize("static/index.html")
-            .context("failed to find static/index.html")?;
         Ok(Api {
             service_client,
             single_sign_on,
-            index_html,
         })
     }
 
@@ -91,13 +84,11 @@ where
             ));
         }
 
-        Ok(NamedFile::open(&api.index_html)?)
+        Ok(NamedFile::open(&AppConfig::get().paths.index_html)?)
     }
 
     pub async fn config() -> actix_web::Result<NamedFile> {
-        Ok(NamedFile::open(
-            AppConfig::get().paths.config_dir.join("app_config.js"),
-        )?)
+        Ok(NamedFile::open(&AppConfig::get().paths.app_config_path)?)
     }
 
     pub async fn healthcheck(api: web::Data<Self>) -> impl Responder {
@@ -178,7 +169,7 @@ where
         if let Err(e) = Self::persist_uploaded_file(
             form.file,
             &AppConfig::get().paths.tmp_dir.join(&filename),
-            &AppConfig::get().paths.data_dir.join(Self::UPDATE_FILE_NAME),
+            &AppConfig::get().paths.update_file_internal,
         ) {
             error!("failed to save uploaded file: {e:#}");
             return HttpResponse::InternalServerError().body(e.to_string());
@@ -193,12 +184,7 @@ where
         match api
             .service_client
             .load_update(LoadUpdate {
-                update_file_path: AppConfig::get()
-                    .paths
-                    .host_data_dir
-                    .join(Self::UPDATE_FILE_NAME)
-                    .display()
-                    .to_string(),
+                update_file_path: AppConfig::get().paths.update_file.clone(),
             })
             .await
         {
@@ -225,7 +211,7 @@ where
     ) -> impl Responder {
         debug!("set_password() called");
 
-        if AppConfig::get().paths.config_dir.join("password").exists() {
+        if AppConfig::get().paths.password_file.exists() {
             return HttpResponse::Found()
                 .append_header(("Location", "/login"))
                 .finish();
@@ -262,7 +248,7 @@ where
     pub async fn require_set_password() -> impl Responder {
         debug!("require_set_password() called");
 
-        if !AppConfig::get().paths.config_dir.join("password").exists() {
+        if !AppConfig::get().paths.password_file.exists() {
             return HttpResponse::Created()
                 .append_header(("Location", "/set-password"))
                 .finish();
@@ -286,22 +272,10 @@ where
     ) -> impl Responder {
         debug!("set_network_config() called");
 
-        if let Err(e) = network_config.validate() {
-            error!("set_network_config() failed: {e:#}");
-            return HttpResponse::BadRequest().body(format!("{e:#}"));
-        }
-
-        if let Err(e) =
-            NetworkConfigService::apply_network_config(&api.service_client, &network_config).await
-        {
-            error!("set_network_config() failed: {e:#}");
-            if let Err(err) = NetworkConfigService::rollback_network_config(&network_config) {
-                error!("Failed to restore network config: {err:#}");
-            }
-            return HttpResponse::InternalServerError().body(format!("{e:#}"));
-        }
-
-        HttpResponse::Ok().finish()
+        Self::handle_service_result(
+            NetworkConfigService::set_network_config(&api.service_client, &network_config).await,
+            "set_network_config",
+        )
     }
 
     async fn validate_token_and_claims(&self, token: &str) -> Result<()> {
@@ -373,10 +347,9 @@ where
 
     fn store_or_update_password(password: &str) -> Result<()> {
         debug!("store_or_update_password() called");
-
-        let password_file = AppConfig::get().paths.config_dir.join("password");
         let hash = Self::hash_password(password)?;
-        let mut file = File::create(&password_file).context("failed to create password file")?;
+        let mut file = File::create(&AppConfig::get().paths.password_file)
+            .context("failed to create password file")?;
 
         file.write_all(hash.as_bytes())
             .context("failed to write password file")

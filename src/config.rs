@@ -2,8 +2,6 @@ use anyhow::{Context, Result};
 use std::{env, path::PathBuf, sync::OnceLock};
 use uuid::Uuid;
 
-static APP_CONFIG: OnceLock<AppConfig> = OnceLock::new();
-
 /// Application configuration loaded and validated at startup
 #[derive(Clone, Debug)]
 pub struct AppConfig {
@@ -43,6 +41,7 @@ pub struct CentrifugoConfig {
     pub port: String,
     pub client_token: String,
     pub api_key: String,
+    pub publish_endpoint: crate::omnect_device_service_client::PublishEndpoint,
 }
 
 #[derive(Clone, Debug)]
@@ -72,10 +71,12 @@ pub struct IoTEdgeConfig {
 
 #[derive(Clone, Debug)]
 pub struct PathConfig {
-    pub config_dir: PathBuf,
-    pub data_dir: PathBuf,
-    pub host_data_dir: PathBuf,
+    pub app_config_path: PathBuf,
     pub tmp_dir: PathBuf,
+    pub index_html: PathBuf,
+    pub password_file: PathBuf,
+    pub update_file: PathBuf,
+    pub update_file_internal: PathBuf,
 }
 
 impl AppConfig {
@@ -89,8 +90,9 @@ impl AppConfig {
     /// Panics if configuration loading fails. This is intentional as the
     /// application cannot function without valid configuration.
     pub fn get() -> &'static Self {
+        static APP_CONFIG: OnceLock<AppConfig> = OnceLock::new();
         APP_CONFIG.get_or_init(|| {
-            Self::load_internal().expect("Failed to load application configuration")
+            Self::load_internal().expect("failed to load application configuration")
         })
     }
 
@@ -102,7 +104,7 @@ impl AppConfig {
     fn load_internal() -> Result<Self> {
         // Validate critical paths exist before proceeding (skip in test/mock mode)
         #[cfg(not(any(test, feature = "mock")))]
-        if !std::fs::exists("/data").is_ok_and(|ok| ok) {
+        if !PathBuf::from("/data").try_exists().unwrap_or(false) {
             anyhow::bail!("failed to find required data directory: /data is missing");
         }
 
@@ -147,10 +149,25 @@ impl CentrifugoConfig {
         let client_token = Uuid::new_v4().to_string();
         let api_key = Uuid::new_v4().to_string();
 
+        let publish_endpoint = crate::omnect_device_service_client::PublishEndpoint {
+            url: format!("https://localhost:{}/api/publish", port),
+            headers: vec![
+                crate::omnect_device_service_client::HeaderKeyValue {
+                    name: String::from("Content-Type"),
+                    value: String::from("application/json"),
+                },
+                crate::omnect_device_service_client::HeaderKeyValue {
+                    name: String::from("X-API-Key"),
+                    value: api_key.clone(),
+                },
+            ],
+        };
+
         Ok(Self {
             port,
             client_token,
             api_key,
+            publish_endpoint,
         })
     }
 }
@@ -225,20 +242,32 @@ impl PathConfig {
 
         // Ensure config directory exists (skip in test/mock mode as it may not have permissions)
         #[cfg(not(any(test, feature = "mock")))]
-        if !std::fs::exists(&config_dir).is_ok_and(|ok| ok) {
-            std::fs::create_dir_all(&config_dir)
-                .context("failed to create config directory")?;
-        }
+        std::fs::create_dir_all(&config_dir).context("failed to create config directory")?;
 
+        let app_config_path = config_dir.join("app_config.js");
         let data_dir = PathBuf::from("/data/");
         let host_data_dir = PathBuf::from(format!("/var/lib/{}/", env!("CARGO_PKG_NAME")));
         let tmp_dir = PathBuf::from("/tmp/");
 
+        // In test/mock mode, use a dummy path since static/index.html won't exist
+        #[cfg(any(test, feature = "mock"))]
+        let index_html = PathBuf::from("/dev/null");
+
+        #[cfg(not(any(test, feature = "mock")))]
+        let index_html = std::fs::canonicalize("static/index.html")
+            .context("failed to find static/index.html")?;
+
+        let password_file = config_dir.join("password");
+        let update_file = host_data_dir.join("update.tar");
+        let update_file_internal = data_dir.join("update.tar");
+
         Ok(Self {
-            config_dir,
-            data_dir,
-            host_data_dir,
+            app_config_path,
             tmp_dir,
+            index_html,
+            password_file,
+            update_file,
+            update_file_internal,
         })
     }
 }

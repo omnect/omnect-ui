@@ -384,10 +384,10 @@ pub mod tests {
         let salt = SaltString::generate(&mut OsRng);
         let hashed_password = argon2.hash_password(password.as_bytes(), &salt).unwrap();
 
-        let config_dir = &AppConfig::get().paths.config_dir;
+        let password_file = &AppConfig::get().paths.password_file;
+        let config_dir = password_file.parent().unwrap();
         std::fs::create_dir_all(config_dir).unwrap();
-        let password_file = config_dir.join("password");
-        let mut file = File::create(&password_file).unwrap();
+        let mut file = File::create(password_file).unwrap();
 
         file.write_all(hashed_password.to_string().as_bytes())
             .unwrap();

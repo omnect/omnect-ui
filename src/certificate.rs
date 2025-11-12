@@ -2,18 +2,18 @@
 
 use crate::{
     config::AppConfig,
-    http_client::{unix_socket_client, handle_http_response},
-    omnect_device_service_client::DeviceServiceClient,
+    http_client::{handle_http_response, unix_socket_client},
 };
 use anyhow::{Context, Result};
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::{fs::File, io::Write};
 
-#[derive(Serialize)]
-struct CreateCertPayload {
+// Public payload for passing to certificate creation
+#[derive(Debug, Serialize)]
+pub struct CreateCertPayload {
     #[serde(rename = "commonName")]
-    common_name: String,
+    pub common_name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,36 +34,22 @@ struct CreateCertResponse {
 }
 
 #[cfg(feature = "mock")]
-pub async fn create_module_certificate<T>(_service_client: &T) -> Result<()>
-where
-    T: DeviceServiceClient,
-{
+pub async fn create_module_certificate(_payload: CreateCertPayload) -> Result<()> {
     Ok(())
 }
 
 #[cfg(not(feature = "mock"))]
-pub async fn create_module_certificate<T>(service_client: &T) -> Result<()>
-where
-    T: DeviceServiceClient,
-{
+pub async fn create_module_certificate(payload: CreateCertPayload) -> Result<()> {
     info!("create module certificate");
 
     let iot_edge = &AppConfig::get().iot_edge;
-
-    let payload = CreateCertPayload {
-        common_name: service_client.ip_address().await?,
-    };
-
-    let path = format!(
-        "/modules/{}/genid/{}/certificate/server?api-version={}",
+    let client = unix_socket_client(&iot_edge.workload_uri)?;
+    let url = format!(
+        "http://localhost/modules/{}/genid/{}/certificate/server?api-version={}",
         iot_edge.module_id, iot_edge.module_generation_id, iot_edge.api_version
     );
 
-    // Create a client for the IoT Edge workload socket
-    let client = unix_socket_client(&iot_edge.workload_uri)?;
-
-    let url = format!("http://localhost{}", path);
-    info!("POST {url} (IoT Edge workload API)");
+    info!("POST {url} with payload: {payload:?}");
 
     let res = client
         .post(&url)
@@ -75,15 +61,15 @@ where
     let body = handle_http_response(res, "certificate request").await?;
     let response: CreateCertResponse =
         serde_json::from_str(&body).context("failed to parse CreateCertResponse")?;
+    let paths = &AppConfig::get().certificate;
+    let mut cert_file = File::create(&paths.cert_path).context("failed to create cert file")?;
+    let mut key_file = File::create(&paths.key_path).context("failed to create key file")?;
 
-    let config = AppConfig::get();
-    let mut file =
-        File::create(&config.certificate.cert_path).context("failed to create cert file")?;
-    file.write_all(response.certificate.as_bytes())
+    cert_file
+        .write_all(response.certificate.as_bytes())
         .context("failed to write certificate to file")?;
 
-    let mut file =
-        File::create(&config.certificate.key_path).context("failed to create key file")?;
-    file.write_all(response.private_key.bytes.as_bytes())
+    key_file
+        .write_all(response.private_key.bytes.as_bytes())
         .context("failed to write private key to file")
 }

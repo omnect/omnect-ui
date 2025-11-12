@@ -3,31 +3,27 @@ pub mod token;
 pub use token::TokenManager;
 
 use crate::config::AppConfig;
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, ensure};
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 
 /// Validate a password against the stored hash
 pub fn validate_password(password: &str) -> Result<()> {
-    if password.is_empty() {
-        bail!("failed to validate password: empty");
-    }
+    ensure!(!password.is_empty(), "failed to validate password: empty");
 
-    let password_file = AppConfig::get().paths.config_dir.join("password");
-    let Ok(password_hash) = std::fs::read_to_string(&password_file) else {
-        bail!("failed to read password file");
-    };
+    let password_hash = std::fs::read_to_string(&AppConfig::get().paths.password_file)
+        .context("failed to read password file")?;
 
-    if password_hash.is_empty() {
-        bail!("failed to validate password: hash is empty");
-    }
+    ensure!(
+        !password_hash.is_empty(),
+        "failed to validate password: hash is empty"
+    );
 
-    let Ok(parsed_hash) = PasswordHash::new(&password_hash) else {
-        bail!("failed to parse password hash");
-    };
+    let parsed_hash = PasswordHash::new(&password_hash)
+        .map_err(|e| anyhow::anyhow!("failed to parse password hash: {e:#}"))?;
 
-    if let Err(e) = Argon2::default().verify_password(password.as_bytes(), &parsed_hash) {
-        bail!("failed to verify password: {e}");
-    }
+    Argon2::default()
+        .verify_password(password.as_bytes(), &parsed_hash)
+        .map_err(|e| anyhow::anyhow!("failed to verify password: {e:#}"))?;
 
     Ok(())
 }
