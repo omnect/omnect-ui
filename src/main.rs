@@ -49,18 +49,30 @@ const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
 
 type UiApi = Api<OmnectDeviceServiceClient, KeycloakProvider>;
 
+enum ShutdownReason {
+    Restart,
+    Shutdown,
+}
+
+impl std::fmt::Display for ShutdownReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ShutdownReason::Restart => write!(f, "restarting server"),
+            ShutdownReason::Shutdown => write!(f, "shutting down"),
+        }
+    }
+}
+
 #[actix_web::main]
 async fn main() {
     initialize();
 
-    let mut restart_rx = NetworkConfigService::setup_restart_receiver()
-        .expect("failed to setup restart receiver");
+    let mut restart_rx =
+        NetworkConfigService::setup_restart_receiver().expect("failed to setup restart receiver");
 
     let mut sigterm = signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");
 
-    while run_until_shutdown(&mut restart_rx, &mut sigterm).await {
-        info!("restarting server...");
-    }
+    while let ShutdownReason::Restart = run_until_shutdown(&mut restart_rx, &mut sigterm).await {}
 }
 
 fn initialize() {
@@ -96,9 +108,7 @@ fn initialize() {
         panic!("failed to find required data directory: /data is missing");
     };
 
-    if !fs::exists(config_path!()).is_ok_and(|ok| ok) {
-        fs::create_dir_all(config_path!()).expect("failed to create config directory");
-    };
+    fs::create_dir_all(config_path!()).expect("failed to create config directory");
 
     common::create_frontend_config_file().expect("failed to create frontend config file");
 }
@@ -106,7 +116,7 @@ fn initialize() {
 async fn run_until_shutdown(
     restart_rx: &mut broadcast::Receiver<()>,
     sigterm: &mut tokio::signal::unix::Signal,
-) -> bool {
+) -> ShutdownReason {
     let mut centrifugo = run_centrifugo();
     let service_client = OmnectDeviceServiceClientBuilder::new()
         .with_certificate_setup(|payload: CreateCertPayload| async move {
@@ -118,18 +128,18 @@ async fn run_until_shutdown(
         .expect("failed to create device service client");
     let (server_handle, server_task) = run_server(service_client.clone()).await;
 
-    let should_restart = tokio::select! {
+    let reason = tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             debug!("ctrl-c received");
-            false
+            ShutdownReason::Shutdown
         },
         _ = sigterm.recv() => {
             debug!("SIGTERM received");
-            false
+            ShutdownReason::Shutdown
         },
         _ = restart_rx.recv() => {
             debug!("server restart requested");
-            true
+            ShutdownReason::Restart
         },
         result = server_task => {
             match result {
@@ -137,39 +147,35 @@ async fn run_until_shutdown(
                 Ok(Err(e)) => debug!("server stopped with error: {e}"),
                 Err(e) => debug!("server task panicked: {e}"),
             }
-            false
+            ShutdownReason::Shutdown
         },
         _ = centrifugo.wait() => {
             debug!("centrifugo stopped unexpectedly");
-            false
+            ShutdownReason::Shutdown
         }
     };
 
-    // Unified cleanup sequence - ensures consistent shutdown regardless of exit reason
-    if !should_restart {
-        info!("shutting down...");
-    }
+    // Unified cleanup sequence
+    info!("{reason}...");
 
-    // 1. Shutdown service client first (unregister from omnect-device-service)
+    // 1. Shutdown service client (unregister from omnect-device-service)
     if let Err(e) = service_client.shutdown().await {
         error!("failed to shutdown service client: {e:#}");
     }
 
     // 2. Stop the server gracefully
     server_handle.stop(true).await;
-    if !should_restart {
-        info!("server stopped");
-    }
 
     // 3. Kill centrifugo
     if let Err(e) = centrifugo.kill().await {
         error!("failed to kill centrifugo: {e:#}");
     }
-    if !should_restart {
-        info!("centrifugo stopped");
+
+    if matches!(reason, ShutdownReason::Shutdown) {
+        info!("shutdown complete");
     }
 
-    should_restart
+    reason
 }
 
 async fn run_server(
