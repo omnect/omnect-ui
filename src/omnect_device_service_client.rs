@@ -117,59 +117,40 @@ pub struct OmnectDeviceServiceClient {
     has_publish_endpoint: bool,
 }
 
-// Type aliases for the default no-op certificate setup
-type NoOpCertSetup = fn(CreateCertPayload) -> std::future::Ready<Result<()>>;
-type NoOpCertFuture = std::future::Ready<Result<()>>;
+type CertSetupFuture = std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>>>>;
+type CertSetupFn = Box<dyn FnOnce(CreateCertPayload) -> CertSetupFuture>;
 
-pub struct OmnectDeviceServiceClientBuilder<F, Fut>
-where
-    F: FnOnce(CreateCertPayload) -> Fut,
-    Fut: std::future::Future<Output = Result<()>>,
-{
+pub struct OmnectDeviceServiceClientBuilder {
     publish_endpoint: Option<PublishEndpoint>,
-    certificate_setup: Option<F>,
-    _phantom: std::marker::PhantomData<Fut>,
+    certificate_setup: Option<CertSetupFn>,
 }
 
-impl Default for OmnectDeviceServiceClientBuilder<NoOpCertSetup, NoOpCertFuture> {
+impl Default for OmnectDeviceServiceClientBuilder {
     fn default() -> Self {
         Self {
             publish_endpoint: None,
             certificate_setup: None,
-            _phantom: std::marker::PhantomData,
         }
     }
 }
 
-impl OmnectDeviceServiceClientBuilder<NoOpCertSetup, NoOpCertFuture> {
+impl OmnectDeviceServiceClientBuilder {
     pub fn new() -> Self {
         Self::default()
     }
-}
 
-impl<F, Fut> OmnectDeviceServiceClientBuilder<F, Fut>
-where
-    F: FnOnce(CreateCertPayload) -> Fut,
-    Fut: std::future::Future<Output = Result<()>>,
-{
     pub fn with_publish_endpoint(mut self, endpoint: PublishEndpoint) -> Self {
         self.publish_endpoint = Some(endpoint);
         self
     }
 
-    pub fn with_certificate_setup<NewF, NewFut>(
-        self,
-        setup_fn: NewF,
-    ) -> OmnectDeviceServiceClientBuilder<NewF, NewFut>
+    pub fn with_certificate_setup<F, Fut>(mut self, setup_fn: F) -> Self
     where
-        NewF: FnOnce(CreateCertPayload) -> NewFut,
-        NewFut: std::future::Future<Output = Result<()>>,
+        F: FnOnce(CreateCertPayload) -> Fut + 'static,
+        Fut: std::future::Future<Output = Result<()>> + 'static,
     {
-        OmnectDeviceServiceClientBuilder {
-            publish_endpoint: self.publish_endpoint,
-            certificate_setup: Some(setup_fn),
-            _phantom: std::marker::PhantomData,
-        }
+        self.certificate_setup = Some(Box::new(move |payload| Box::pin(setup_fn(payload))));
+        self
     }
 
     pub async fn build(self) -> Result<OmnectDeviceServiceClient> {
