@@ -117,6 +117,8 @@ async fn run_until_shutdown(
     restart_rx: &mut broadcast::Receiver<()>,
     sigterm: &mut tokio::signal::unix::Signal,
 ) -> ShutdownReason {
+    info!("starting server...");
+
     let mut centrifugo = run_centrifugo();
     let service_client = OmnectDeviceServiceClientBuilder::new()
         .with_certificate_setup(|payload: CreateCertPayload| async move {

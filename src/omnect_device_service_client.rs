@@ -65,7 +65,7 @@ pub struct NetworkStatus {
     pub network_interfaces: Vec<NetworkInterface>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct NetworkInterface {
     pub online: bool,
     pub ipv4: Ipv4Info,
@@ -73,12 +73,12 @@ pub struct NetworkInterface {
     pub name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Ipv4Info {
     pub addrs: Vec<Ipv4AddrInfo>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct Ipv4AddrInfo {
     pub addr: String,
 }

@@ -59,7 +59,7 @@ tokio = { version = "1.45", default-features = false, features = [
   "net",
   "process",
 ] }
-trait-variant = { version = "0.1" }
+trait-variant = { version = "0.1", default-features = false }
 uuid = { version = "1.17", default-features = false, features = [
   "v4",
 ] }

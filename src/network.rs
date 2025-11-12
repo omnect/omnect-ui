@@ -1,11 +1,12 @@
 use crate::omnect_device_service_client::DeviceServiceClient;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use ini::Ini;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_valid::Validate;
 use std::{
     fs,
+    io::ErrorKind,
     net::Ipv4Addr,
     path::Path,
     time::{Duration, SystemTime},
@@ -195,24 +196,45 @@ impl NetworkConfigService {
         let config_file = network_config_file!(network.name);
         let backup_file = network_backup_file!(network.name);
 
-        if !backup_file.try_exists().unwrap_or(false) {
-            return Ok(());
-        }
-
-        fs::copy(&backup_file, &config_file).context(format!(
-            "failed to restore {} from {}",
-            config_file.display(),
-            backup_file.display()
-        ))?;
-
-        let _ = fs::remove_file(&backup_file);
-
+        Self::try_rename_if_exists(&backup_file, &config_file)?;
         Ok(())
     }
 
     // ========================================================================
     // Private helper methods
     // ========================================================================
+
+    /// Atomically copy a file if it exists
+    ///
+    /// # Arguments
+    /// * `src` - Source file path
+    /// * `dest` - Destination file path
+    ///
+    /// # Returns
+    /// Result with bool indicating if copy happened (true) or source didn't exist (false)
+    fn try_copy_if_exists(src: &Path, dest: &Path) -> Result<bool> {
+        match fs::copy(src, dest) {
+            Ok(_) => Ok(true),
+            Err(e) if e.kind() == ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(e).context(format!("failed to copy {src:?} to {dest:?}")),
+        }
+    }
+
+    /// Atomically rename a file if it exists
+    ///
+    /// # Arguments
+    /// * `src` - Source file path
+    /// * `dest` - Destination file path
+    ///
+    /// # Returns
+    /// Result with bool indicating if rename happened (true) or source didn't exist (false)
+    fn try_rename_if_exists(src: &Path, dest: &Path) -> Result<bool> {
+        match fs::rename(src, dest) {
+            Ok(_) => Ok(true),
+            Err(e) if e.kind() == ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(e).context(format!("failed to rename {src:?} to {dest:?}")),
+        }
+    }
 
     /// Trigger a server restart by sending signal through the restart channel
     ///
@@ -264,10 +286,7 @@ impl NetworkConfigService {
         let config_file = network_config_file!(&network.name);
         let backup_file = network_backup_file!(&network.name);
 
-        if let Ok(true) = fs::exists(&config_file) {
-            fs::copy(&config_file, &backup_file)
-                .context(format!("failed to back up {}", config_file.display()))?;
-        } else {
+        if !Self::try_copy_if_exists(&config_file, &backup_file)? {
             let status = service_client
                 .status()
                 .await
@@ -280,18 +299,18 @@ impl NetworkConfigService {
                 .find(|iface| iface.name == network.name)
                 .context("failed to find current network interface")?;
 
-            log::debug!("current network file is {}", current_network.file);
+            log::debug!("current network is {current_network:?}");
 
-            if let Some(current_network_file) = Path::new(&current_network.file).file_name() {
-                let config_file = network_path!(current_network_file);
-                log::debug!("config file is {:?}", &config_file);
-                if let Ok(true) = fs::exists(&config_file) {
-                    fs::copy(&config_file, &backup_file).context(format!(
-                        "failed to back up current network file {}",
-                        config_file.display()
-                    ))?;
-                }
-            }
+            let file_name = Path::new(&current_network.file)
+                .file_name()
+                .context("context")?;
+
+            let config_file = network_path!(file_name);
+            log::debug!("config file is {config_file:?}");
+            ensure!(
+                Self::try_copy_if_exists(&config_file, &backup_file)?,
+                "failed to backup config"
+            );
         }
 
         Ok(())
@@ -352,8 +371,7 @@ impl NetworkConfigService {
 
         let config_path = network_config_file!(&network.name);
         ini.write_to_file(&config_path).context(format!(
-            "failed to write network config file {}",
-            config_path.display()
+            "failed to write network config file {config_path:?}"
         ))?;
 
         Ok(())
