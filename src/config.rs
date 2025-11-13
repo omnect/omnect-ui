@@ -104,9 +104,10 @@ impl AppConfig {
     fn load_internal() -> Result<Self> {
         // Validate critical paths exist before proceeding (skip in test/mock mode)
         #[cfg(not(any(test, feature = "mock")))]
-        if !PathBuf::from("/data").try_exists().unwrap_or(false) {
-            anyhow::bail!("failed to find required data directory: /data is missing");
-        }
+        anyhow::ensure!(
+            PathBuf::from("/data").try_exists().unwrap_or(false),
+            "failed to find required data directory: /data is missing"
+        );
 
         let ui = UiConfig::load()?;
         let centrifugo = CentrifugoConfig::load()?;
@@ -133,7 +134,7 @@ impl AppConfig {
 impl UiConfig {
     fn load() -> Result<Self> {
         let port = env::var("UI_PORT")
-            .unwrap_or_else(|_| "443".to_string())
+            .unwrap_or_else(|_| "1977".to_string())
             .parse::<u16>()
             .context("failed to parse UI_PORT: invalid format")?;
 
@@ -210,44 +211,63 @@ impl CertificateConfig {
 
 impl IoTEdgeConfig {
     fn load() -> Result<Self> {
-        let module_id = env::var("IOTEDGE_MODULEID").unwrap_or_else(|_| "test-module".to_string());
-        let module_generation_id =
-            env::var("IOTEDGE_MODULEGENERATIONID").unwrap_or_else(|_| "1".to_string());
-        let api_version =
-            env::var("IOTEDGE_APIVERSION").unwrap_or_else(|_| "2021-12-07".to_string());
-        let workload_uri = env::var("IOTEDGE_WORKLOADURI")
-            .unwrap_or_else(|_| "unix:///var/run/iotedge/workload.sock".to_string());
+        #[cfg(any(test, feature = "mock"))]
+        {
+            let module_id =
+                env::var("IOTEDGE_MODULEID").unwrap_or_else(|_| "test-module".to_string());
+            let module_generation_id =
+                env::var("IOTEDGE_MODULEGENERATIONID").unwrap_or_else(|_| "1".to_string());
+            let api_version =
+                env::var("IOTEDGE_APIVERSION").unwrap_or_else(|_| "2021-12-07".to_string());
+            let workload_uri = env::var("IOTEDGE_WORKLOADURI")
+                .unwrap_or_else(|_| "unix:///var/run/iotedge/workload.sock".to_string());
 
-        Ok(Self {
-            module_id,
-            module_generation_id,
-            api_version,
-            workload_uri,
-        })
+            Ok(Self {
+                module_id,
+                module_generation_id,
+                api_version,
+                workload_uri,
+            })
+        }
+
+        #[cfg(not(any(test, feature = "mock")))]
+        {
+            let module_id =
+                env::var("IOTEDGE_MODULEID").context("failed to get IOTEDGE_MODULEID")?;
+            let module_generation_id = env::var("IOTEDGE_MODULEGENERATIONID")
+                .context("failed to get IOTEDGE_MODULEGENERATIONID")?;
+            let api_version =
+                env::var("IOTEDGE_APIVERSION").context("failed to get IOTEDGE_APIVERSION")?;
+            let workload_uri =
+                env::var("IOTEDGE_WORKLOADURI").context("failed to get IOTEDGE_WORKLOADURI")?;
+
+            Ok(Self {
+                module_id,
+                module_generation_id,
+                api_version,
+                workload_uri,
+            })
+        }
     }
 }
 
 impl PathConfig {
     fn load() -> Result<Self> {
+        let tmp_dir = std::env::temp_dir();
         // In test mode, use temp directory as default to avoid /data requirement
         #[cfg(test)]
-        let default_config = std::env::temp_dir()
-            .join("omnect-test-config")
-            .display()
-            .to_string();
+        let data_dir = tmp_dir.clone();
         #[cfg(not(test))]
-        let default_config = "/data/config".to_string();
+        let data_dir = PathBuf::from("/data/");
 
-        let config_dir: PathBuf = env::var("CONFIG_PATH").unwrap_or(default_config).into();
+        let config_dir = data_dir.join("config");
 
         // Ensure config directory exists (skip in test/mock mode as it may not have permissions)
         #[cfg(not(any(test, feature = "mock")))]
         std::fs::create_dir_all(&config_dir).context("failed to create config directory")?;
 
         let app_config_path = config_dir.join("app_config.js");
-        let data_dir = PathBuf::from("/data/");
         let host_data_dir = PathBuf::from(format!("/var/lib/{}/", env!("CARGO_PKG_NAME")));
-        let tmp_dir = PathBuf::from("/tmp/");
 
         // In test/mock mode, use a dummy path since static/index.html won't exist
         #[cfg(any(test, feature = "mock"))]
