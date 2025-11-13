@@ -69,8 +69,8 @@ impl FirmwareService {
     /// Clear all files in the data folder
     fn clear_data_folder() -> Result<()> {
         debug!("clear_data_folder() called");
-        let mut tmp = fs::read_dir(&AppConfig::get().paths.data_dir)?;
-        while let Some(entry) = tmp.next() {
+        let tmp = fs::read_dir(&AppConfig::get().paths.data_dir)?;
+        for entry in tmp {
             let entry = entry?;
             if entry.path().is_file() {
                 fs::remove_file(entry.path())?;
