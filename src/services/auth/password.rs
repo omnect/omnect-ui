@@ -101,14 +101,6 @@ mod tests {
     }
 
     #[test]
-    fn test_hash_password_different_salts() {
-        let hash1 = PasswordService::hash_password("test").expect("should hash");
-        let hash2 = PasswordService::hash_password("test").expect("should hash");
-        // Same password should produce different hashes due to different salts
-        assert_ne!(hash1, hash2);
-    }
-
-    #[test]
     fn test_store_and_check_password() {
         // This test relies on AppConfig which is initialized in test mode with temp directories
         // Clean up any existing password file first

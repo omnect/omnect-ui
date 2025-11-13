@@ -6,7 +6,7 @@ use crate::{config::AppConfig, omnect_device_service_client::DeviceServiceClient
 use actix_multipart::form::tempfile::TempFile;
 use anyhow::{Context, Result};
 use log::{debug, error};
-use std::fs;
+use std::{fs, os::unix::fs::PermissionsExt};
 
 /// Service for firmware update file operations
 pub struct FirmwareService;
@@ -26,10 +26,23 @@ impl FirmwareService {
             // Continue anyway as this is not critical
         }
 
+        let local_update_file = &AppConfig::get().paths.local_update_file;
+        let tmp_update_file = &AppConfig::get().paths.tmp_update_file;
+
+        // 1. store tempfile in temp dir (cannot be persisted across filesystems)
         tmp_file
             .file
-            .persist(&AppConfig::get().paths.update_file_internal)
+            .persist(tmp_update_file)
             .context("failed to persist tmp file")?;
+
+        // 2. copy to local container filesystem
+        fs::copy(tmp_update_file, local_update_file).context("failed to copy file to data dir")?;
+
+        // 3. allow host to access the file
+        let metadata = fs::metadata(local_update_file).context("failed to get file metadata")?;
+        let mut perm = metadata.permissions();
+        perm.set_mode(0o750);
+        fs::set_permissions(local_update_file, perm).context("failed to set file permission")?;
 
         Ok(())
     }
@@ -46,7 +59,7 @@ impl FirmwareService {
 
         service_client
             .load_update(LoadUpdate {
-                update_file_path: AppConfig::get().paths.update_file.clone(),
+                update_file_path: AppConfig::get().paths.host_update_file.clone(),
             })
             .await
     }
@@ -59,8 +72,8 @@ impl FirmwareService {
     ///
     /// # Returns
     /// Result indicating success or failure
-    pub async fn run_update<SC: DeviceServiceClient>(
-        service_client: &SC,
+    pub async fn run_update<ServiceClient: DeviceServiceClient>(
+        service_client: &ServiceClient,
         run_update: crate::omnect_device_service_client::RunUpdate,
     ) -> Result<()> {
         service_client.run_update(run_update).await
@@ -69,8 +82,8 @@ impl FirmwareService {
     /// Clear all files in the data folder
     fn clear_data_folder() -> Result<()> {
         debug!("clear_data_folder() called");
-        let tmp = fs::read_dir(&AppConfig::get().paths.data_dir)?;
-        for entry in tmp {
+        let data_dir = fs::read_dir(&AppConfig::get().paths.data_dir)?;
+        for entry in data_dir {
             let entry = entry?;
             if entry.path().is_file() {
                 fs::remove_file(entry.path())?;

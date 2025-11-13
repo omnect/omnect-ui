@@ -1,9 +1,9 @@
 use crate::{
     config::AppConfig,
+    http_client::handle_service_result,
     keycloak_client::SingleSignOnProvider,
     omnect_device_service_client::{DeviceServiceClient, FactoryReset, RunUpdate},
     services::{
-        ServiceResultResponse,
         auth::{AuthorizationService, PasswordService, TokenManager},
         firmware::FirmwareService,
         network::{NetworkConfig, NetworkConfigService},
@@ -50,7 +50,6 @@ where
     ServiceClient: DeviceServiceClient,
     SingleSignOn: SingleSignOnProvider,
 {
-    // Public methods
     pub async fn new(service_client: ServiceClient, single_sign_on: SingleSignOn) -> Result<Self> {
         Ok(Api {
             service_client,
@@ -101,17 +100,17 @@ where
             session.purge();
         }
 
-        Self::handle_service_result(result, "factory_reset")
+        handle_service_result(result, "factory_reset")
     }
 
     pub async fn reboot(api: web::Data<Self>) -> impl Responder {
         debug!("reboot() called");
-        Self::handle_service_result(api.service_client.reboot().await, "reboot")
+        handle_service_result(api.service_client.reboot().await, "reboot")
     }
 
     pub async fn reload_network(api: web::Data<Self>) -> impl Responder {
         debug!("reload_network() called");
-        Self::handle_service_result(api.service_client.reload_network().await, "reload_network")
+        handle_service_result(api.service_client.reload_network().await, "reload_network")
     }
 
     pub async fn token(session: Session, token_manager: web::Data<TokenManager>) -> impl Responder {
@@ -136,7 +135,7 @@ where
     ) -> impl Responder {
         debug!("upload_firmware_file() called");
 
-        Self::handle_service_result(
+        handle_service_result(
             FirmwareService::handle_uploaded_firmware(form.file),
             "upload_firmware_file",
         )
@@ -145,7 +144,7 @@ where
     pub async fn load_update(api: web::Data<Self>) -> impl Responder {
         debug!("load_update() called");
 
-        Self::handle_service_result(
+        handle_service_result(
             FirmwareService::load_update(&api.service_client).await,
             "load_update",
         )
@@ -153,7 +152,7 @@ where
 
     pub async fn run_update(body: web::Json<RunUpdate>, api: web::Data<Self>) -> impl Responder {
         debug!("run_update() called with validate_iothub_connection: {body:?}");
-        Self::handle_service_result(
+        handle_service_result(
             FirmwareService::run_update(&api.service_client, body.into_inner()).await,
             "run_update",
         )
@@ -172,13 +171,12 @@ where
                 .finish();
         }
 
-        match PasswordService::store_or_update_password(&body.password) {
-            Ok(_) => Self::session_token(session, token_manager),
-            Err(e) => {
-                error!("set_password failed: {e:#}");
-                HttpResponse::InternalServerError().body(e.to_string())
-            }
+        if let Err(e) = PasswordService::store_or_update_password(&body.password) {
+            error!("set_password failed: {e:#}");
+            return HttpResponse::InternalServerError().body(e.to_string());
         }
+
+        Self::session_token(session, token_manager)
     }
 
     pub async fn update_password(
@@ -198,7 +196,7 @@ where
             session.purge();
         }
 
-        Self::handle_service_result(result, "update_password")
+        handle_service_result(result, "update_password")
     }
 
     pub async fn require_set_password() -> impl Responder {
@@ -216,19 +214,18 @@ where
     pub async fn validate_portal_token(body: String, api: web::Data<Self>) -> impl Responder {
         debug!("validate_portal_token() called");
 
-        match AuthorizationService::validate_token_and_claims(
+        if let Err(e) = AuthorizationService::validate_token_and_claims(
             &api.single_sign_on,
             &api.service_client,
             &body,
         )
         .await
         {
-            Ok(_) => HttpResponse::Ok().finish(),
-            Err(e) => {
-                error!("validate_portal_token failed: {e:#}");
-                HttpResponse::Unauthorized().finish()
-            }
+            error!("validate_portal_token failed: {e:#}");
+            return HttpResponse::Unauthorized().finish();
         }
+
+        HttpResponse::Ok().finish()
     }
 
     pub async fn set_network_config(
@@ -237,25 +234,10 @@ where
     ) -> impl Responder {
         debug!("set_network_config() called");
 
-        Self::handle_service_result(
+        handle_service_result(
             NetworkConfigService::set_network_config(&api.service_client, &network_config).await,
             "set_network_config",
         )
-    }
-
-    // Private methods
-    /// Helper to handle service results with consistent error logging
-    fn handle_service_result<T>(result: Result<T>, operation: &str) -> HttpResponse
-    where
-        T: ServiceResultResponse,
-    {
-        match result {
-            Ok(data) => data.into_response(),
-            Err(e) => {
-                error!("{operation} failed: {e:#}");
-                HttpResponse::InternalServerError().body(e.to_string())
-            }
-        }
     }
 
     fn session_token(session: Session, token_manager: web::Data<TokenManager>) -> HttpResponse {

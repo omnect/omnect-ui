@@ -75,8 +75,9 @@ pub struct PathConfig {
     pub data_dir: PathBuf,
     pub index_html: PathBuf,
     pub password_file: PathBuf,
-    pub update_file: PathBuf,
-    pub update_file_internal: PathBuf,
+    pub host_update_file: PathBuf,
+    pub local_update_file: PathBuf,
+    pub tmp_update_file: PathBuf,
 }
 
 impl AppConfig {
@@ -253,16 +254,10 @@ impl IoTEdgeConfig {
 
 impl PathConfig {
     fn load() -> Result<Self> {
-        // In test mode, use temp directory as default to avoid /data requirement
-        #[cfg(test)]
-        let data_dir = std::env::temp_dir().join("test");
-        #[cfg(not(test))]
-        let data_dir = PathBuf::from("/data/");
-
+        let data_dir = Self::data_dir();
         let config_dir = data_dir.join("config");
 
         // Ensure config directory exists (skip in test/mock mode as it may not have permissions)
-        #[cfg(not(any(test, feature = "mock")))]
         std::fs::create_dir_all(&config_dir).context("failed to create config directory")?;
 
         let app_config_path = config_dir.join("app_config.js");
@@ -277,26 +272,34 @@ impl PathConfig {
             .context("failed to find static/index.html")?;
 
         let password_file = config_dir.join("password");
-        let update_file = host_data_dir.join("update.tar");
-        let update_file_internal = data_dir.join("update.tar");
-
-        #[cfg(not(any(test, feature = "mock")))]
-        {
-            use std::{fs, os::unix::fs::PermissionsExt};
-
-            let metadata = fs::metadata(&data_dir).context("failed to get file metadata")?;
-            let mut perm = metadata.permissions();
-            perm.set_mode(0o750);
-            fs::set_permissions(&data_dir, perm).context("failed to set file permission")?;
-        }
+        let host_update_file = host_data_dir.join("update.tar");
+        let local_update_file = data_dir.join("update.tar");
+        let tmp_update_file = std::env::temp_dir().join("update.tar");
 
         Ok(Self {
             app_config_path,
             data_dir,
             index_html,
             password_file,
-            update_file,
-            update_file_internal,
+            host_update_file,
+            local_update_file,
+            tmp_update_file,
         })
+    }
+
+    #[cfg(not(any(test, feature = "mock")))]
+    fn data_dir() -> PathBuf {
+        PathBuf::from("/data/")
+    }
+
+    // In test mode, use temp directory as default to avoid /data requirement
+    #[cfg(any(test, feature = "mock"))]
+    fn data_dir() -> PathBuf {
+        let data_dir = std::env::temp_dir().join("omnect-ui-test");
+
+        std::fs::create_dir_all(&data_dir)
+            .context("failed to create data directory")
+            .unwrap();
+        data_dir
     }
 }

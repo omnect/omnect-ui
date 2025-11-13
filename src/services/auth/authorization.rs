@@ -28,14 +28,14 @@ impl AuthorizationService {
     /// - User must have tenant in their tenant_list
     /// - FleetAdministrator role grants full access
     /// - FleetOperator role requires fleet_id in fleet_list
-    pub async fn validate_token_and_claims<SC, SS>(
-        single_sign_on: &SS,
-        service_client: &SC,
+    pub async fn validate_token_and_claims<ServiceClient, SingleSignOn>(
+        single_sign_on: &SingleSignOn,
+        service_client: &ServiceClient,
         token: &str,
     ) -> Result<()>
     where
-        SC: DeviceServiceClient,
-        SS: SingleSignOnProvider,
+        ServiceClient: DeviceServiceClient,
+        SingleSignOn: SingleSignOnProvider,
     {
         let claims = single_sign_on.verify_token(token).await?;
         let tenant = &AppConfig::get().tenant;
