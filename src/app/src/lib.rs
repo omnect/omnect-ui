@@ -7,7 +7,7 @@ pub mod wasm;
 use crux_core::{render::render, Command};
 use serde::{Deserialize, Serialize};
 
-// Using deprecated Capabilities API for Http (will migrate later)
+// Using deprecated Capabilities API for Http (kept for Effect enum generation)
 #[allow(deprecated)]
 use crux_http::Http;
 
@@ -15,6 +15,9 @@ use crux_http::Http;
 // These types are shared between the deprecated and new Command API
 pub use crate::capabilities::centrifugo::{CentrifugoOperation, CentrifugoOutput};
 use crate::types::*;
+
+// Re-export crux_http Result type for convenience
+pub use crux_http::Result as HttpResult;
 
 // API base URL - empty string means relative URLs (shell will use current origin)
 // For absolute URLs, set to something like "http://localhost:8000"
@@ -160,8 +163,10 @@ pub enum Event {
 }
 
 // Capabilities - side effects the app can perform
-// Note: We keep the old Centrifugo in Capabilities to generate Effect enum variants,
-// but use the new Command API (CentrifugoCmd) in the update function
+// Note: We keep the old deprecated capabilities in this struct ONLY for Effect enum generation.
+// The #[derive(crux_core::macros::Effect)] macro generates the Effect enum with proper
+// From<Request<Operation>> implementations based on what's declared here.
+// Actual usage goes through the Command-based APIs (HttpCmd, CentrifugoCmd).
 #[allow(deprecated)]
 #[cfg_attr(feature = "typegen", derive(crux_core::macros::Export))]
 #[derive(crux_core::macros::Effect)]
@@ -171,9 +176,10 @@ pub struct Capabilities {
     pub centrifugo: crate::capabilities::centrifugo::Centrifugo<Event>,
 }
 
-// Type alias for the Command-based Centrifugo API
+// Type aliases for the Command-based APIs
 // Defined after Capabilities to have access to the generated Effect enum
 type CentrifugoCmd = crate::capabilities::centrifugo_command::Centrifugo<Effect, Event>;
+type HttpCmd = crux_http::command::Http<Effect, Event>;
 
 // The Core application
 #[derive(Default)]
@@ -190,7 +196,7 @@ impl crux_core::App for App {
         &self,
         event: Self::Event,
         model: &mut Self::Model,
-        caps: &Self::Capabilities,
+        _caps: &Self::Capabilities,
     ) -> Command<Effect, Event> {
         match event {
             Event::Initialize => {
@@ -203,24 +209,26 @@ impl crux_core::App for App {
                 model.is_loading = true;
                 model.error_message = None;
                 let credentials = LoginCredentials { username, password };
-                caps.http
-                    .post(format!("{}/api/token/login", API_BASE_URL))
-                    .header("Content-Type", "application/json")
-                    .body_json(&credentials)
-                    .expect(
-                        "Failed to serialize login credentials - this should never happen for valid data",
-                    )
-                    .expect_json::<AuthToken>()
-                    .send(|result| match result {
-                        Ok(mut response) => {
-                            match response.take_body() {
+                Command::all([
+                    render(),
+                    HttpCmd::post(format!("{}/api/token/login", API_BASE_URL))
+                        .header("Content-Type", "application/json")
+                        .body_json(&credentials)
+                        .expect(
+                            "Failed to serialize login credentials - this should never happen for valid data",
+                        )
+                        .expect_json::<AuthToken>()
+                        .build()
+                        .then_send(|result| match result {
+                            Ok(mut response) => match response.take_body() {
                                 Some(token) => Event::LoginResponse(Ok(token)),
-                                None => Event::LoginResponse(Err("Empty response body".to_string())),
-                            }
-                        }
-                        Err(e) => Event::LoginResponse(Err(e.to_string())),
-                    });
-                render()
+                                None => {
+                                    Event::LoginResponse(Err("Empty response body".to_string()))
+                                }
+                            },
+                            Err(e) => Event::LoginResponse(Err(e.to_string())),
+                        }),
+                ])
             }
 
             Event::LoginResponse(result) => {
@@ -242,24 +250,28 @@ impl crux_core::App for App {
             Event::Logout => {
                 model.is_loading = true;
                 if let Some(token) = &model.auth_token {
-                    caps.http
-                        .post(format!("{}/api/token/logout", API_BASE_URL))
-                        .header("Authorization", format!("Bearer {}", token))
-                        .send(|result| match result {
-                            Ok(response) => {
-                                if response.status().is_success() {
-                                    Event::LogoutResponse(Ok(()))
-                                } else {
-                                    Event::LogoutResponse(Err(format!(
-                                        "Logout failed: HTTP {}",
-                                        response.status()
-                                    )))
+                    Command::all([
+                        render(),
+                        HttpCmd::post(format!("{}/api/token/logout", API_BASE_URL))
+                            .header("Authorization", format!("Bearer {token}"))
+                            .build()
+                            .then_send(|result| match result {
+                                Ok(response) => {
+                                    if response.status().is_success() {
+                                        Event::LogoutResponse(Ok(()))
+                                    } else {
+                                        Event::LogoutResponse(Err(format!(
+                                            "Logout failed: HTTP {}",
+                                            response.status()
+                                        )))
+                                    }
                                 }
-                            }
-                            Err(e) => Event::LogoutResponse(Err(e.to_string())),
-                        });
+                                Err(e) => Event::LogoutResponse(Err(e.to_string())),
+                            }),
+                    ])
+                } else {
+                    render()
                 }
-                render()
             }
 
             Event::LogoutResponse(result) => {
@@ -282,25 +294,27 @@ impl crux_core::App for App {
                 struct SetPasswordRequest {
                     password: String,
                 }
-                caps.http
-                    .post(format!("{}/api/token/set-password", API_BASE_URL))
-                    .header("Content-Type", "application/json")
-                    .body_json(&SetPasswordRequest { password })
-                    .expect("Failed to serialize password request")
-                    .send(|result| match result {
-                        Ok(response) => {
-                            if response.status().is_success() {
-                                Event::SetPasswordResponse(Ok(()))
-                            } else {
-                                Event::SetPasswordResponse(Err(format!(
-                                    "Set password failed: HTTP {}",
-                                    response.status()
-                                )))
+                Command::all([
+                    render(),
+                    HttpCmd::post(format!("{}/api/token/set-password", API_BASE_URL))
+                        .header("Content-Type", "application/json")
+                        .body_json(&SetPasswordRequest { password })
+                        .expect("Failed to serialize password request")
+                        .build()
+                        .then_send(|result| match result {
+                            Ok(response) => {
+                                if response.status().is_success() {
+                                    Event::SetPasswordResponse(Ok(()))
+                                } else {
+                                    Event::SetPasswordResponse(Err(format!(
+                                        "Set password failed: HTTP {}",
+                                        response.status()
+                                    )))
+                                }
                             }
-                        }
-                        Err(e) => Event::SetPasswordResponse(Err(e.to_string())),
-                    });
-                render()
+                            Err(e) => Event::SetPasswordResponse(Err(e.to_string())),
+                        }),
+                ])
             }
 
             Event::SetPasswordResponse(result) => {
@@ -328,30 +342,34 @@ impl crux_core::App for App {
                     new_password: String,
                 }
                 if let Some(token) = &model.auth_token {
-                    caps.http
-                        .post(format!("{}/api/token/update-password", API_BASE_URL))
-                        .header("Authorization", format!("Bearer {}", token))
-                        .header("Content-Type", "application/json")
-                        .body_json(&UpdatePasswordRequest {
-                            current,
-                            new_password,
-                        })
-                        .expect("Failed to serialize password update request")
-                        .send(|result| match result {
-                            Ok(response) => {
-                                if response.status().is_success() {
-                                    Event::UpdatePasswordResponse(Ok(()))
-                                } else {
-                                    Event::UpdatePasswordResponse(Err(format!(
-                                        "Update password failed: HTTP {}",
-                                        response.status()
-                                    )))
+                    Command::all([
+                        render(),
+                        HttpCmd::post(format!("{}/api/token/update-password", API_BASE_URL))
+                            .header("Authorization", format!("Bearer {token}"))
+                            .header("Content-Type", "application/json")
+                            .body_json(&UpdatePasswordRequest {
+                                current,
+                                new_password,
+                            })
+                            .expect("Failed to serialize password update request")
+                            .build()
+                            .then_send(|result| match result {
+                                Ok(response) => {
+                                    if response.status().is_success() {
+                                        Event::UpdatePasswordResponse(Ok(()))
+                                    } else {
+                                        Event::UpdatePasswordResponse(Err(format!(
+                                            "Update password failed: HTTP {}",
+                                            response.status()
+                                        )))
+                                    }
                                 }
-                            }
-                            Err(e) => Event::UpdatePasswordResponse(Err(e.to_string())),
-                        });
+                                Err(e) => Event::UpdatePasswordResponse(Err(e.to_string())),
+                            }),
+                    ])
+                } else {
+                    render()
                 }
-                render()
             }
 
             Event::UpdatePasswordResponse(result) => {
@@ -369,19 +387,23 @@ impl crux_core::App for App {
 
             Event::CheckRequiresPasswordSet => {
                 model.is_loading = true;
-                caps.http
-                    .get(format!("{}/api/token/requires-password-set", API_BASE_URL))
-                    .expect_json::<bool>()
-                    .send(|result| match result {
-                        Ok(mut response) => match response.take_body() {
-                            Some(requires) => Event::CheckRequiresPasswordSetResponse(Ok(requires)),
-                            None => Event::CheckRequiresPasswordSetResponse(Err(
-                                "Empty response body".to_string(),
-                            )),
-                        },
-                        Err(e) => Event::CheckRequiresPasswordSetResponse(Err(e.to_string())),
-                    });
-                render()
+                Command::all([
+                    render(),
+                    HttpCmd::get(format!("{}/api/token/requires-password-set", API_BASE_URL))
+                        .expect_json::<bool>()
+                        .build()
+                        .then_send(|result| match result {
+                            Ok(mut response) => match response.take_body() {
+                                Some(requires) => {
+                                    Event::CheckRequiresPasswordSetResponse(Ok(requires))
+                                }
+                                None => Event::CheckRequiresPasswordSetResponse(Err(
+                                    "Empty response body".to_string(),
+                                )),
+                            },
+                            Err(e) => Event::CheckRequiresPasswordSetResponse(Err(e.to_string())),
+                        }),
+                ])
             }
 
             Event::CheckRequiresPasswordSetResponse(result) => {
@@ -401,24 +423,28 @@ impl crux_core::App for App {
             Event::Reboot => {
                 model.is_loading = true;
                 if let Some(token) = &model.auth_token {
-                    caps.http
-                        .post(format!("{}/api/device/reboot", API_BASE_URL))
-                        .header("Authorization", format!("Bearer {}", token))
-                        .send(|result| match result {
-                            Ok(response) => {
-                                if response.status().is_success() {
-                                    Event::RebootResponse(Ok(()))
-                                } else {
-                                    Event::RebootResponse(Err(format!(
-                                        "Reboot failed: HTTP {}",
-                                        response.status()
-                                    )))
+                    Command::all([
+                        render(),
+                        HttpCmd::post(format!("{}/api/device/reboot", API_BASE_URL))
+                            .header("Authorization", format!("Bearer {token}"))
+                            .build()
+                            .then_send(|result| match result {
+                                Ok(response) => {
+                                    if response.status().is_success() {
+                                        Event::RebootResponse(Ok(()))
+                                    } else {
+                                        Event::RebootResponse(Err(format!(
+                                            "Reboot failed: HTTP {}",
+                                            response.status()
+                                        )))
+                                    }
                                 }
-                            }
-                            Err(e) => Event::RebootResponse(Err(e.to_string())),
-                        });
+                                Err(e) => Event::RebootResponse(Err(e.to_string())),
+                            }),
+                    ])
+                } else {
+                    render()
                 }
-                render()
             }
 
             Event::RebootResponse(result) => {
@@ -442,27 +468,31 @@ impl crux_core::App for App {
                     preserve: Vec<String>,
                 }
                 if let Some(token) = &model.auth_token {
-                    caps.http
-                        .post(format!("{}/api/device/factory-reset", API_BASE_URL))
-                        .header("Authorization", format!("Bearer {}", token))
-                        .header("Content-Type", "application/json")
-                        .body_json(&FactoryResetRequest { mode, preserve })
-                        .expect("Failed to serialize factory reset request")
-                        .send(|result| match result {
-                            Ok(response) => {
-                                if response.status().is_success() {
-                                    Event::FactoryResetResponse(Ok(()))
-                                } else {
-                                    Event::FactoryResetResponse(Err(format!(
-                                        "Factory reset failed: HTTP {}",
-                                        response.status()
-                                    )))
+                    Command::all([
+                        render(),
+                        HttpCmd::post(format!("{}/api/device/factory-reset", API_BASE_URL))
+                            .header("Authorization", format!("Bearer {token}"))
+                            .header("Content-Type", "application/json")
+                            .body_json(&FactoryResetRequest { mode, preserve })
+                            .expect("Failed to serialize factory reset request")
+                            .build()
+                            .then_send(|result| match result {
+                                Ok(response) => {
+                                    if response.status().is_success() {
+                                        Event::FactoryResetResponse(Ok(()))
+                                    } else {
+                                        Event::FactoryResetResponse(Err(format!(
+                                            "Factory reset failed: HTTP {}",
+                                            response.status()
+                                        )))
+                                    }
                                 }
-                            }
-                            Err(e) => Event::FactoryResetResponse(Err(e.to_string())),
-                        });
+                                Err(e) => Event::FactoryResetResponse(Err(e.to_string())),
+                            }),
+                    ])
+                } else {
+                    render()
                 }
-                render()
             }
 
             Event::FactoryResetResponse(result) => {
@@ -481,24 +511,28 @@ impl crux_core::App for App {
             Event::ReloadNetwork => {
                 model.is_loading = true;
                 if let Some(token) = &model.auth_token {
-                    caps.http
-                        .post(format!("{}/api/device/reload-network", API_BASE_URL))
-                        .header("Authorization", format!("Bearer {}", token))
-                        .send(|result| match result {
-                            Ok(response) => {
-                                if response.status().is_success() {
-                                    Event::ReloadNetworkResponse(Ok(()))
-                                } else {
-                                    Event::ReloadNetworkResponse(Err(format!(
-                                        "Reload network failed: HTTP {}",
-                                        response.status()
-                                    )))
+                    Command::all([
+                        render(),
+                        HttpCmd::post(format!("{}/api/device/reload-network", API_BASE_URL))
+                            .header("Authorization", format!("Bearer {token}"))
+                            .build()
+                            .then_send(|result| match result {
+                                Ok(response) => {
+                                    if response.status().is_success() {
+                                        Event::ReloadNetworkResponse(Ok(()))
+                                    } else {
+                                        Event::ReloadNetworkResponse(Err(format!(
+                                            "Reload network failed: HTTP {}",
+                                            response.status()
+                                        )))
+                                    }
                                 }
-                            }
-                            Err(e) => Event::ReloadNetworkResponse(Err(e.to_string())),
-                        });
+                                Err(e) => Event::ReloadNetworkResponse(Err(e.to_string())),
+                            }),
+                    ])
+                } else {
+                    render()
                 }
-                render()
             }
 
             Event::ReloadNetworkResponse(result) => {
@@ -518,26 +552,30 @@ impl crux_core::App for App {
             Event::SetNetworkConfig { config } => {
                 model.is_loading = true;
                 if let Some(token) = &model.auth_token {
-                    caps.http
-                        .post(format!("{}/api/device/network", API_BASE_URL))
-                        .header("Authorization", format!("Bearer {}", token))
-                        .header("Content-Type", "application/json")
-                        .body_string(config)
-                        .send(|result| match result {
-                            Ok(response) => {
-                                if response.status().is_success() {
-                                    Event::SetNetworkConfigResponse(Ok(()))
-                                } else {
-                                    Event::SetNetworkConfigResponse(Err(format!(
-                                        "Set network config failed: HTTP {}",
-                                        response.status()
-                                    )))
+                    Command::all([
+                        render(),
+                        HttpCmd::post(format!("{}/api/device/network", API_BASE_URL))
+                            .header("Authorization", format!("Bearer {token}"))
+                            .header("Content-Type", "application/json")
+                            .body_string(config)
+                            .build()
+                            .then_send(|result| match result {
+                                Ok(response) => {
+                                    if response.status().is_success() {
+                                        Event::SetNetworkConfigResponse(Ok(()))
+                                    } else {
+                                        Event::SetNetworkConfigResponse(Err(format!(
+                                            "Set network config failed: HTTP {}",
+                                            response.status()
+                                        )))
+                                    }
                                 }
-                            }
-                            Err(e) => Event::SetNetworkConfigResponse(Err(e.to_string())),
-                        });
+                                Err(e) => Event::SetNetworkConfigResponse(Err(e.to_string())),
+                            }),
+                    ])
+                } else {
+                    render()
                 }
-                render()
             }
 
             Event::SetNetworkConfigResponse(result) => {
@@ -561,27 +599,31 @@ impl crux_core::App for App {
                     file_path: String,
                 }
                 if let Some(token) = &model.auth_token {
-                    caps.http
-                        .post(format!("{}/api/update/load", API_BASE_URL))
-                        .header("Authorization", format!("Bearer {}", token))
-                        .header("Content-Type", "application/json")
-                        .body_json(&LoadUpdateRequest { file_path })
-                        .expect("Failed to serialize load update request")
-                        .send(|result| match result {
-                            Ok(response) => {
-                                if response.status().is_success() {
-                                    Event::LoadUpdateResponse(Ok(()))
-                                } else {
-                                    Event::LoadUpdateResponse(Err(format!(
-                                        "Load update failed: HTTP {}",
-                                        response.status()
-                                    )))
+                    Command::all([
+                        render(),
+                        HttpCmd::post(format!("{}/api/update/load", API_BASE_URL))
+                            .header("Authorization", format!("Bearer {token}"))
+                            .header("Content-Type", "application/json")
+                            .body_json(&LoadUpdateRequest { file_path })
+                            .expect("Failed to serialize load update request")
+                            .build()
+                            .then_send(|result| match result {
+                                Ok(response) => {
+                                    if response.status().is_success() {
+                                        Event::LoadUpdateResponse(Ok(()))
+                                    } else {
+                                        Event::LoadUpdateResponse(Err(format!(
+                                            "Load update failed: HTTP {}",
+                                            response.status()
+                                        )))
+                                    }
                                 }
-                            }
-                            Err(e) => Event::LoadUpdateResponse(Err(e.to_string())),
-                        });
+                                Err(e) => Event::LoadUpdateResponse(Err(e.to_string())),
+                            }),
+                    ])
+                } else {
+                    render()
                 }
-                render()
             }
 
             Event::LoadUpdateResponse(result) => {
@@ -604,27 +646,31 @@ impl crux_core::App for App {
                     validate_iothub: bool,
                 }
                 if let Some(token) = &model.auth_token {
-                    caps.http
-                        .post(format!("{}/api/update/run", API_BASE_URL))
-                        .header("Authorization", format!("Bearer {}", token))
-                        .header("Content-Type", "application/json")
-                        .body_json(&RunUpdateRequest { validate_iothub })
-                        .expect("Failed to serialize run update request")
-                        .send(|result| match result {
-                            Ok(response) => {
-                                if response.status().is_success() {
-                                    Event::RunUpdateResponse(Ok(()))
-                                } else {
-                                    Event::RunUpdateResponse(Err(format!(
-                                        "Run update failed: HTTP {}",
-                                        response.status()
-                                    )))
+                    Command::all([
+                        render(),
+                        HttpCmd::post(format!("{}/api/update/run", API_BASE_URL))
+                            .header("Authorization", format!("Bearer {token}"))
+                            .header("Content-Type", "application/json")
+                            .body_json(&RunUpdateRequest { validate_iothub })
+                            .expect("Failed to serialize run update request")
+                            .build()
+                            .then_send(|result| match result {
+                                Ok(response) => {
+                                    if response.status().is_success() {
+                                        Event::RunUpdateResponse(Ok(()))
+                                    } else {
+                                        Event::RunUpdateResponse(Err(format!(
+                                            "Run update failed: HTTP {}",
+                                            response.status()
+                                        )))
+                                    }
                                 }
-                            }
-                            Err(e) => Event::RunUpdateResponse(Err(e.to_string())),
-                        });
+                                Err(e) => Event::RunUpdateResponse(Err(e.to_string())),
+                            }),
+                    ])
+                } else {
+                    render()
                 }
-                render()
             }
 
             Event::RunUpdateResponse(result) => {
@@ -774,7 +820,7 @@ impl crux_core::App for App {
                     render()
                 }
                 CentrifugoOutput::Error { message } => {
-                    model.error_message = Some(format!("Centrifugo error: {}", message));
+                    model.error_message = Some(format!("Centrifugo error: {message}"));
                     render()
                 }
             },
@@ -843,10 +889,8 @@ impl crux_core::App for App {
             update_validation_status: model.update_validation_status.clone(),
             timeouts: model.timeouts.clone(),
             healthcheck: model.healthcheck.clone(),
-
             is_authenticated: model.is_authenticated,
             requires_password_set: model.requires_password_set,
-
             is_loading: model.is_loading,
             error_message: model.error_message.clone(),
             success_message: model.success_message.clone(),

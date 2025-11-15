@@ -109,5 +109,7 @@ cargo clippy -p omnect-ui-core -- -D warnings
 - [x] Migrate all state management from Vue stores to Crux Core
 - [ ] Add more comprehensive tests for edge cases (currently only 3 basic tests)
 - [x] Migrate Centrifugo capability to Command API (non-deprecated)
-- [ ] Migrate HTTP capability to Command API (non-deprecated)
-- [ ] Remove deprecated Centrifugo capability once HTTP is also migrated
+- [x] Migrate HTTP capability to Command API (non-deprecated)
+- [ ] Remove deprecated capabilities once crux_core provides alternative Effect generation mechanism
+- [ ] Remove `#[allow(deprecated)]` attributes after crux_core deprecation warnings are resolved
+- [ ] Introduce shared_types crate for types shared between backend API and Crux Core

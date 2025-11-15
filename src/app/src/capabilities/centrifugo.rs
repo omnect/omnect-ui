@@ -1,3 +1,8 @@
+//! Deprecated Centrifugo capability using the old Capabilities API.
+//!
+//! This module is kept for Effect enum generation via the #[derive(Effect)] macro.
+//! For actual usage, prefer the Command-based API in `centrifugo_command`.
+
 use crux_core::capability::{CapabilityContext, Operation};
 use serde::{Deserialize, Serialize};
 

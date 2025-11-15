@@ -336,7 +336,9 @@ impl DeviceServiceClient for OmnectDeviceServiceClient {
 
     async fn shutdown(&self) -> Result<()> {
         if self.has_publish_endpoint {
-            let path = format!("{}/{}", Self::PUBLISH_ENDPOINT, env!("CARGO_PKG_NAME"));
+            let endpoint = Self::PUBLISH_ENDPOINT;
+            let pkg_name = env!("CARGO_PKG_NAME");
+            let path = format!("{endpoint}/{pkg_name}");
             let url = self.build_url(&path);
             info!("DELETE {url}");
 
