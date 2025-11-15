@@ -271,8 +271,8 @@ impl PathConfig {
         let index_html = PathBuf::from("/dev/null");
 
         #[cfg(not(any(test, feature = "mock")))]
-        let index_html = std::fs::canonicalize("dist/index.html")
-            .context("failed to find dist/index.html")?;
+        let index_html =
+            std::fs::canonicalize("dist/index.html").context("failed to find dist/index.html")?;
 
         let password_file = config_dir.join("password");
         let host_update_file = host_data_dir.join("update.tar");

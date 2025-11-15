@@ -4,13 +4,13 @@ ARG DISTROLESS_IMAGE=gcr.io/distroless/base-debian12:nonroot
 
 FROM oven/bun AS vue-install
 RUN mkdir -p /tmp
-COPY src/frontend/package.json /tmp
-COPY src/frontend/bun.lock /tmp
+COPY src/ui/package.json /tmp
+COPY src/ui/bun.lock /tmp
 RUN cd /tmp && bun install --frozen-lockfile
 
 FROM oven/bun AS vue-build
 WORKDIR /usr/src/app
-COPY src/frontend .
+COPY src/ui .
 COPY --from=vue-install /tmp/node_modules node_modules
 RUN bun run build
 

@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
     "src/backend",
+    "src/app",
+    "src/shared_types",
 ]
 
 [workspace.package]
