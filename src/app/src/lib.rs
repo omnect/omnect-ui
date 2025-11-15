@@ -7,12 +7,13 @@ pub mod wasm;
 use crux_core::{render::render, Command};
 use serde::{Deserialize, Serialize};
 
-// Using deprecated Capabilities API for backwards compatibility
-// Will migrate to full Command API when shell integration is complete
+// Using deprecated Capabilities API for Http (will migrate later)
 #[allow(deprecated)]
 use crux_http::Http;
 
-use crate::capabilities::centrifugo::{Centrifugo, CentrifugoOutput};
+// Re-export the Centrifugo Operation and Output types from the original capability module
+// These types are shared between the deprecated and new Command API
+pub use crate::capabilities::centrifugo::{CentrifugoOperation, CentrifugoOutput};
 use crate::types::*;
 
 // API base URL - empty string means relative URLs (shell will use current origin)
@@ -159,14 +160,20 @@ pub enum Event {
 }
 
 // Capabilities - side effects the app can perform
+// Note: We keep the old Centrifugo in Capabilities to generate Effect enum variants,
+// but use the new Command API (CentrifugoCmd) in the update function
 #[allow(deprecated)]
 #[cfg_attr(feature = "typegen", derive(crux_core::macros::Export))]
 #[derive(crux_core::macros::Effect)]
 pub struct Capabilities {
     pub render: crux_core::render::Render<Event>,
     pub http: Http<Event>,
-    pub centrifugo: Centrifugo<Event>,
+    pub centrifugo: crate::capabilities::centrifugo::Centrifugo<Event>,
 }
+
+// Type alias for the Command-based Centrifugo API
+// Defined after Capabilities to have access to the generated Effect enum
+type CentrifugoCmd = crate::capabilities::centrifugo_command::Centrifugo<Effect, Event>;
 
 // The Core application
 #[derive(Default)]
@@ -645,17 +652,19 @@ impl crux_core::App for App {
                 render()
             }
 
-            // WebSocket subscriptions
+            // WebSocket subscriptions (using new Command API)
             Event::SubscribeToChannels => {
                 // Connect to Centrifugo and subscribe to all channels
-                caps.centrifugo.subscribe_all(Event::CentrifugoResponse);
-                render()
+                CentrifugoCmd::subscribe_all()
+                    .build()
+                    .then_send(Event::CentrifugoResponse)
             }
 
             Event::UnsubscribeFromChannels => {
                 // Unsubscribe from all channels
-                caps.centrifugo.unsubscribe_all(Event::CentrifugoResponse);
-                render()
+                CentrifugoCmd::unsubscribe_all()
+                    .build()
+                    .then_send(Event::CentrifugoResponse)
             }
 
             // Centrifugo response handling
@@ -734,15 +743,13 @@ impl crux_core::App for App {
                                 }
                             }
                             "OnlineStatusV1" => {
-                                if let Ok(status) =
-                                    serde_json::from_str::<OnlineStatus>(&json_data)
+                                if let Ok(status) = serde_json::from_str::<OnlineStatus>(&json_data)
                                 {
                                     model.online_status = Some(status);
                                 }
                             }
                             "FactoryResetV1" => {
-                                if let Ok(reset) =
-                                    serde_json::from_str::<FactoryReset>(&json_data)
+                                if let Ok(reset) = serde_json::from_str::<FactoryReset>(&json_data)
                                 {
                                     model.factory_reset = Some(reset);
                                 }
@@ -755,8 +762,7 @@ impl crux_core::App for App {
                                 }
                             }
                             "TimeoutsV1" => {
-                                if let Ok(timeouts) = serde_json::from_str::<Timeouts>(&json_data)
-                                {
+                                if let Ok(timeouts) = serde_json::from_str::<Timeouts>(&json_data) {
                                     model.timeouts = Some(timeouts);
                                 }
                             }

@@ -15,7 +15,8 @@ The Crux Core follows the Model-View-Update pattern:
 
 - `src/lib.rs` - Main application logic (App, Model, ViewModel, Events)
 - `src/types.rs` - Shared data types
-- `src/capabilities/centrifugo.rs` - Custom WebSocket capability
+- `src/capabilities/centrifugo.rs` - Custom WebSocket capability (deprecated API)
+- `src/capabilities/centrifugo_command.rs` - Command-based WebSocket capability (new API)
 
 ## Building
 
@@ -103,8 +104,10 @@ cargo clippy -p omnect-ui-core -- -D warnings
 
 ## Future Work
 
-- [ ] Complete WASM integration with wasm-pack
-- [ ] Implement full effect processing in Vue shell
-- [ ] Migrate all state management from Vue stores to Crux Core
-- [ ] Add more comprehensive tests for edge cases
-- [ ] Consider migrating to Command API v2 (non-deprecated)
+- [x] Complete WASM integration with wasm-pack
+- [x] Implement full effect processing in Vue shell
+- [x] Migrate all state management from Vue stores to Crux Core
+- [ ] Add more comprehensive tests for edge cases (currently only 3 basic tests)
+- [x] Migrate Centrifugo capability to Command API (non-deprecated)
+- [ ] Migrate HTTP capability to Command API (non-deprecated)
+- [ ] Remove deprecated Centrifugo capability once HTTP is also migrated

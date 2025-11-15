@@ -18,11 +18,23 @@ pub enum CentrifugoOperation {
 pub enum CentrifugoOutput {
     Connected,
     Disconnected,
-    Subscribed { channel: String },
-    Unsubscribed { channel: String },
-    Message { channel: String, data: String },
-    HistoryResult { channel: String, data: Option<String> },
-    Error { message: String },
+    Subscribed {
+        channel: String,
+    },
+    Unsubscribed {
+        channel: String,
+    },
+    Message {
+        channel: String,
+        data: String,
+    },
+    HistoryResult {
+        channel: String,
+        data: Option<String>,
+    },
+    Error {
+        message: String,
+    },
 }
 
 impl Operation for CentrifugoOperation {
@@ -50,7 +62,9 @@ where
         self.context.spawn({
             let context = self.context.clone();
             async move {
-                let output = context.request_from_shell(CentrifugoOperation::Connect).await;
+                let output = context
+                    .request_from_shell(CentrifugoOperation::Connect)
+                    .await;
                 context.update_app(callback(output));
             }
         });
