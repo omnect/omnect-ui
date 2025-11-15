@@ -12,8 +12,12 @@ use serde::{Deserialize, Serialize};
 #[allow(deprecated)]
 use crux_http::Http;
 
-use crate::capabilities::centrifugo::Centrifugo;
+use crate::capabilities::centrifugo::{Centrifugo, CentrifugoOutput};
 use crate::types::*;
+
+// API base URL - empty string means relative URLs (shell will use current origin)
+// For absolute URLs, set to something like "http://localhost:8000"
+const API_BASE_URL: &str = "http://localhost:8000";
 
 // Application Model - the complete state
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -145,6 +149,10 @@ pub enum Event {
     Connected,
     Disconnected,
 
+    // Centrifugo responses (internal events)
+    #[serde(skip)]
+    CentrifugoResponse(CentrifugoOutput),
+
     // UI actions
     ClearError,
     ClearSuccess,
@@ -175,7 +183,7 @@ impl crux_core::App for App {
         &self,
         event: Self::Event,
         model: &mut Self::Model,
-        _caps: &Self::Capabilities,
+        caps: &Self::Capabilities,
     ) -> Command<Effect, Event> {
         match event {
             Event::Initialize => {
@@ -184,14 +192,27 @@ impl crux_core::App for App {
             }
 
             // Authentication events
-            Event::Login {
-                username: _,
-                password: _,
-            } => {
+            Event::Login { username, password } => {
                 model.is_loading = true;
                 model.error_message = None;
-                // TODO: HTTP request will be implemented when integrating with shell
-                // let _credentials = LoginCredentials { username, password };
+                let credentials = LoginCredentials { username, password };
+                caps.http
+                    .post(format!("{}/api/token/login", API_BASE_URL))
+                    .header("Content-Type", "application/json")
+                    .body_json(&credentials)
+                    .expect(
+                        "Failed to serialize login credentials - this should never happen for valid data",
+                    )
+                    .expect_json::<AuthToken>()
+                    .send(|result| match result {
+                        Ok(mut response) => {
+                            match response.take_body() {
+                                Some(token) => Event::LoginResponse(Ok(token)),
+                                None => Event::LoginResponse(Err("Empty response body".to_string())),
+                            }
+                        }
+                        Err(e) => Event::LoginResponse(Err(e.to_string())),
+                    });
                 render()
             }
 
@@ -213,6 +234,24 @@ impl crux_core::App for App {
 
             Event::Logout => {
                 model.is_loading = true;
+                if let Some(token) = &model.auth_token {
+                    caps.http
+                        .post(format!("{}/api/token/logout", API_BASE_URL))
+                        .header("Authorization", format!("Bearer {}", token))
+                        .send(|result| match result {
+                            Ok(response) => {
+                                if response.status().is_success() {
+                                    Event::LogoutResponse(Ok(()))
+                                } else {
+                                    Event::LogoutResponse(Err(format!(
+                                        "Logout failed: HTTP {}",
+                                        response.status()
+                                    )))
+                                }
+                            }
+                            Err(e) => Event::LogoutResponse(Err(e.to_string())),
+                        });
+                }
                 render()
             }
 
@@ -230,8 +269,30 @@ impl crux_core::App for App {
                 render()
             }
 
-            Event::SetPassword { password: _ } => {
+            Event::SetPassword { password } => {
                 model.is_loading = true;
+                #[derive(Serialize)]
+                struct SetPasswordRequest {
+                    password: String,
+                }
+                caps.http
+                    .post(format!("{}/api/token/set-password", API_BASE_URL))
+                    .header("Content-Type", "application/json")
+                    .body_json(&SetPasswordRequest { password })
+                    .expect("Failed to serialize password request")
+                    .send(|result| match result {
+                        Ok(response) => {
+                            if response.status().is_success() {
+                                Event::SetPasswordResponse(Ok(()))
+                            } else {
+                                Event::SetPasswordResponse(Err(format!(
+                                    "Set password failed: HTTP {}",
+                                    response.status()
+                                )))
+                            }
+                        }
+                        Err(e) => Event::SetPasswordResponse(Err(e.to_string())),
+                    });
                 render()
             }
 
@@ -250,10 +311,39 @@ impl crux_core::App for App {
             }
 
             Event::UpdatePassword {
-                current: _,
-                new_password: _,
+                current,
+                new_password,
             } => {
                 model.is_loading = true;
+                #[derive(Serialize)]
+                struct UpdatePasswordRequest {
+                    current: String,
+                    new_password: String,
+                }
+                if let Some(token) = &model.auth_token {
+                    caps.http
+                        .post(format!("{}/api/token/update-password", API_BASE_URL))
+                        .header("Authorization", format!("Bearer {}", token))
+                        .header("Content-Type", "application/json")
+                        .body_json(&UpdatePasswordRequest {
+                            current,
+                            new_password,
+                        })
+                        .expect("Failed to serialize password update request")
+                        .send(|result| match result {
+                            Ok(response) => {
+                                if response.status().is_success() {
+                                    Event::UpdatePasswordResponse(Ok(()))
+                                } else {
+                                    Event::UpdatePasswordResponse(Err(format!(
+                                        "Update password failed: HTTP {}",
+                                        response.status()
+                                    )))
+                                }
+                            }
+                            Err(e) => Event::UpdatePasswordResponse(Err(e.to_string())),
+                        });
+                }
                 render()
             }
 
@@ -272,6 +362,18 @@ impl crux_core::App for App {
 
             Event::CheckRequiresPasswordSet => {
                 model.is_loading = true;
+                caps.http
+                    .get(format!("{}/api/token/requires-password-set", API_BASE_URL))
+                    .expect_json::<bool>()
+                    .send(|result| match result {
+                        Ok(mut response) => match response.take_body() {
+                            Some(requires) => Event::CheckRequiresPasswordSetResponse(Ok(requires)),
+                            None => Event::CheckRequiresPasswordSetResponse(Err(
+                                "Empty response body".to_string(),
+                            )),
+                        },
+                        Err(e) => Event::CheckRequiresPasswordSetResponse(Err(e.to_string())),
+                    });
                 render()
             }
 
@@ -291,6 +393,24 @@ impl crux_core::App for App {
             // Device actions
             Event::Reboot => {
                 model.is_loading = true;
+                if let Some(token) = &model.auth_token {
+                    caps.http
+                        .post(format!("{}/api/device/reboot", API_BASE_URL))
+                        .header("Authorization", format!("Bearer {}", token))
+                        .send(|result| match result {
+                            Ok(response) => {
+                                if response.status().is_success() {
+                                    Event::RebootResponse(Ok(()))
+                                } else {
+                                    Event::RebootResponse(Err(format!(
+                                        "Reboot failed: HTTP {}",
+                                        response.status()
+                                    )))
+                                }
+                            }
+                            Err(e) => Event::RebootResponse(Err(e.to_string())),
+                        });
+                }
                 render()
             }
 
@@ -307,11 +427,34 @@ impl crux_core::App for App {
                 render()
             }
 
-            Event::FactoryResetRequest {
-                mode: _,
-                preserve: _,
-            } => {
+            Event::FactoryResetRequest { mode, preserve } => {
                 model.is_loading = true;
+                #[derive(Serialize)]
+                struct FactoryResetRequest {
+                    mode: String,
+                    preserve: Vec<String>,
+                }
+                if let Some(token) = &model.auth_token {
+                    caps.http
+                        .post(format!("{}/api/device/factory-reset", API_BASE_URL))
+                        .header("Authorization", format!("Bearer {}", token))
+                        .header("Content-Type", "application/json")
+                        .body_json(&FactoryResetRequest { mode, preserve })
+                        .expect("Failed to serialize factory reset request")
+                        .send(|result| match result {
+                            Ok(response) => {
+                                if response.status().is_success() {
+                                    Event::FactoryResetResponse(Ok(()))
+                                } else {
+                                    Event::FactoryResetResponse(Err(format!(
+                                        "Factory reset failed: HTTP {}",
+                                        response.status()
+                                    )))
+                                }
+                            }
+                            Err(e) => Event::FactoryResetResponse(Err(e.to_string())),
+                        });
+                }
                 render()
             }
 
@@ -330,6 +473,24 @@ impl crux_core::App for App {
 
             Event::ReloadNetwork => {
                 model.is_loading = true;
+                if let Some(token) = &model.auth_token {
+                    caps.http
+                        .post(format!("{}/api/device/reload-network", API_BASE_URL))
+                        .header("Authorization", format!("Bearer {}", token))
+                        .send(|result| match result {
+                            Ok(response) => {
+                                if response.status().is_success() {
+                                    Event::ReloadNetworkResponse(Ok(()))
+                                } else {
+                                    Event::ReloadNetworkResponse(Err(format!(
+                                        "Reload network failed: HTTP {}",
+                                        response.status()
+                                    )))
+                                }
+                            }
+                            Err(e) => Event::ReloadNetworkResponse(Err(e.to_string())),
+                        });
+                }
                 render()
             }
 
@@ -347,8 +508,28 @@ impl crux_core::App for App {
             }
 
             // Network configuration
-            Event::SetNetworkConfig { config: _ } => {
+            Event::SetNetworkConfig { config } => {
                 model.is_loading = true;
+                if let Some(token) = &model.auth_token {
+                    caps.http
+                        .post(format!("{}/api/device/network", API_BASE_URL))
+                        .header("Authorization", format!("Bearer {}", token))
+                        .header("Content-Type", "application/json")
+                        .body_string(config)
+                        .send(|result| match result {
+                            Ok(response) => {
+                                if response.status().is_success() {
+                                    Event::SetNetworkConfigResponse(Ok(()))
+                                } else {
+                                    Event::SetNetworkConfigResponse(Err(format!(
+                                        "Set network config failed: HTTP {}",
+                                        response.status()
+                                    )))
+                                }
+                            }
+                            Err(e) => Event::SetNetworkConfigResponse(Err(e.to_string())),
+                        });
+                }
                 render()
             }
 
@@ -366,8 +547,33 @@ impl crux_core::App for App {
             }
 
             // Update actions
-            Event::LoadUpdate { file_path: _ } => {
+            Event::LoadUpdate { file_path } => {
                 model.is_loading = true;
+                #[derive(Serialize)]
+                struct LoadUpdateRequest {
+                    file_path: String,
+                }
+                if let Some(token) = &model.auth_token {
+                    caps.http
+                        .post(format!("{}/api/update/load", API_BASE_URL))
+                        .header("Authorization", format!("Bearer {}", token))
+                        .header("Content-Type", "application/json")
+                        .body_json(&LoadUpdateRequest { file_path })
+                        .expect("Failed to serialize load update request")
+                        .send(|result| match result {
+                            Ok(response) => {
+                                if response.status().is_success() {
+                                    Event::LoadUpdateResponse(Ok(()))
+                                } else {
+                                    Event::LoadUpdateResponse(Err(format!(
+                                        "Load update failed: HTTP {}",
+                                        response.status()
+                                    )))
+                                }
+                            }
+                            Err(e) => Event::LoadUpdateResponse(Err(e.to_string())),
+                        });
+                }
                 render()
             }
 
@@ -384,8 +590,33 @@ impl crux_core::App for App {
                 render()
             }
 
-            Event::RunUpdate { validate_iothub: _ } => {
+            Event::RunUpdate { validate_iothub } => {
                 model.is_loading = true;
+                #[derive(Serialize)]
+                struct RunUpdateRequest {
+                    validate_iothub: bool,
+                }
+                if let Some(token) = &model.auth_token {
+                    caps.http
+                        .post(format!("{}/api/update/run", API_BASE_URL))
+                        .header("Authorization", format!("Bearer {}", token))
+                        .header("Content-Type", "application/json")
+                        .body_json(&RunUpdateRequest { validate_iothub })
+                        .expect("Failed to serialize run update request")
+                        .send(|result| match result {
+                            Ok(response) => {
+                                if response.status().is_success() {
+                                    Event::RunUpdateResponse(Ok(()))
+                                } else {
+                                    Event::RunUpdateResponse(Err(format!(
+                                        "Run update failed: HTTP {}",
+                                        response.status()
+                                    )))
+                                }
+                            }
+                            Err(e) => Event::RunUpdateResponse(Err(e.to_string())),
+                        });
+                }
                 render()
             }
 
@@ -416,14 +647,131 @@ impl crux_core::App for App {
 
             // WebSocket subscriptions
             Event::SubscribeToChannels => {
-                // TODO: Centrifugo commands will be implemented
+                // Connect to Centrifugo and subscribe to all channels
+                caps.centrifugo.subscribe_all(Event::CentrifugoResponse);
                 render()
             }
 
             Event::UnsubscribeFromChannels => {
-                // TODO: Centrifugo commands will be implemented
+                // Unsubscribe from all channels
+                caps.centrifugo.unsubscribe_all(Event::CentrifugoResponse);
                 render()
             }
+
+            // Centrifugo response handling
+            Event::CentrifugoResponse(output) => match output {
+                CentrifugoOutput::Connected => {
+                    model.is_connected = true;
+                    render()
+                }
+                CentrifugoOutput::Disconnected => {
+                    model.is_connected = false;
+                    render()
+                }
+                CentrifugoOutput::Subscribed { channel: _ } => {
+                    // Subscription confirmed, no model change needed
+                    render()
+                }
+                CentrifugoOutput::Unsubscribed { channel: _ } => {
+                    // Unsubscription confirmed, no model change needed
+                    render()
+                }
+                CentrifugoOutput::Message { channel, data } => {
+                    // Parse the JSON data and dispatch to appropriate update event
+                    match channel.as_str() {
+                        "SystemInfoV1" => {
+                            if let Ok(info) = serde_json::from_str::<SystemInfo>(&data) {
+                                model.system_info = Some(info);
+                            }
+                        }
+                        "NetworkStatusV1" => {
+                            if let Ok(status) = serde_json::from_str::<NetworkStatus>(&data) {
+                                model.network_status = Some(status);
+                            }
+                        }
+                        "OnlineStatusV1" => {
+                            if let Ok(status) = serde_json::from_str::<OnlineStatus>(&data) {
+                                model.online_status = Some(status);
+                            }
+                        }
+                        "FactoryResetV1" => {
+                            if let Ok(reset) = serde_json::from_str::<FactoryReset>(&data) {
+                                model.factory_reset = Some(reset);
+                            }
+                        }
+                        "UpdateValidationStatusV1" => {
+                            if let Ok(status) =
+                                serde_json::from_str::<UpdateValidationStatus>(&data)
+                            {
+                                model.update_validation_status = Some(status);
+                            }
+                        }
+                        "TimeoutsV1" => {
+                            if let Ok(timeouts) = serde_json::from_str::<Timeouts>(&data) {
+                                model.timeouts = Some(timeouts);
+                            }
+                        }
+                        _ => {
+                            // Unknown channel, ignore
+                        }
+                    }
+                    render()
+                }
+                CentrifugoOutput::HistoryResult { channel, data } => {
+                    // Handle history result similar to Message
+                    if let Some(json_data) = data {
+                        match channel.as_str() {
+                            "SystemInfoV1" => {
+                                if let Ok(info) = serde_json::from_str::<SystemInfo>(&json_data) {
+                                    model.system_info = Some(info);
+                                }
+                            }
+                            "NetworkStatusV1" => {
+                                if let Ok(status) =
+                                    serde_json::from_str::<NetworkStatus>(&json_data)
+                                {
+                                    model.network_status = Some(status);
+                                }
+                            }
+                            "OnlineStatusV1" => {
+                                if let Ok(status) =
+                                    serde_json::from_str::<OnlineStatus>(&json_data)
+                                {
+                                    model.online_status = Some(status);
+                                }
+                            }
+                            "FactoryResetV1" => {
+                                if let Ok(reset) =
+                                    serde_json::from_str::<FactoryReset>(&json_data)
+                                {
+                                    model.factory_reset = Some(reset);
+                                }
+                            }
+                            "UpdateValidationStatusV1" => {
+                                if let Ok(status) =
+                                    serde_json::from_str::<UpdateValidationStatus>(&json_data)
+                                {
+                                    model.update_validation_status = Some(status);
+                                }
+                            }
+                            "TimeoutsV1" => {
+                                if let Ok(timeouts) = serde_json::from_str::<Timeouts>(&json_data)
+                                {
+                                    model.timeouts = Some(timeouts);
+                                }
+                            }
+                            _ => {
+                                // Unknown channel, ignore
+                            }
+                        }
+                    }
+                    render()
+                }
+                CentrifugoOutput::Error { message } => {
+                    model.error_message = Some(format!("Centrifugo error: {}", message));
+                    render()
+                }
+            },
 
             // WebSocket updates
             Event::SystemInfoUpdated(info) => {

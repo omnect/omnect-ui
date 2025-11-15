@@ -74,7 +74,6 @@ pub struct IoTEdgeConfig {
 pub struct PathConfig {
     pub app_config_path: PathBuf,
     pub data_dir: PathBuf,
-    pub index_html: PathBuf,
     pub password_file: PathBuf,
     pub host_update_file: PathBuf,
     pub local_update_file: PathBuf,
@@ -265,15 +264,6 @@ impl PathConfig {
 
         let app_config_path = config_dir.join("app_config.js");
         let host_data_dir = PathBuf::from(format!("/var/lib/{}/", env!("CARGO_PKG_NAME")));
-
-        // In test/mock mode, use a dummy path since dist/index.html won't exist
-        #[cfg(any(test, feature = "mock"))]
-        let index_html = PathBuf::from("/dev/null");
-
-        #[cfg(not(any(test, feature = "mock")))]
-        let index_html =
-            std::fs::canonicalize("dist/index.html").context("failed to find dist/index.html")?;
-
         let password_file = config_dir.join("password");
         let host_update_file = host_data_dir.join("update.tar");
         let local_update_file = data_dir.join("update.tar");
@@ -282,7 +272,6 @@ impl PathConfig {
         Ok(Self {
             app_config_path,
             data_dir,
-            index_html,
             password_file,
             host_update_file,
             local_update_file,

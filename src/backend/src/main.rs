@@ -18,7 +18,6 @@ use crate::{
     },
 };
 use actix_cors::Cors;
-use actix_files::Files;
 use actix_multipart::form::MultipartFormConfig;
 use actix_server::ServerHandle;
 use actix_session::{
@@ -31,6 +30,7 @@ use actix_web::{
     cookie::{Key, SameSite},
     web::{self, Data},
 };
+use actix_web_static_files::ResourceFiles;
 use anyhow::{Context, Result};
 use env_logger::{Builder, Env, Target};
 use log::{debug, error, info, warn};
@@ -44,6 +44,9 @@ use tokio::{
 
 const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
 const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
+
+// Include the generated static files from build.rs
+include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 
 type UiApi = Api<OmnectDeviceServiceClient, KeycloakProvider>;
 
@@ -223,9 +226,10 @@ async fn run_server(
     let ui_port = config.ui.port;
     let session_key = Key::generate();
     let token_manager = TokenManager::new(&config.centrifugo.client_token);
-    let static_path = std::fs::canonicalize("dist").context("failed to find dist folder")?;
 
     let server = HttpServer::new(move || {
+        let generated_files = generate();
+        let static_resources: api::StaticResources = generate();
         App::new()
             .wrap(
                 Cors::default()
@@ -252,6 +256,7 @@ async fn run_server(
             )
             .app_data(Data::new(token_manager.clone()))
             .app_data(Data::new(api.clone()))
+            .app_data(Data::new(static_resources))
             .route("/", web::get().to(UiApi::index))
             .route("/config.js", web::get().to(UiApi::config))
             .route(
@@ -306,7 +311,7 @@ async fn run_server(
             .route("/logout", web::post().to(UiApi::logout))
             .route("/healthcheck", web::get().to(UiApi::healthcheck))
             .route("/network", web::post().to(UiApi::set_network_config))
-            .service(Files::new("/static", static_path.clone()))
+            .service(ResourceFiles::new("/static", generated_files))
             .default_service(web::route().to(UiApi::index))
     })
     .bind_rustls_0_23(format!("0.0.0.0:{ui_port}"), tls_config)

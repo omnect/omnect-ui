@@ -1,23 +1,27 @@
-#![allow(deprecated)]
-
 use crux_core::capability::{CapabilityContext, Operation};
 use serde::{Deserialize, Serialize};
 
 // Operations that the Shell needs to perform for Centrifugo
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum CentrifugoOperation {
+    Connect,
+    Disconnect,
     Subscribe { channel: String },
     Unsubscribe { channel: String },
     SubscribeAll,
     UnsubscribeAll,
+    History { channel: String },
 }
 
 // The output from Centrifugo operations (shell tells us what happened)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum CentrifugoOutput {
+    Connected,
+    Disconnected,
     Subscribed { channel: String },
     Unsubscribed { channel: String },
     Message { channel: String, data: String },
+    HistoryResult { channel: String, data: Option<String> },
     Error { message: String },
 }
 
@@ -38,20 +42,117 @@ where
         Self { context }
     }
 
-    pub fn subscribe(&self, _channel: &str) {
-        // Will be implemented when shell integration is ready
+    /// Connect to Centrifugo server
+    pub fn connect<F>(&self, callback: F)
+    where
+        F: FnOnce(CentrifugoOutput) -> Ev + Send + 'static,
+    {
+        self.context.spawn({
+            let context = self.context.clone();
+            async move {
+                let output = context.request_from_shell(CentrifugoOperation::Connect).await;
+                context.update_app(callback(output));
+            }
+        });
     }
 
-    pub fn unsubscribe(&self, _channel: &str) {
-        // Will be implemented when shell integration is ready
+    /// Disconnect from Centrifugo server
+    pub fn disconnect<F>(&self, callback: F)
+    where
+        F: FnOnce(CentrifugoOutput) -> Ev + Send + 'static,
+    {
+        self.context.spawn({
+            let context = self.context.clone();
+            async move {
+                let output = context
+                    .request_from_shell(CentrifugoOperation::Disconnect)
+                    .await;
+                context.update_app(callback(output));
+            }
+        });
     }
 
-    pub fn subscribe_all(&self) {
-        // Will be implemented when shell integration is ready
+    /// Subscribe to a specific channel
+    pub fn subscribe<F>(&self, channel: &str, callback: F)
+    where
+        F: FnOnce(CentrifugoOutput) -> Ev + Send + 'static,
+    {
+        let channel = channel.to_string();
+        self.context.spawn({
+            let context = self.context.clone();
+            async move {
+                let output = context
+                    .request_from_shell(CentrifugoOperation::Subscribe { channel })
+                    .await;
+                context.update_app(callback(output));
+            }
+        });
     }
 
-    pub fn unsubscribe_all(&self) {
-        // Will be implemented when shell integration is ready
+    /// Unsubscribe from a specific channel
+    pub fn unsubscribe<F>(&self, channel: &str, callback: F)
+    where
+        F: FnOnce(CentrifugoOutput) -> Ev + Send + 'static,
+    {
+        let channel = channel.to_string();
+        self.context.spawn({
+            let context = self.context.clone();
+            async move {
+                let output = context
+                    .request_from_shell(CentrifugoOperation::Unsubscribe { channel })
+                    .await;
+                context.update_app(callback(output));
+            }
+        });
+    }
+
+    /// Subscribe to all known channels
+    pub fn subscribe_all<F>(&self, callback: F)
+    where
+        F: FnOnce(CentrifugoOutput) -> Ev + Send + 'static,
+    {
+        self.context.spawn({
+            let context = self.context.clone();
+            async move {
+                let output = context
+                    .request_from_shell(CentrifugoOperation::SubscribeAll)
+                    .await;
+                context.update_app(callback(output));
+            }
+        });
+    }
+
+    /// Unsubscribe from all channels
+    pub fn unsubscribe_all<F>(&self, callback: F)
+    where
+        F: FnOnce(CentrifugoOutput) -> Ev + Send + 'static,
+    {
+        self.context.spawn({
+            let context = self.context.clone();
+            async move {
+                let output = context
+                    .request_from_shell(CentrifugoOperation::UnsubscribeAll)
+                    .await;
+                context.update_app(callback(output));
+            }
+        });
+    }
+
+    /// Get history (last message) from a channel
+    pub fn history<F>(&self, channel: &str, callback: F)
+    where
+        F: FnOnce(CentrifugoOutput) -> Ev + Send + 'static,
+    {
+        let channel = channel.to_string();
+        self.context.spawn({
+            let context = self.context.clone();
+            async move {
+                let output = context
+                    .request_from_shell(CentrifugoOperation::History { channel })
+                    .await;
+                context.update_app(callback(output));
+            }
+        });
     }
 }
 
