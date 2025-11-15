@@ -7,3 +7,6 @@ centrifugo
 *.http
 /dist
 CLAUDE.md
+
+# Generated WASM package (rebuild with wasm-pack)
+src/ui/src/core/pkg/

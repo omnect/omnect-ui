@@ -1,6 +1,9 @@
 pub mod capabilities;
 pub mod types;
 
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
+
 use crux_core::{render::render, Command};
 use serde::{Deserialize, Serialize};
 
