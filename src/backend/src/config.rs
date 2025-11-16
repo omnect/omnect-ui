@@ -167,13 +167,11 @@ impl CentrifugoConfig {
             ],
         };
 
-        // Look for centrifugo binary in multiple locations:
-        // 1. /centrifugo (Docker container)
-        // 2. tools/centrifugo (local development)
-        // 3. centrifugo (legacy/current directory)
-        let binary_path = std::fs::canonicalize("/centrifugo")
-            .or_else(|_| std::fs::canonicalize("tools/centrifugo"))
-            .or_else(|_| std::fs::canonicalize("centrifugo"))
+        // In test/mock mode, use a dummy path since the binary is not actually executed
+        #[cfg(any(test, feature = "mock"))]
+        let binary_path = PathBuf::from("centrifugo_path");
+        #[cfg(not(any(test, feature = "mock")))]
+        let binary_path = std::fs::canonicalize("centrifugo")
             .context("failed to find centrifugo binary")?;
 
         Ok(Self {

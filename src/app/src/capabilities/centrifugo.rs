@@ -3,6 +3,8 @@
 //! This module is kept for Effect enum generation via the #[derive(Effect)] macro.
 //! For actual usage, prefer the Command-based API in `centrifugo_command`.
 
+#![allow(deprecated)]
+
 use crux_core::capability::{CapabilityContext, Operation};
 use serde::{Deserialize, Serialize};
 
