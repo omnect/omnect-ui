@@ -43,6 +43,7 @@ pub struct CentrifugoConfig {
     pub api_key: String,
     pub publish_endpoint: crate::omnect_device_service_client::PublishEndpoint,
     pub log_level: String,
+    pub binary_path: PathBuf,
 }
 
 #[derive(Clone, Debug)]
@@ -153,7 +154,7 @@ impl CentrifugoConfig {
         let api_key = Uuid::new_v4().to_string();
 
         let publish_endpoint = crate::omnect_device_service_client::PublishEndpoint {
-            url: format!("https://localhost:{}/api/publish", port),
+            url: format!("https://localhost:{port}/api/publish"),
             headers: vec![
                 crate::omnect_device_service_client::HeaderKeyValue {
                     name: String::from("Content-Type"),
@@ -166,12 +167,22 @@ impl CentrifugoConfig {
             ],
         };
 
+        // Look for centrifugo binary in multiple locations:
+        // 1. /centrifugo (Docker container)
+        // 2. tools/centrifugo (local development)
+        // 3. centrifugo (legacy/current directory)
+        let binary_path = std::fs::canonicalize("/centrifugo")
+            .or_else(|_| std::fs::canonicalize("tools/centrifugo"))
+            .or_else(|_| std::fs::canonicalize("centrifugo"))
+            .context("failed to find centrifugo binary")?;
+
         Ok(Self {
             port,
             client_token,
             api_key,
             publish_endpoint,
             log_level,
+            binary_path,
         })
     }
 }

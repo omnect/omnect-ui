@@ -139,16 +139,14 @@ async fn run_until_shutdown(
     info!("starting server");
 
     // 1. create the cert with the ip in CommonName
-    let ip_address = service_client
+    let common_name = service_client
         .ip_address()
         .await
         .context("failed to get IP address")?;
 
-    CertificateService::create_module_certificate(CreateCertPayload {
-        common_name: ip_address,
-    })
-    .await
-    .context("failed to create certificate")?;
+    CertificateService::create_module_certificate(CreateCertPayload { common_name })
+        .await
+        .context("failed to create certificate")?;
 
     // 2. run centrifugo with valid cert
     let mut centrifugo = run_centrifugo().context("failed to start centrifugo")?;
@@ -325,10 +323,8 @@ async fn run_server(
 fn run_centrifugo() -> Result<Child> {
     let config = &AppConfig::get().centrifugo;
     let certificate = &AppConfig::get().certificate;
-    let centrifugo_path =
-        std::fs::canonicalize("centrifugo").context("failed to find centrifugo binary")?;
 
-    let centrifugo = Command::new(centrifugo_path)
+    let centrifugo = Command::new(&config.binary_path)
         .arg("-c")
         .arg("/centrifugo_config.json")
         .envs(vec![

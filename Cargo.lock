@@ -2355,7 +2355,7 @@ dependencies = [
 
 [[package]]
 name = "omnect-ui"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -2395,7 +2395,7 @@ dependencies = [
 
 [[package]]
 name = "omnect-ui-core"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "crux_core",
  "crux_http",
@@ -3400,7 +3400,7 @@ checksum = "65da48d447333cebe1aadbdd3662f3ba56e76e67f53bc46f3dd5f67c74629d6b"
 
 [[package]]
 name = "shared_types"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "crux_core",

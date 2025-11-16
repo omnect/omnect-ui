@@ -1,0 +1,49 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "killall_centrifugo",
+            "command": "killall centrifugo || true",
+            "type": "shell",
+            "problemMatcher": []
+        },
+        {
+            "label": "setup_test_password",
+            "type": "shell",
+            "command": "cargo",
+            "args": [
+                "run",
+                "--bin",
+                "setup-password",
+                "--features=mock",
+                "--",
+                "123"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "check_ods_running",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "if [ ! -S /tmp/api.sock ]; then echo '❌ ERROR: omnect-device-service is not running!' && echo 'Please start it first from /home/jzac/projects/omnect-device-service' && echo 'See: https://github.com/omnect/omnect-device-service' && exit 1; else echo '✓ omnect-device-service is running'; fi"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "pre_launch_setup",
+            "dependsOn": [
+                "check_ods_running",
+                "killall_centrifugo",
+                "setup_test_password"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        }
+    ]
+}
+
