@@ -13,9 +13,17 @@ The Crux Core follows the Model-View-Update pattern:
 
 ## Key Files
 
-- `src/lib.rs` - Main application logic (App, Model, ViewModel, Events)
+- `src/lib.rs` - App struct, Capabilities, and re-exports
+- `src/model.rs` - Model and ViewModel structs
+- `src/events.rs` - Event enum definitions
 - `src/types.rs` - Shared data types
-- `src/capabilities/centrifugo.rs` - Custom WebSocket capability (deprecated API)
+- `src/update/` - Domain-based event handlers
+  - `mod.rs` - Main dispatcher and view function
+  - `auth.rs` - Authentication handlers (login, logout, password)
+  - `device.rs` - Device action handlers (reboot, factory reset, network, updates)
+  - `websocket.rs` - WebSocket/Centrifugo handlers
+  - `ui.rs` - UI action handlers (clear error/success)
+- `src/capabilities/centrifugo.rs` - Custom WebSocket capability (deprecated API, kept for Effect enum generation)
 - `src/capabilities/centrifugo_command.rs` - Command-based WebSocket capability (new API)
 
 ## Building
@@ -110,6 +118,7 @@ cargo clippy -p omnect-ui-core -- -D warnings
 - [ ] Add more comprehensive tests for edge cases (currently only 3 basic tests)
 - [x] Migrate Centrifugo capability to Command API (non-deprecated)
 - [x] Migrate HTTP capability to Command API (non-deprecated)
+- [x] Split monolithic lib.rs into domain-based modules
+- [x] Suppress deprecated warnings with module-level `#![allow(deprecated)]`
 - [ ] Remove deprecated capabilities once crux_core provides alternative Effect generation mechanism
-- [ ] Remove `#[allow(deprecated)]` attributes after crux_core deprecation warnings are resolved
 - [ ] Introduce shared_types crate for types shared between backend API and Crux Core
