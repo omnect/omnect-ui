@@ -1,6 +1,10 @@
 #!/bin/bash
 # file used for local development
 
+# In order to deploy the image to the device,
+# there must be an existing deployment and the
+# restart policy of omnect-ui must be set to `never`!
+
 set -e
 
 # Default configuration

@@ -81,7 +81,7 @@ cargo build -p shared_types
 
 #### Docker Image Build
 
-Use the `build-and-deploy-image.sh` script for building Docker images:
+Use the `build-and-deploy-image.sh` script for building and optionally deploying a Docker image to device **(there must be an existing deployment and the restart policy of omnect-ui must be set to `never`)**.
 
 ```bash
 # Build ARM64 image (default)
