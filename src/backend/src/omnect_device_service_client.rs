@@ -295,12 +295,6 @@ impl DeviceServiceClient for OmnectDeviceServiceClient {
     }
 
     async fn reload_network(&self) -> Result<()> {
-        use tokio::time::sleep;
-        self.post(Self::RELOAD_NETWORK_ENDPOINT).await?;
-
-        // this is a hack since ods reports same networks after reload
-        // so sleeping for a while and do it again fixes the issue
-        sleep(std::time::Duration::from_secs(5)).await;
         self.post(Self::RELOAD_NETWORK_ENDPOINT).await?;
         Ok(())
     }
