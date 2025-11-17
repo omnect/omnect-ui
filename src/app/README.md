@@ -69,7 +69,7 @@ The Vue shell uses the `useCore()` composable (in `src/ui/src/composables/useCor
 const { viewModel, sendEvent, login, logout } = useCore()
 
 // Send an event
-await login('username', 'password')
+await login('password')
 
 // Access the view model
 const isLoading = computed(() => viewModel.is_loading)

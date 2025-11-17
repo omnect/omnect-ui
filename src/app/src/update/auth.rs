@@ -9,10 +9,10 @@ use crate::{Effect, HttpCmd, API_BASE_URL};
 /// Handle authentication-related events
 pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
     match event {
-        Event::Login { username, password } => {
+        Event::Login { password } => {
             model.is_loading = true;
             model.error_message = None;
-            let credentials = LoginCredentials { username, password };
+            let credentials = LoginCredentials { password };
             Command::all([
                 render(),
                 HttpCmd::post(format!("{API_BASE_URL}/api/token/login"))

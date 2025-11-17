@@ -116,7 +116,6 @@ pub struct HealthcheckInfo {
 // Authentication
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LoginCredentials {
-    pub username: String,
     pub password: String,
 }
 

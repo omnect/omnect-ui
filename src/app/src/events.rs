@@ -11,7 +11,6 @@ pub enum Event {
 
     // Authentication
     Login {
-        username: String,
         password: String,
     },
     Logout,

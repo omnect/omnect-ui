@@ -81,7 +81,6 @@ mod tests {
 
         let _command = app.update(
             Event::Login {
-                username: "user".to_string(),
                 password: "pass".to_string(),
             },
             &mut model,
