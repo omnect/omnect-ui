@@ -56,6 +56,11 @@ onRebootSuccess(() => {
 onRebootError(() => {
 	if (rebootStatusCode.value === 401) {
 		router.push("/login")
+	} else if (rebootError.value && String(rebootError.value).includes("Failed to fetch")) {
+		// Connection dropped during reboot - this is expected behavior
+		// The reboot command was successfully sent, device is rebooting
+		emit("rebootInProgress")
+		rebootDialog.value = false
 	} else {
 		showError(`Rebooting device failed: ${JSON.stringify(rebootError.value)}`)
 	}

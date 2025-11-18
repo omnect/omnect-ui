@@ -3,6 +3,12 @@ use std::process::Command;
 use std::{env, io};
 
 fn main() {
+    // Tell Cargo to only rerun this build script if specific files change
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=../ui/dist");
+    println!("cargo:rerun-if-changed=../.git/HEAD");
+    println!("cargo:rerun-if-changed=../.git/refs/heads");
+
     let git_short_rev = String::from_utf8(
         Command::new("git")
             .args(["rev-parse", "--short", "HEAD"])
@@ -30,8 +36,6 @@ fn generate_static_files() -> io::Result<()> {
         static_files::resource_dir(ui_dist_path)
             .build()
             .expect("Failed to build static resources");
-
-        println!("cargo:rerun-if-changed=../ui/dist");
     } else {
         // If dist folder doesn't exist, create an empty resource map
         std::fs::write(

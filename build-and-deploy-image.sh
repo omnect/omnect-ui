@@ -8,7 +8,7 @@
 set -e
 
 # Default configuration
-DEVICE_HOST="${DEVICE_HOST:-192.168.0.98}"
+DEVICE_HOST="${DEVICE_HOST:-}"
 DEVICE_USER="${DEVICE_USER:-omnect}"
 DEVICE_PORT="${DEVICE_PORT:-1977}"
 IMAGE_TAG="${IMAGE_TAG:-$(whoami)}"
@@ -23,17 +23,17 @@ Usage: $0 [OPTIONS]
 Build Docker image for omnect-ui and optionally deploy to device.
 
 OPTIONS:
-  --deploy              Deploy the image to the target device after building
+  --deploy              Deploy the image to the target device after building (requires --host)
   --push                Push the image to the registry after building
   --arch <arch>         Target architecture (default: $IMAGE_ARCH)
-  --host <hostname>     Target device hostname or IP (default: $DEVICE_HOST)
+  --host <hostname>     Target device hostname or IP (required when using --deploy)
   --user <username>     SSH user for target device (default: $DEVICE_USER)
   --port <port>         UI port on target device (default: $DEVICE_PORT)
   --tag <tag>           Docker image tag (default: \$(whoami))
   --help                Show this help message
 
 ENVIRONMENT VARIABLES:
-  DEVICE_HOST           Target device hostname or IP (default: 192.168.0.98)
+  DEVICE_HOST           Target device hostname or IP (required when using --deploy)
   DEVICE_USER           SSH user for target device (default: omnect)
   DEVICE_PORT           UI port on target device (default: 1977)
   IMAGE_TAG             Docker image tag (default: \$(whoami))
@@ -42,13 +42,12 @@ ENVIRONMENT VARIABLES:
 EXAMPLES:
   $0                                    # Build only (arm64)
   $0 --arch amd64                       # Build for amd64
-  $0 --deploy                           # Build and deploy to default device
   $0 --push                             # Build and push to registry
-  $0 --push --deploy                    # Build, push to registry, and deploy
   $0 --deploy --host 192.168.1.100      # Build and deploy to specific device
-  $0 --tag v1.2.0 --deploy              # Build with custom tag and deploy
-  $0 --deploy --port 8080               # Build and deploy with custom port
-  IMAGE_TAG=test $0 --deploy            # Build with env var tag and deploy
+  $0 --push --deploy --host 192.168.1.100  # Build, push to registry, and deploy
+  $0 --tag v1.2.0 --deploy --host 192.168.1.100  # Build with custom tag and deploy
+  $0 --deploy --host 192.168.1.100 --port 8080   # Build and deploy with custom port
+  DEVICE_HOST=192.168.1.100 $0 --deploy  # Build and deploy using env var
 EOF
 }
 
@@ -98,6 +97,15 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Validate required parameters
+if [[ "$DEPLOY" == "true" && -z "$DEVICE_HOST" ]]; then
+  echo "Error: --host is required when using --deploy"
+  echo "Provide the device hostname/IP using --host or set DEVICE_HOST environment variable"
+  echo ""
+  usage
+  exit 1
+fi
 
 # local build
 omnect_ui_version=$(toml get --raw Cargo.toml workspace.package.version)
