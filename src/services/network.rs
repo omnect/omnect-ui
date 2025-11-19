@@ -154,7 +154,7 @@ impl NetworkConfigService {
             )
             .context(format!("failed to deserialize rollback: {path:?}"))?;
 
-            // fails if rollback_time < now
+            // fails if deadline < now
             if let Ok(remaining_time) = rollback.deadline.duration_since(SystemTime::now()) {
                 info!("pending rollback found: {rollback:?}");
                 info!(
@@ -190,7 +190,7 @@ impl NetworkConfigService {
     /// # Returns
     /// true if rollback file exists, false otherwise
     pub fn rollback_exists() -> bool {
-        network_rollback_file!().try_exists().unwrap_or(false)
+        network_rollback_file!().exists()
     }
 
     /// Rollback network configuration to the previous backup
