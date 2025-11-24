@@ -74,3 +74,15 @@ impl SingleSignOnProvider for KeycloakProvider {
         Ok(claims.custom)
     }
 }
+
+// Note: Unit tests for KeycloakProvider are not included here because:
+// - verify_token() requires mocking the HTTP client (reqwest) which is complex
+// - verify_token() is already tested indirectly through AuthorizationService tests
+// - verify_token() is tested in integration tests (tests/validate_portal_token.rs)
+// - create_frontend_config_file() requires AppConfig setup with environment variables
+// - The token verification logic itself is handled by jwt-simple library (well-tested)
+//
+// If direct unit tests are needed in the future, consider:
+// - Using wiremock or similar to mock HTTP responses
+// - Making realm_public_key() mockable via dependency injection
+// - Creating integration tests with a test Keycloak instance
