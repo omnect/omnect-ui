@@ -110,15 +110,48 @@ Run with clippy:
 cargo clippy -p omnect-ui-core -- -D warnings
 ```
 
-## Future Work
+## Current Status
+
+### Completed Infrastructure
 
 - [x] Complete WASM integration with wasm-pack
 - [x] Implement full effect processing in Vue shell
 - [x] Migrate all state management from Vue stores to Crux Core
-- [ ] Add more comprehensive tests for edge cases (currently only 3 basic tests)
 - [x] Migrate Centrifugo capability to Command API (non-deprecated)
 - [x] Migrate HTTP capability to Command API (non-deprecated)
 - [x] Split monolithic lib.rs into domain-based modules
 - [x] Suppress deprecated warnings with module-level `#![allow(deprecated)]`
+- [x] Introduce shared_types crate for types shared between backend API and Crux Core
+- [x] Create proof-of-concept component (DeviceInfoCore.vue)
+
+### Vue Component Migration (Future PRs)
+
+The Core infrastructure is complete, but most Vue components still use direct API calls (`useFetch`, `useCentrifuge`). These need to be migrated to use the Core:
+
+**Components to Migrate:**
+
+1. [ ] `DeviceActions.vue` - Reboot and factory reset actions
+   - Replace `useFetch` POST calls with Core events
+   - Replace `useCentrifuge` factory reset subscription with Core ViewModel
+2. [ ] `DeviceInfo.vue` - Replace with `DeviceInfoCore.vue`
+   - Update import in `DeviceOverview.vue`
+   - Remove old `DeviceInfo.vue` file
+3. [ ] `DeviceNetworks.vue` - Network list and status
+   - Replace `useCentrifuge` subscription with Core ViewModel
+4. [ ] `NetworkSettings.vue` - Network configuration
+   - Replace `useFetch` POST calls with Core events
+5. [ ] `UpdateFileUpload.vue` - Firmware update upload
+   - Replace `useFetch` multipart upload with Core event
+6. [ ] `UserMenu.vue` - User authentication actions
+   - Replace `useFetch` logout with Core event
+
+**Additional Tasks:**
+
+- [ ] Remove `useCentrifuge` composable once all components migrated
+- [ ] Add comprehensive integration tests for all migrated components
+- [ ] Add more unit tests for Core edge cases
+- [ ] Performance testing and bundle size optimization
+
+### Technical Debt
+
 - [ ] Remove deprecated capabilities once crux_core provides alternative Effect generation mechanism
-- [ ] Introduce shared_types crate for types shared between backend API and Crux Core
