@@ -12,8 +12,5 @@ CLAUDE.md
 src/ui/src/core/pkg/
 
 # Research and documentation files (generated, not part of source)
-*_RESEARCH*.md
-*_RESEARCH*.txt
-HTTP_IMPLEMENTATION_EXAMPLES.md
-CRUX_HTTP_QUICK_REFERENCE.md
-SHARED_TYPES_ANALYSIS.md
+*.md
+!README.md

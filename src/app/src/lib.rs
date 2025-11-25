@@ -17,7 +17,7 @@ use crux_http::Http;
 // Re-export core types
 pub use crate::capabilities::centrifugo::{CentrifugoOperation, CentrifugoOutput};
 pub use crate::events::Event;
-pub use crate::model::{Model, ViewModel};
+pub use crate::model::Model;
 pub use crate::types::*;
 pub use crux_http::Result as HttpResult;
 
@@ -52,7 +52,7 @@ pub struct App;
 impl crux_core::App for App {
     type Event = Event;
     type Model = Model;
-    type ViewModel = ViewModel;
+    type ViewModel = Model;
     type Capabilities = Capabilities;
     type Effect = Effect;
 
@@ -66,7 +66,7 @@ impl crux_core::App for App {
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
-        update::view(model)
+        model.clone()
     }
 }
 

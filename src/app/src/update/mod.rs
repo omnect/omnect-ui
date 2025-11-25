@@ -6,7 +6,7 @@ mod websocket;
 use crux_core::{render::render, Command};
 
 use crate::events::Event;
-use crate::model::{Model, ViewModel};
+use crate::model::Model;
 use crate::Effect;
 
 /// Main update dispatcher - routes events to domain-specific handlers
@@ -60,24 +60,5 @@ pub fn update(event: Event, model: &mut Model) -> Command<Effect, Event> {
 
         // UI actions domain
         Event::ClearError | Event::ClearSuccess => ui::handle(event, model),
-    }
-}
-
-/// Convert Model to ViewModel for rendering
-pub fn view(model: &Model) -> ViewModel {
-    ViewModel {
-        system_info: model.system_info.clone(),
-        network_status: model.network_status.clone(),
-        online_status: model.online_status.clone(),
-        factory_reset: model.factory_reset.clone(),
-        update_validation_status: model.update_validation_status.clone(),
-        timeouts: model.timeouts.clone(),
-        healthcheck: model.healthcheck.clone(),
-        is_authenticated: model.is_authenticated,
-        requires_password_set: model.requires_password_set,
-        is_loading: model.is_loading,
-        error_message: model.error_message.clone(),
-        success_message: model.success_message.clone(),
-        is_connected: model.is_connected,
     }
 }
