@@ -88,12 +88,15 @@ const errorMessage = computed(() => viewModel.error_message)
 ## Capabilities
 
 ### Render
+
 Updates the ViewModel to trigger UI re-rendering.
 
 ### HTTP
+
 Makes REST API calls to the backend. The shell handles the actual HTTP request and sends the response back to the core.
 
 ### Centrifugo
+
 Manages WebSocket subscriptions for real-time updates. The shell handles the actual WebSocket connection.
 
 ## Testing
@@ -133,9 +136,9 @@ The Core infrastructure is complete, but most Vue components still use direct AP
 1. [ ] `DeviceActions.vue` - Reboot and factory reset actions
    - Replace `useFetch` POST calls with Core events
    - Replace `useCentrifuge` factory reset subscription with Core ViewModel
-2. [ ] `DeviceInfo.vue` - Replace with `DeviceInfoCore.vue`
-   - Update import in `DeviceOverview.vue`
-   - Remove old `DeviceInfo.vue` file
+2. [x] `DeviceInfo.vue` - Replaced with `DeviceInfoCore.vue`
+   - ~~Update import in `DeviceOverview.vue`~~
+   - ~~Remove old `DeviceInfo.vue` file~~
 3. [ ] `DeviceNetworks.vue` - Network list and status
    - Replace `useCentrifuge` subscription with Core ViewModel
 4. [ ] `NetworkSettings.vue` - Network configuration
