@@ -104,4 +104,78 @@ mod tests {
         // Token created with secret1 should not verify with secret2
         assert!(!manager2.verify_token(&token));
     }
+
+    #[test]
+    fn test_token_contains_required_subject() {
+        let manager = TokenManager::new("test-secret");
+        let token = manager.create_token().expect("should create token");
+
+        // Verify token has correct subject
+        let claims = manager
+            .inner
+            .key
+            .verify_token::<NoCustomClaims>(&token, None)
+            .expect("should verify");
+        assert_eq!(claims.subject, Some(TOKEN_SUBJECT.to_string()));
+    }
+
+    #[test]
+    fn test_token_has_expiration() {
+        let manager = TokenManager::new("test-secret");
+        let token = manager.create_token().expect("should create token");
+
+        // Verify token has expiration set
+        let claims = manager
+            .inner
+            .key
+            .verify_token::<NoCustomClaims>(&token, None)
+            .expect("should verify");
+        assert!(claims.expires_at.is_some());
+    }
+
+    #[test]
+    fn test_token_manager_is_clonable() {
+        let manager1 = TokenManager::new("test-secret");
+        let manager2 = manager1.clone();
+
+        let token = manager1.create_token().expect("should create token");
+        assert!(manager2.verify_token(&token));
+    }
+
+    #[test]
+    fn test_multiple_tokens_from_same_manager() {
+        let manager = TokenManager::new("test-secret");
+        let token1 = manager.create_token().expect("should create token 1");
+        let token2 = manager.create_token().expect("should create token 2");
+
+        // Both tokens should be valid
+        assert!(manager.verify_token(&token1));
+        assert!(manager.verify_token(&token2));
+        // Note: tokens may be identical if created at same timestamp (which is fine)
+    }
+
+    #[test]
+    fn test_verify_malformed_token() {
+        let manager = TokenManager::new("test-secret");
+
+        // Various malformed tokens
+        assert!(!manager.verify_token("not.a.jwt"));
+        assert!(!manager.verify_token("only-one-part"));
+        assert!(!manager.verify_token("two.parts"));
+        assert!(!manager.verify_token("...."));
+    }
+
+    #[test]
+    fn test_token_format() {
+        let manager = TokenManager::new("test-secret");
+        let token = manager.create_token().expect("should create token");
+
+        // JWT should have 3 parts separated by dots
+        let parts: Vec<&str> = token.split('.').collect();
+        assert_eq!(parts.len(), 3);
+        // Each part should not be empty
+        assert!(!parts[0].is_empty());
+        assert!(!parts[1].is_empty());
+        assert!(!parts[2].is_empty());
+    }
 }
