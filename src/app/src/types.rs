@@ -123,3 +123,31 @@ pub struct LoginCredentials {
 pub struct AuthToken {
     pub token: String,
 }
+
+// Request types for API calls
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SetPasswordRequest {
+    pub password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UpdatePasswordRequest {
+    pub current: String,
+    pub new_password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FactoryResetRequest {
+    pub mode: String,
+    pub preserve: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LoadUpdateRequest {
+    pub file_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RunUpdateRequest {
+    pub validate_iothub: bool,
+}

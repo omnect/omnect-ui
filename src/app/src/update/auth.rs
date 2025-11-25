@@ -1,10 +1,10 @@
 use crux_core::{render::render, Command};
-use serde::Serialize;
 
+use crate::auth_post;
 use crate::events::Event;
 use crate::handle_response;
 use crate::model::Model;
-use crate::types::{AuthToken, LoginCredentials};
+use crate::types::{AuthToken, LoginCredentials, SetPasswordRequest, UpdatePasswordRequest};
 use crate::{Effect, HttpCmd, API_BASE_URL};
 
 /// Handle authentication-related events
@@ -40,32 +40,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             },
         }),
 
-        Event::Logout => {
-            model.is_loading = true;
-            if let Some(token) = &model.auth_token {
-                Command::all([
-                    render(),
-                    HttpCmd::post(format!("{API_BASE_URL}/api/token/logout"))
-                        .header("Authorization", format!("Bearer {token}"))
-                        .build()
-                        .then_send(|result| match result {
-                            Ok(response) => {
-                                if response.status().is_success() {
-                                    Event::LogoutResponse(Ok(()))
-                                } else {
-                                    Event::LogoutResponse(Err(format!(
-                                        "Logout failed: HTTP {}",
-                                        response.status()
-                                    )))
-                                }
-                            }
-                            Err(e) => Event::LogoutResponse(Err(e.to_string())),
-                        }),
-                ])
-            } else {
-                render()
-            }
-        }
+        Event::Logout => auth_post!(model, "/api/token/logout", LogoutResponse, "Logout"),
 
         Event::LogoutResponse(result) => handle_response!(model, result, {
             on_success: |model, _| {
@@ -75,32 +50,25 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
         }),
 
         Event::SetPassword { password } => {
-            model.is_loading = true;
-            #[derive(Serialize)]
-            struct SetPasswordRequest {
-                password: String,
-            }
-            Command::all([
-                render(),
-                HttpCmd::post(format!("{API_BASE_URL}/api/token/set-password"))
-                    .header("Content-Type", "application/json")
-                    .body_json(&SetPasswordRequest { password })
-                    .expect("Failed to serialize password request")
-                    .build()
-                    .then_send(|result| match result {
-                        Ok(response) => {
-                            if response.status().is_success() {
-                                Event::SetPasswordResponse(Ok(()))
-                            } else {
-                                Event::SetPasswordResponse(Err(format!(
-                                    "Set password failed: HTTP {}",
-                                    response.status()
-                                )))
-                            }
+            let request = SetPasswordRequest { password };
+            HttpCmd::post(format!("{API_BASE_URL}/api/token/set-password"))
+                .header("Content-Type", "application/json")
+                .body_json(&request)
+                .expect("Failed to serialize set password request")
+                .build()
+                .then_send(|result| match result {
+                    Ok(response) => {
+                        if response.status().is_success() {
+                            Event::SetPasswordResponse(Ok(()))
+                        } else {
+                            Event::SetPasswordResponse(Err(crate::macros::http_error(
+                                "Set password",
+                                response.status(),
+                            )))
                         }
-                        Err(e) => Event::SetPasswordResponse(Err(e.to_string())),
-                    }),
-            ])
+                    }
+                    Err(e) => Event::SetPasswordResponse(Err(e.to_string())),
+                })
         }
 
         Event::SetPasswordResponse(result) => handle_response!(model, result, {
@@ -114,41 +82,13 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             current,
             new_password,
         } => {
-            model.is_loading = true;
-            #[derive(Serialize)]
-            struct UpdatePasswordRequest {
-                current: String,
-                new_password: String,
-            }
-            if let Some(token) = &model.auth_token {
-                Command::all([
-                    render(),
-                    HttpCmd::post(format!("{API_BASE_URL}/api/token/update-password"))
-                        .header("Authorization", format!("Bearer {token}"))
-                        .header("Content-Type", "application/json")
-                        .body_json(&UpdatePasswordRequest {
-                            current,
-                            new_password,
-                        })
-                        .expect("Failed to serialize password update request")
-                        .build()
-                        .then_send(|result| match result {
-                            Ok(response) => {
-                                if response.status().is_success() {
-                                    Event::UpdatePasswordResponse(Ok(()))
-                                } else {
-                                    Event::UpdatePasswordResponse(Err(format!(
-                                        "Update password failed: HTTP {}",
-                                        response.status()
-                                    )))
-                                }
-                            }
-                            Err(e) => Event::UpdatePasswordResponse(Err(e.to_string())),
-                        }),
-                ])
-            } else {
-                render()
-            }
+            let request = UpdatePasswordRequest {
+                current,
+                new_password,
+            };
+            auth_post!(model, "/api/token/update-password", UpdatePasswordResponse, "Update password",
+                body_json: &request
+            )
         }
 
         Event::UpdatePasswordResponse(result) => handle_response!(model, result, {
