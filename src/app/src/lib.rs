@@ -1,5 +1,6 @@
 pub mod capabilities;
 pub mod events;
+pub mod macros;
 pub mod model;
 pub mod types;
 pub mod update;

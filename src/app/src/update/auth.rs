@@ -2,6 +2,7 @@ use crux_core::{render::render, Command};
 use serde::Serialize;
 
 use crate::events::Event;
+use crate::handle_response;
 use crate::model::Model;
 use crate::types::{AuthToken, LoginCredentials};
 use crate::{Effect, HttpCmd, API_BASE_URL};
@@ -31,21 +32,13 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             ])
         }
 
-        Event::LoginResponse(result) => {
-            model.is_loading = false;
-            match result {
-                Ok(auth) => {
-                    model.auth_token = Some(auth.token);
-                    model.is_authenticated = true;
-                    model.error_message = None;
-                }
-                Err(e) => {
-                    model.error_message = Some(e);
-                    model.is_authenticated = false;
-                }
-            }
-            render()
-        }
+        Event::LoginResponse(result) => handle_response!(model, result, {
+            on_success: |model, auth| {
+                model.auth_token = Some(auth.token);
+                model.is_authenticated = true;
+                model.error_message = None;
+            },
+        }),
 
         Event::Logout => {
             model.is_loading = true;
@@ -74,19 +67,12 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             }
         }
 
-        Event::LogoutResponse(result) => {
-            model.is_loading = false;
-            match result {
-                Ok(()) => {
-                    model.auth_token = None;
-                    model.is_authenticated = false;
-                }
-                Err(e) => {
-                    model.error_message = Some(e);
-                }
-            }
-            render()
-        }
+        Event::LogoutResponse(result) => handle_response!(model, result, {
+            on_success: |model, _| {
+                model.auth_token = None;
+                model.is_authenticated = false;
+            },
+        }),
 
         Event::SetPassword { password } => {
             model.is_loading = true;
@@ -117,19 +103,12 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             ])
         }
 
-        Event::SetPasswordResponse(result) => {
-            model.is_loading = false;
-            match result {
-                Ok(()) => {
-                    model.requires_password_set = false;
-                    model.success_message = Some("Password set successfully".to_string());
-                }
-                Err(e) => {
-                    model.error_message = Some(e);
-                }
-            }
-            render()
-        }
+        Event::SetPasswordResponse(result) => handle_response!(model, result, {
+            on_success: |model, _| {
+                model.requires_password_set = false;
+            },
+            success_message: "Password set successfully",
+        }),
 
         Event::UpdatePassword {
             current,
@@ -172,18 +151,9 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             }
         }
 
-        Event::UpdatePasswordResponse(result) => {
-            model.is_loading = false;
-            match result {
-                Ok(()) => {
-                    model.success_message = Some("Password updated successfully".to_string());
-                }
-                Err(e) => {
-                    model.error_message = Some(e);
-                }
-            }
-            render()
-        }
+        Event::UpdatePasswordResponse(result) => handle_response!(model, result, {
+            success_message: "Password updated successfully",
+        }),
 
         Event::CheckRequiresPasswordSet => {
             model.is_loading = true;
@@ -204,18 +174,11 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             ])
         }
 
-        Event::CheckRequiresPasswordSetResponse(result) => {
-            model.is_loading = false;
-            match result {
-                Ok(requires) => {
-                    model.requires_password_set = requires;
-                }
-                Err(e) => {
-                    model.error_message = Some(e);
-                }
-            }
-            render()
-        }
+        Event::CheckRequiresPasswordSetResponse(result) => handle_response!(model, result, {
+            on_success: |model, requires| {
+                model.requires_password_set = requires;
+            },
+        }),
 
         _ => unreachable!("Non-auth event passed to auth handler"),
     }

@@ -2,6 +2,7 @@ use crux_core::{render::render, Command};
 use serde::Serialize;
 
 use crate::events::Event;
+use crate::handle_response;
 use crate::model::Model;
 use crate::{Effect, HttpCmd, API_BASE_URL};
 
@@ -35,18 +36,9 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             }
         }
 
-        Event::RebootResponse(result) => {
-            model.is_loading = false;
-            match result {
-                Ok(()) => {
-                    model.success_message = Some("Reboot initiated".to_string());
-                }
-                Err(e) => {
-                    model.error_message = Some(e);
-                }
-            }
-            render()
-        }
+        Event::RebootResponse(result) => handle_response!(model, result, {
+            success_message: "Reboot initiated",
+        }),
 
         Event::FactoryResetRequest { mode, preserve } => {
             model.is_loading = true;
@@ -83,18 +75,9 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             }
         }
 
-        Event::FactoryResetResponse(result) => {
-            model.is_loading = false;
-            match result {
-                Ok(()) => {
-                    model.success_message = Some("Factory reset initiated".to_string());
-                }
-                Err(e) => {
-                    model.error_message = Some(e);
-                }
-            }
-            render()
-        }
+        Event::FactoryResetResponse(result) => handle_response!(model, result, {
+            success_message: "Factory reset initiated",
+        }),
 
         Event::ReloadNetwork => {
             model.is_loading = true;
@@ -123,18 +106,9 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             }
         }
 
-        Event::ReloadNetworkResponse(result) => {
-            model.is_loading = false;
-            match result {
-                Ok(()) => {
-                    model.success_message = Some("Network reloaded".to_string());
-                }
-                Err(e) => {
-                    model.error_message = Some(e);
-                }
-            }
-            render()
-        }
+        Event::ReloadNetworkResponse(result) => handle_response!(model, result, {
+            success_message: "Network reloaded",
+        }),
 
         Event::SetNetworkConfig { config } => {
             model.is_loading = true;
@@ -165,18 +139,9 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             }
         }
 
-        Event::SetNetworkConfigResponse(result) => {
-            model.is_loading = false;
-            match result {
-                Ok(()) => {
-                    model.success_message = Some("Network configuration updated".to_string());
-                }
-                Err(e) => {
-                    model.error_message = Some(e);
-                }
-            }
-            render()
-        }
+        Event::SetNetworkConfigResponse(result) => handle_response!(model, result, {
+            success_message: "Network configuration updated",
+        }),
 
         Event::LoadUpdate { file_path } => {
             model.is_loading = true;
@@ -212,18 +177,9 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             }
         }
 
-        Event::LoadUpdateResponse(result) => {
-            model.is_loading = false;
-            match result {
-                Ok(()) => {
-                    model.success_message = Some("Update loaded".to_string());
-                }
-                Err(e) => {
-                    model.error_message = Some(e);
-                }
-            }
-            render()
-        }
+        Event::LoadUpdateResponse(result) => handle_response!(model, result, {
+            success_message: "Update loaded",
+        }),
 
         Event::RunUpdate { validate_iothub } => {
             model.is_loading = true;
@@ -259,30 +215,16 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             }
         }
 
-        Event::RunUpdateResponse(result) => {
-            model.is_loading = false;
-            match result {
-                Ok(()) => {
-                    model.success_message = Some("Update started".to_string());
-                }
-                Err(e) => {
-                    model.error_message = Some(e);
-                }
-            }
-            render()
-        }
+        Event::RunUpdateResponse(result) => handle_response!(model, result, {
+            success_message: "Update started",
+        }),
 
-        Event::HealthcheckResponse(result) => {
-            match result {
-                Ok(info) => {
-                    model.healthcheck = Some(info);
-                }
-                Err(e) => {
-                    model.error_message = Some(e);
-                }
-            }
-            render()
-        }
+        Event::HealthcheckResponse(result) => handle_response!(model, result, {
+            on_success: |model, info| {
+                model.healthcheck = Some(info);
+            },
+            no_loading: true,
+        }),
 
         _ => unreachable!("Non-device event passed to device handler"),
     }

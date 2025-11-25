@@ -3,7 +3,9 @@ use crux_core::{render::render, Command};
 use crate::capabilities::centrifugo::CentrifugoOutput;
 use crate::events::Event;
 use crate::model::Model;
+use crate::parse_channel_data;
 use crate::types::*;
+use crate::update_field;
 use crate::{CentrifugoCmd, Effect};
 
 /// Handle WebSocket and Centrifugo-related events
@@ -19,45 +21,16 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
 
         Event::CentrifugoResponse(output) => handle_centrifugo_output(output, model),
 
-        Event::SystemInfoUpdated(info) => {
-            model.system_info = Some(info);
-            render()
-        }
-
-        Event::NetworkStatusUpdated(status) => {
-            model.network_status = Some(status);
-            render()
-        }
-
-        Event::OnlineStatusUpdated(status) => {
-            model.online_status = Some(status);
-            render()
-        }
-
-        Event::FactoryResetUpdated(reset) => {
-            model.factory_reset = Some(reset);
-            render()
-        }
-
+        Event::SystemInfoUpdated(info) => update_field!(model.system_info, Some(info)),
+        Event::NetworkStatusUpdated(status) => update_field!(model.network_status, Some(status)),
+        Event::OnlineStatusUpdated(status) => update_field!(model.online_status, Some(status)),
+        Event::FactoryResetUpdated(reset) => update_field!(model.factory_reset, Some(reset)),
         Event::UpdateValidationStatusUpdated(status) => {
-            model.update_validation_status = Some(status);
-            render()
+            update_field!(model.update_validation_status, Some(status))
         }
-
-        Event::TimeoutsUpdated(timeouts) => {
-            model.timeouts = Some(timeouts);
-            render()
-        }
-
-        Event::Connected => {
-            model.is_connected = true;
-            render()
-        }
-
-        Event::Disconnected => {
-            model.is_connected = false;
-            render()
-        }
+        Event::TimeoutsUpdated(timeouts) => update_field!(model.timeouts, Some(timeouts)),
+        Event::Connected => update_field!(model.is_connected, true),
+        Event::Disconnected => update_field!(model.is_connected, false),
 
         _ => unreachable!("Non-websocket event passed to websocket handler"),
     }
@@ -95,39 +68,13 @@ fn handle_centrifugo_output(output: CentrifugoOutput, model: &mut Model) -> Comm
 
 /// Parse JSON data from a channel message and update the model
 fn parse_channel_message(channel: &str, data: &str, model: &mut Model) {
-    match channel {
-        "SystemInfoV1" => {
-            if let Ok(info) = serde_json::from_str::<SystemInfo>(data) {
-                model.system_info = Some(info);
-            }
-        }
-        "NetworkStatusV1" => {
-            if let Ok(status) = serde_json::from_str::<NetworkStatus>(data) {
-                model.network_status = Some(status);
-            }
-        }
-        "OnlineStatusV1" => {
-            if let Ok(status) = serde_json::from_str::<OnlineStatus>(data) {
-                model.online_status = Some(status);
-            }
-        }
-        "FactoryResetV1" => {
-            if let Ok(reset) = serde_json::from_str::<FactoryReset>(data) {
-                model.factory_reset = Some(reset);
-            }
-        }
-        "UpdateValidationStatusV1" => {
-            if let Ok(status) = serde_json::from_str::<UpdateValidationStatus>(data) {
-                model.update_validation_status = Some(status);
-            }
-        }
-        "TimeoutsV1" => {
-            if let Ok(timeouts) = serde_json::from_str::<Timeouts>(data) {
-                model.timeouts = Some(timeouts);
-            }
-        }
-        _ => {
-            // Unknown channel, ignore
-        }
+    parse_channel_data! {
+        channel, data, model,
+        "SystemInfoV1" => system_info: SystemInfo,
+        "NetworkStatusV1" => network_status: NetworkStatus,
+        "OnlineStatusV1" => online_status: OnlineStatus,
+        "FactoryResetV1" => factory_reset: FactoryReset,
+        "UpdateValidationStatusV1" => update_validation_status: UpdateValidationStatus,
+        "TimeoutsV1" => timeouts: Timeouts,
     }
 }
