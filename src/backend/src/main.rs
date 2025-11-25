@@ -226,8 +226,6 @@ async fn run_server(
     let token_manager = TokenManager::new(&config.centrifugo.client_token);
 
     let server = HttpServer::new(move || {
-        let generated_files = generate();
-        let static_resources: api::StaticResources = generate();
         App::new()
             .wrap(
                 Cors::default()
@@ -254,7 +252,7 @@ async fn run_server(
             )
             .app_data(Data::new(token_manager.clone()))
             .app_data(Data::new(api.clone()))
-            .app_data(Data::new(static_resources))
+            .app_data(Data::new(generate()))
             .route("/", web::get().to(UiApi::index))
             .route("/config.js", web::get().to(UiApi::config))
             .route(
@@ -309,7 +307,7 @@ async fn run_server(
             .route("/logout", web::post().to(UiApi::logout))
             .route("/healthcheck", web::get().to(UiApi::healthcheck))
             .route("/network", web::post().to(UiApi::set_network_config))
-            .service(ResourceFiles::new("/static", generated_files))
+            .service(ResourceFiles::new("/static", generate()))
             .default_service(web::route().to(UiApi::index))
     })
     .bind_rustls_0_23(format!("0.0.0.0:{ui_port}"), tls_config)

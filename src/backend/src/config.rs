@@ -171,8 +171,8 @@ impl CentrifugoConfig {
         #[cfg(any(test, feature = "mock"))]
         let binary_path = PathBuf::from("centrifugo_path");
         #[cfg(not(any(test, feature = "mock")))]
-        let binary_path = std::fs::canonicalize("centrifugo")
-            .context("failed to find centrifugo binary")?;
+        let binary_path =
+            std::fs::canonicalize("centrifugo").context("failed to find centrifugo binary")?;
 
         Ok(Self {
             port,

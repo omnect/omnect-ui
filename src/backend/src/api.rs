@@ -71,9 +71,11 @@ where
             actix_web::error::ErrorInternalServerError("republish failed")
         })?;
 
-        let index_html = static_resources.get("index.html").ok_or_else(|| {
-            actix_web::error::ErrorNotFound("index.html not found in embedded resources")
-        })?;
+        let Some(index_html) = static_resources.get("index.html") else {
+            return Err(actix_web::error::ErrorNotFound(
+                "index.html not found in embedded resources",
+            ));
+        };
 
         Ok(HttpResponse::Ok()
             .content_type(index_html.mime_type)
