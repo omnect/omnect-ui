@@ -116,4 +116,128 @@ mod tests {
         // Cleanup
         let _ = std::fs::remove_file(password_file);
     }
+
+    #[test]
+    fn test_validate_password_success() {
+        let password_file = &AppConfig::get().paths.password_file;
+        let _ = std::fs::remove_file(password_file);
+
+        PasswordService::store_or_update_password("mypassword").expect("should store");
+
+        let result = PasswordService::validate_password("mypassword");
+        assert!(result.is_ok());
+
+        // Cleanup
+        let _ = std::fs::remove_file(password_file);
+    }
+
+    #[test]
+    fn test_validate_password_wrong_password() {
+        let password_file = &AppConfig::get().paths.password_file;
+        let _ = std::fs::remove_file(password_file);
+
+        PasswordService::store_or_update_password("correctpassword").expect("should store");
+
+        let result = PasswordService::validate_password("wrongpassword");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("failed to verify password"));
+
+        // Cleanup
+        let _ = std::fs::remove_file(password_file);
+    }
+
+    #[test]
+    fn test_validate_password_empty() {
+        let result = PasswordService::validate_password("");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("empty"));
+    }
+
+    #[test]
+    fn test_update_existing_password() {
+        let password_file = &AppConfig::get().paths.password_file;
+        let _ = std::fs::remove_file(password_file);
+
+        PasswordService::store_or_update_password("oldpassword").expect("should store");
+        assert!(PasswordService::validate_password("oldpassword").is_ok());
+
+        PasswordService::store_or_update_password("newpassword").expect("should update");
+        assert!(PasswordService::validate_password("newpassword").is_ok());
+        assert!(PasswordService::validate_password("oldpassword").is_err());
+
+        // Cleanup
+        let _ = std::fs::remove_file(password_file);
+    }
+
+    #[test]
+    fn test_hash_password_different_salts() {
+        let hash1 = PasswordService::hash_password("password").expect("should hash");
+        let hash2 = PasswordService::hash_password("password").expect("should hash");
+
+        // Same password should produce different hashes due to random salt
+        assert_ne!(hash1, hash2);
+        // But both should be valid Argon2 hashes
+        assert!(hash1.starts_with("$argon2"));
+        assert!(hash2.starts_with("$argon2"));
+    }
+
+    #[test]
+    fn test_hash_password_format() {
+        let hash = PasswordService::hash_password("testpass").expect("should hash");
+
+        // Argon2 hash should have specific format
+        assert!(hash.starts_with("$argon2"));
+        // Should contain multiple $ separators (format: $alg$v$params$salt$hash)
+        assert!(hash.matches('$').count() >= 4);
+    }
+
+    #[test]
+    fn test_password_exists_no_file() {
+        let password_file = &AppConfig::get().paths.password_file;
+        let _ = std::fs::remove_file(password_file);
+
+        assert!(!PasswordService::password_exists());
+    }
+
+    #[test]
+    fn test_validate_password_no_file() {
+        let password_file = &AppConfig::get().paths.password_file;
+        let _ = std::fs::remove_file(password_file);
+
+        let result = PasswordService::validate_password("anypassword");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("failed to read password file"));
+    }
+
+    #[test]
+    fn test_store_password_special_characters() {
+        let password_file = &AppConfig::get().paths.password_file;
+        let _ = std::fs::remove_file(password_file);
+
+        let password = "p@$$w0rd!#%&*()";
+        PasswordService::store_or_update_password(password).expect("should store");
+        assert!(PasswordService::validate_password(password).is_ok());
+
+        // Cleanup
+        let _ = std::fs::remove_file(password_file);
+    }
+
+    #[test]
+    fn test_store_password_unicode() {
+        let password_file = &AppConfig::get().paths.password_file;
+        let _ = std::fs::remove_file(password_file);
+
+        let password = "пароль密码🔐";
+        PasswordService::store_or_update_password(password).expect("should store");
+        assert!(PasswordService::validate_password(password).is_ok());
+
+        // Cleanup
+        let _ = std::fs::remove_file(password_file);
+    }
 }
