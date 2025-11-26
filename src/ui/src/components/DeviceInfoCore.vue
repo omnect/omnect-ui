@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * DeviceInfoCore - Example component using Crux Core state management
+ * DeviceInfoCore - Device information component using Crux Core state management
  *
- * This component demonstrates the Full Crux approach where:
+ * This component uses the Crux architecture where:
  * - All state lives in the Core
  * - Shell handles only effects (HTTP, Centrifugo)
  * - Components read from the reactive viewModel
@@ -11,7 +11,6 @@
 import { computed, onMounted } from 'vue'
 import { useCore } from '../composables/useCore'
 
-// Use the Core directly
 const { viewModel, initialize, subscribeToChannels } = useCore()
 
 // Initialize Core and subscribe to Centrifugo channels
@@ -76,7 +75,7 @@ const displayItems = computed(() =>
 
 <template>
   <div class="flex flex-col gap-y-8">
-    <div class="text-h4 text-secondary border-b">Common Info (Core)</div>
+    <div class="text-h4 text-secondary border-b">Common Info</div>
     <dl class="grid grid-cols-[1fr_3fr] gap-x-64 gap-y-8">
       <div v-for="item of displayItems" :key="item.title">
         <dt class="font-bold text-gray-900">{{ item.title }}</dt>

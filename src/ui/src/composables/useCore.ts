@@ -55,7 +55,7 @@ import {
   EventVariantClearError,
   EventVariantClearSuccess,
   type Event,
-  ViewModel as GeneratedViewModel,
+  Model as GeneratedViewModel,
   Request as CruxRequest,
   Effect as EffectClass,
   EffectVariantRender,

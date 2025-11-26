@@ -25,6 +25,7 @@ Build Docker image for omnect-ui and optionally deploy to device.
 OPTIONS:
   --deploy              Deploy the image to the target device after building (requires --host)
   --push                Push the image to the registry after building
+  --clean               Perform a clean build without using Docker cache
   --arch <arch>         Target architecture (default: $IMAGE_ARCH)
   --host <hostname>     Target device hostname or IP (required when using --deploy)
   --user <username>     SSH user for target device (default: $DEVICE_USER)
@@ -42,6 +43,7 @@ ENVIRONMENT VARIABLES:
 EXAMPLES:
   $0                                    # Build only (arm64)
   $0 --arch amd64                       # Build for amd64
+  $0 --clean                            # Clean build without cache
   $0 --push                             # Build and push to registry
   $0 --deploy --host 192.168.1.100      # Build and deploy to specific device
   $0 --push --deploy --host 192.168.1.100  # Build, push to registry, and deploy
@@ -54,6 +56,7 @@ EOF
 # Parse command line arguments
 DEPLOY=false
 PUSH=false
+CLEAN=false
 while [[ $# -gt 0 ]]; do
   case $1 in
     --deploy)
@@ -62,6 +65,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --push)
       PUSH=true
+      shift
+      ;;
+    --clean)
+      CLEAN=true
       shift
       ;;
     --arch)
@@ -117,11 +124,14 @@ if [[ "$IMAGE_ARCH" != "$(uname -m)" ]]; then
   docker run --rm --privileged omnectweucopsacr.azurecr.io/mlilien/qemu-user-static:8.1.2 --reset -p yes
 fi
 
-docker buildx build \
-  --platform "linux/${IMAGE_ARCH}" \
-  --load \
-  -f Dockerfile . \
-  -t "$IMAGE_NAME"
+# Build with or without cache
+BUILD_ARGS="--platform linux/${IMAGE_ARCH} --load -f Dockerfile . -t $IMAGE_NAME"
+if [[ "$CLEAN" == "true" ]]; then
+  echo "Performing clean build (no cache)..."
+  docker buildx build --no-cache $BUILD_ARGS
+else
+  docker buildx build $BUILD_ARGS
+fi
 
 # Push to registry if requested
 if [[ "$PUSH" == "true" ]]; then

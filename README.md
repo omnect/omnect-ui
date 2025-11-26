@@ -6,11 +6,11 @@ This module implements a web frontend and backend to provide omnect specific fea
 
 ## Architecture
 
-omnect UI follows a full-stack architecture:
+omnect UI follows a full-stack Single Page Application (SPA) architecture:
 
 - **Backend**: Rust-based web service (Actix-web) providing API endpoints and WebSocket support via Centrifugo
 - **Crux Core**: Platform-agnostic business logic compiled to WebAssembly
-- **Frontend**: Vue 3 TypeScript application serving as the shell for the Crux Core
+- **Frontend**: Vue 3 TypeScript SPA serving as the shell for the Crux Core
 - **Shared Types**: TypeScript bindings auto-generated from Rust types
 
 ## Install omnect UI

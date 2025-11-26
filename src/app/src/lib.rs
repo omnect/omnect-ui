@@ -8,6 +8,9 @@ pub mod update;
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
 
+#[cfg(test)]
+mod tests;
+
 use crux_core::Command;
 
 // Using deprecated Capabilities API for Http (kept for Effect enum generation)
@@ -21,8 +24,6 @@ pub use crate::model::Model;
 pub use crate::types::*;
 pub use crux_http::Result as HttpResult;
 
-/// API base URL - empty string means relative URLs (shell will use current origin)
-/// For absolute URLs, set to something like "http://localhost:8000"
 pub const API_BASE_URL: &str = "http://localhost:8000";
 
 /// Capabilities - side effects the app can perform
@@ -40,8 +41,6 @@ pub struct Capabilities {
     pub centrifugo: crate::capabilities::centrifugo::Centrifugo<Event>,
 }
 
-/// Type aliases for the Command-based APIs
-/// Defined after Capabilities to have access to the generated Effect enum
 pub type CentrifugoCmd = crate::capabilities::centrifugo_command::Centrifugo<Effect, Event>;
 pub type HttpCmd = crux_http::command::Http<Effect, Event>;
 
@@ -67,59 +66,5 @@ impl crux_core::App for App {
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
         model.clone()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crux_core::testing::AppTester;
-
-    #[test]
-    fn test_login_sets_loading() {
-        let app = AppTester::<App>::default();
-        let mut model = Model::default();
-
-        let _command = app.update(
-            Event::Login {
-                password: "pass".to_string(),
-            },
-            &mut model,
-        );
-
-        assert!(model.is_loading);
-    }
-
-    #[test]
-    fn test_system_info_updated() {
-        let app = AppTester::<App>::default();
-        let mut model = Model::default();
-
-        let info = SystemInfo {
-            os: OsInfo {
-                name: "Linux".to_string(),
-                version: "5.10".to_string(),
-            },
-            azure_sdk_version: "1.0".to_string(),
-            omnect_device_service_version: "2.0".to_string(),
-            boot_time: Some("2024-01-01".to_string()),
-        };
-
-        let _command = app.update(Event::SystemInfoUpdated(info.clone()), &mut model);
-
-        assert_eq!(model.system_info, Some(info));
-    }
-
-    #[test]
-    fn test_clear_error() {
-        let app = AppTester::<App>::default();
-        let mut model = Model {
-            error_message: Some("Some error".to_string()),
-            ..Default::default()
-        };
-
-        let _command = app.update(Event::ClearError, &mut model);
-
-        assert_eq!(model.error_message, None);
     }
 }

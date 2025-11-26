@@ -1,7 +1,7 @@
 [package]
 name = "omnect-ui-core"
 description = "Crux Core for omnect-ui application"
-readme = "../../README.md"
+readme = "README.md"
 edition = "2021"
 
 authors.workspace = true

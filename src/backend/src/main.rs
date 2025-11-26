@@ -48,6 +48,12 @@ const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
 // Include the generated static files from build.rs
 include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 
+// Alias the generated function to a more descriptive name
+#[inline(always)]
+fn static_files() -> std::collections::HashMap<&'static str, static_files::Resource> {
+    generate()
+}
+
 type UiApi = Api<OmnectDeviceServiceClient, KeycloakProvider>;
 
 enum ShutdownReason {
@@ -252,7 +258,7 @@ async fn run_server(
             )
             .app_data(Data::new(token_manager.clone()))
             .app_data(Data::new(api.clone()))
-            .app_data(Data::new(generate()))
+            .app_data(Data::new(static_files()))
             .route("/", web::get().to(UiApi::index))
             .route("/config.js", web::get().to(UiApi::config))
             .route(
@@ -307,7 +313,7 @@ async fn run_server(
             .route("/logout", web::post().to(UiApi::logout))
             .route("/healthcheck", web::get().to(UiApi::healthcheck))
             .route("/network", web::post().to(UiApi::set_network_config))
-            .service(ResourceFiles::new("/static", generate()))
+            .service(ResourceFiles::new("/static", static_files()))
             .default_service(web::route().to(UiApi::index))
     })
     .bind_rustls_0_23(format!("0.0.0.0:{ui_port}"), tls_config)
