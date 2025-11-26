@@ -33,7 +33,7 @@ export type {
   HealthcheckInfo,
   Event,
   Effect,
-  ViewModel as CoreViewModel,
+  Model as CoreViewModel,
 } from '../../../shared_types/generated/typescript/types/shared_types'
 
 // Import event constructors for sending events to the core
