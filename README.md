@@ -75,8 +75,8 @@ export PATH="$HOME/.local/share/pnpm:$PATH"
 pnpm install
 pnpm run dev
 
-# Generate TypeScript types
-cargo build -p shared_types
+# Generate TypeScript types (ESM format for Vite)
+./scripts/generate-types.sh
 ```
 
 #### Docker Image Build

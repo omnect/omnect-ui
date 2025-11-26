@@ -14,9 +14,16 @@ The Crux Core follows the Model-View-Update pattern:
 ## Key Files
 
 - `src/lib.rs` - App struct, Capabilities, and re-exports
-- `src/model.rs` - Model and ViewModel structs
+- `src/model.rs` - Model struct (application state)
 - `src/events.rs` - Event enum definitions
-- `src/types.rs` - Shared data types
+- `src/types/` - Shared data types organized by domain
+  - `mod.rs` - Module re-exports
+  - `auth.rs` - Authentication types
+  - `device.rs` - Device information types
+  - `network.rs` - Network configuration types
+  - `factory_reset.rs` - Factory reset types
+  - `update.rs` - Update validation types
+  - `common.rs` - Common shared types
 - `src/update/` - Domain-based event handlers
   - `mod.rs` - Main dispatcher and view function
   - `auth.rs` - Authentication handlers (login, logout, password)
@@ -53,13 +60,25 @@ This will generate the WASM module in `src/ui/src/core/pkg/`.
 
 ### Generate TypeScript Types
 
-Make sure pnpm is in your PATH, then:
+TypeScript types are auto-generated from Rust types. Use the provided script:
 
 ```bash
-cargo build -p shared_types
+# From project root
+./scripts/generate-types.sh
 ```
 
-This generates TypeScript types in `src/shared_types/generated/typescript/`.
+Or manually:
+
+```bash
+# Generate types and convert to ESM (required for Vite)
+export PATH="$HOME/.local/share/pnpm:$PATH"
+cargo build -p shared_types
+cd src/shared_types/generated/typescript
+sed -i 's/"module": "commonjs"/"module": "esnext"/' tsconfig.json
+pnpm exec tsc
+```
+
+This generates TypeScript types in `src/shared_types/generated/typescript/` with ESM module format (required for Vite compatibility).
 
 ## Integration with Vue
 
