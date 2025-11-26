@@ -1,5 +1,5 @@
-/// Macro for simple model field updates with automatic rendering.
-/// Reduces boilerplate for events that just update a field and render.
+/// Macro for model field updates with automatic rendering.
+/// Supports both single and multiple field updates.
 ///
 /// # Examples
 ///
@@ -10,26 +10,24 @@
 ///
 /// Multiple field updates:
 /// ```ignore
-/// update_fields!(
+/// update_field!(
 ///     model.is_connected, true;
-///     model.error_message, None;
+///     model.error_message, None
 /// )
 /// ```
 #[macro_export]
 macro_rules! update_field {
-    ($model_field:expr, $value:expr) => {{
-        $model_field = $value;
-        crux_core::render::render()
-    }};
-}
-
-/// Macro for updating multiple model fields at once.
-#[macro_export]
-macro_rules! update_fields {
+    // Multiple field updates (must come first to match the pattern)
     ($($model_field:expr, $value:expr);+ $(;)?) => {{
         $(
             $model_field = $value;
         )+
+        crux_core::render::render()
+    }};
+
+    // Single field update
+    ($model_field:expr, $value:expr) => {{
+        $model_field = $value;
         crux_core::render::render()
     }};
 }
