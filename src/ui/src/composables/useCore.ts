@@ -37,6 +37,14 @@ export type {
 } from '../../../shared_types/generated/typescript/types/shared_types'
 
 // Import event constructors for sending events to the core
+import type {
+  OdsOnlineStatus,
+  OdsSystemInfo,
+  OdsTimeouts,
+  OdsNetworkStatus,
+  OdsFactoryReset,
+  OdsUpdateValidationStatus,
+} from '../types/ods'
 import {
   EventVariantInitialize,
   EventVariantLogin,
@@ -54,10 +62,29 @@ import {
   EventVariantUnsubscribeFromChannels,
   EventVariantClearError,
   EventVariantClearSuccess,
+  // Update events for Centrifugo data
+  EventVariantSystemInfoUpdated,
+  EventVariantNetworkStatusUpdated,
+  EventVariantOnlineStatusUpdated,
+  EventVariantFactoryResetUpdated,
+  EventVariantUpdateValidationStatusUpdated,
+  EventVariantTimeoutsUpdated,
   type Event,
+  SystemInfo,
+  OsInfo,
+  NetworkStatus,
+  DeviceNetwork,
+  InternetProtocol,
+  IpAddress,
+  OnlineStatus,
+  FactoryReset,
+  FactoryResetResult,
+  FactoryResetStatus,
+  UpdateValidationStatus,
+  Timeouts,
+  Duration,
   Model as GeneratedViewModel,
   Request as CruxRequest,
-  Effect as EffectClass,
   EffectVariantRender,
   EffectVariantHttp,
   EffectVariantCentrifugo,
@@ -71,21 +98,8 @@ import {
   HttpResultVariantOk,
   HttpResultVariantErr,
   HttpErrorVariantIo,
-  // Centrifugo types
-  CentrifugoOperationVariantConnect,
-  CentrifugoOperationVariantDisconnect,
-  CentrifugoOperationVariantSubscribe,
-  CentrifugoOperationVariantUnsubscribe,
+  // Centrifugo types (only SubscribeAll is used)
   CentrifugoOperationVariantSubscribeAll,
-  CentrifugoOperationVariantUnsubscribeAll,
-  CentrifugoOperationVariantHistory,
-  CentrifugoOutputVariantConnected,
-  CentrifugoOutputVariantDisconnected,
-  CentrifugoOutputVariantSubscribed,
-  CentrifugoOutputVariantUnsubscribed,
-  CentrifugoOutputVariantMessage,
-  CentrifugoOutputVariantHistoryResult,
-  CentrifugoOutputVariantError,
 } from '../../../shared_types/generated/typescript/types/shared_types'
 
 // Import serialization utilities
@@ -133,7 +147,7 @@ export interface ViewModel {
       context: string | null
       error: string
       paths: string[]
-    }
+    } | null
   } | null
   update_validation_status: { status: string } | null
   timeouts: { wait_online_timeout: { nanos: number; secs: bigint } } | null
@@ -175,17 +189,22 @@ let wasmModule: any = null
 // Centrifugo instance for WebSocket operations
 const centrifugoInstance = useCentrifuge()
 
-// Map of active subscription request IDs waiting for messages
-const activeSubscriptions = new Map<string, number>()
+// ============================================================================
+// Event Serialization
+// ============================================================================
 
 /**
- * Serialize an Event to bincode bytes
+ * Serialize an Event to bincode bytes for sending to WASM Core
  */
 function serializeEvent(event: Event): Uint8Array {
   const serializer = new BincodeSerializer()
   event.serialize(serializer)
   return serializer.getBytes()
 }
+
+// ============================================================================
+// HTTP Capability Implementation
+// ============================================================================
 
 /**
  * Execute an HTTP request and return the result to the Core
@@ -203,39 +222,22 @@ async function executeHttpRequest(
     return
   }
 
-  console.log(`[HTTP Effect ${requestId}] ${httpRequest.method} ${httpRequest.url}`)
-  console.log(`[HTTP Effect ${requestId}] Headers:`, httpRequest.headers)
-  if (httpRequest.body.length > 0) {
-    try {
-      const bodyText = new TextDecoder().decode(httpRequest.body)
-      console.log(`[HTTP Effect ${requestId}] Body:`, bodyText)
-    } catch {
-      console.log(`[HTTP Effect ${requestId}] Body: <binary ${httpRequest.body.length} bytes>`)
-    }
-  }
-
   try {
-    // Convert Core headers to fetch headers
     const headers = new Headers()
     for (const header of httpRequest.headers) {
       headers.append(header.name, header.value)
     }
 
-    // Build fetch options
     const fetchOptions: RequestInit = {
       method: httpRequest.method,
       headers,
     }
 
-    // Add body for non-GET/HEAD requests
     if (httpRequest.method !== 'GET' && httpRequest.method !== 'HEAD' && httpRequest.body.length > 0) {
       fetchOptions.body = httpRequest.body
     }
 
-    // Execute the fetch request
-    console.log(`[HTTP Effect ${requestId}] Executing fetch...`)
     const response = await fetch(httpRequest.url, fetchOptions)
-    console.log(`[HTTP Effect ${requestId}] Response: ${response.status} ${response.statusText}`)
 
     // Convert response headers
     const responseHeaders: Array<CoreHttpHeader> = []
@@ -254,17 +256,10 @@ async function executeHttpRequest(
     // Create success result
     const result = new HttpResultVariantOk(httpResponse)
 
-    // Serialize the result
     const serializer = new BincodeSerializer()
     result.serialize(serializer)
     const resultBytes = serializer.getBytes()
-    console.log(`[HTTP Effect ${requestId}] Sending result back to Core (${resultBytes.length} bytes)`)
-
-    // Send result back to Core
     const newEffectsBytes = wasmModule.handle_response(requestId, resultBytes) as Uint8Array
-    console.log(`[HTTP Effect ${requestId}] Core returned ${newEffectsBytes.length} bytes of new effects`)
-
-    // Process any new effects that result from the response
     if (newEffectsBytes.length > 0) {
       await processEffects(newEffectsBytes)
     }
@@ -275,181 +270,192 @@ async function executeHttpRequest(
     const httpError = new HttpErrorVariantIo(errorMessage)
     const result = new HttpResultVariantErr(httpError)
 
-    // Serialize the error result
     const serializer = new BincodeSerializer()
     result.serialize(serializer)
     const resultBytes = serializer.getBytes()
-
-    // Send error back to Core
     const newEffectsBytes = wasmModule.handle_response(requestId, resultBytes) as Uint8Array
-    console.log(`[HTTP Effect ${requestId}] Core returned ${newEffectsBytes.length} bytes after error`)
-
-    // Process any new effects
     if (newEffectsBytes.length > 0) {
       await processEffects(newEffectsBytes)
     }
   }
 }
 
+// ============================================================================
+// Centrifugo Capability Implementation
+// ============================================================================
+
 /**
- * Send a Centrifugo output result back to the Core
+ * Convert ODS FactoryResetStatus string to typed variant
  */
-async function sendCentrifugoResult(
-  requestId: number,
-  output:
-    | CentrifugoOutputVariantConnected
-    | CentrifugoOutputVariantDisconnected
-    | CentrifugoOutputVariantSubscribed
-    | CentrifugoOutputVariantUnsubscribed
-    | CentrifugoOutputVariantMessage
-    | CentrifugoOutputVariantHistoryResult
-    | CentrifugoOutputVariantError
-): Promise<void> {
-  if (!wasmModule) {
-    console.warn('WASM module not loaded, cannot send Centrifugo result')
-    return
-  }
-
-  const serializer = new BincodeSerializer()
-  output.serialize(serializer)
-  const resultBytes = serializer.getBytes()
-
-  console.log(`[Centrifugo Effect ${requestId}] Sending result back to Core (${resultBytes.length} bytes)`)
-
-  const newEffectsBytes = wasmModule.handle_response(requestId, resultBytes) as Uint8Array
-
-  if (newEffectsBytes.length > 0) {
-    await processEffects(newEffectsBytes)
+function stringToFactoryResetStatus(status: string): FactoryResetStatus {
+  switch (status) {
+    case 'mode_supported':
+      return new FactoryResetStatusVariantmode_supported()
+    case 'mode_unsupported':
+      return new FactoryResetStatusVariantmode_unsupported()
+    case 'backup_restore_error':
+      return new FactoryResetStatusVariantbackup_restore_error()
+    case 'configuration_error':
+      return new FactoryResetStatusVariantconfiguration_error()
+    default:
+      return new FactoryResetStatusVariantunknown()
   }
 }
 
 /**
- * Execute a Centrifugo operation and return the result to the Core
+ * Parse WebSocket channel data from ODS JSON and send as typed event to Core
  *
- * This is the shell's implementation of the Centrifugo capability.
- * It uses the existing useCentrifugo composable to interact with the
- * Centrifugo WebSocket server.
+ * Architecture:
+ * - Receives JSON from Centrifugo WebSocket (ODS data format)
+ * - Parses JSON and constructs typed TypeScript class instances
+ * - Sends as *Updated events to Core (not responses)
+ * - Core processes events, updates Model, and renders
+ * - Shell reads updated viewModel from Core
+ *
+ * This event-based approach avoids request/response conflicts with streaming data.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function executeCentrifugoOperation(requestId: number, operation: any): Promise<void> {
-  console.log(`[Centrifugo Effect ${requestId}]`, operation)
-
+async function parseAndSendChannelEvent(channel: string, jsonData: string): Promise<void> {
   try {
-    if (operation instanceof CentrifugoOperationVariantConnect) {
-      // Connect to Centrifugo
-      centrifugoInstance.initializeCentrifuge()
-
-      // Wait for connection
-      centrifugoInstance.onConnected(() => {
-        console.log(`[Centrifugo Effect ${requestId}] Connected`)
-        sendCentrifugoResult(requestId, new CentrifugoOutputVariantConnected())
-      })
-    } else if (operation instanceof CentrifugoOperationVariantDisconnect) {
-      // Disconnect from Centrifugo
-      centrifugoInstance.disconnect()
-      console.log(`[Centrifugo Effect ${requestId}] Disconnected`)
-      await sendCentrifugoResult(requestId, new CentrifugoOutputVariantDisconnected())
-    } else if (operation instanceof CentrifugoOperationVariantSubscribe) {
-      // Subscribe to a specific channel
-      const channel = operation.channel as string
-      console.log(`[Centrifugo Effect ${requestId}] Subscribing to ${channel}`)
-
-      // Store the request ID for this subscription so we can send messages back
-      activeSubscriptions.set(channel, requestId)
-
-      // Subscribe and forward messages to Core
-      await centrifugoInstance.subscribe((data: unknown) => {
-        const jsonData = JSON.stringify(data)
-        console.log(`[Centrifugo Message] ${channel}:`, jsonData)
-
-        // Send message to Core (use same request ID)
-        const msgRequestId = activeSubscriptions.get(channel) ?? requestId
-        sendCentrifugoResult(msgRequestId, new CentrifugoOutputVariantMessage(channel, jsonData))
-      }, channel as CentrifugeSubscriptionType)
-
-      // Notify subscription confirmed
-      await sendCentrifugoResult(requestId, new CentrifugoOutputVariantSubscribed(channel))
-    } else if (operation instanceof CentrifugoOperationVariantUnsubscribe) {
-      // Unsubscribe from a specific channel
-      const channel = operation.channel as string
-      centrifugoInstance.unsubscribe(channel)
-      activeSubscriptions.delete(channel)
-      console.log(`[Centrifugo Effect ${requestId}] Unsubscribed from ${channel}`)
-      await sendCentrifugoResult(requestId, new CentrifugoOutputVariantUnsubscribed(channel))
-    } else if (operation instanceof CentrifugoOperationVariantSubscribeAll) {
-      // Subscribe to all known channels
-      const channels = Object.values(CentrifugeSubscriptionType)
-      console.log(`[Centrifugo Effect ${requestId}] Subscribing to all channels:`, channels)
-
-      // Initialize Centrifugo first if needed
-      centrifugoInstance.initializeCentrifuge()
-
-      // Wait for connection then subscribe
-      centrifugoInstance.onConnected(async () => {
-        console.log(`[Centrifugo Effect ${requestId}] Connected, subscribing to channels`)
-
-        for (const channel of channels) {
-          // Store request ID for this channel
-          activeSubscriptions.set(channel, requestId)
-
-          // Subscribe with message forwarding
-          await centrifugoInstance.subscribe((data: unknown) => {
-            const jsonData = JSON.stringify(data)
-            console.log(`[Centrifugo Message] ${channel}:`, jsonData)
-            sendCentrifugoResult(requestId, new CentrifugoOutputVariantMessage(channel, jsonData))
-          }, channel)
-
-          // Also get history for initial data
-          await centrifugoInstance.history((data: unknown) => {
-            const jsonData = JSON.stringify(data)
-            console.log(`[Centrifugo History] ${channel}:`, jsonData)
-            sendCentrifugoResult(
-              requestId,
-              new CentrifugoOutputVariantHistoryResult(channel, jsonData)
-            )
-          }, channel)
+    switch (channel) {
+      case 'OnlineStatusV1': {
+        const json = JSON.parse(jsonData) as OdsOnlineStatus
+        const data = new OnlineStatus(json.iothub)
+        await sendEventToCore(new EventVariantOnlineStatusUpdated(data))
+        break
+      }
+      case 'SystemInfoV1': {
+        const json = JSON.parse(jsonData) as OdsSystemInfo
+        const data = new SystemInfo(
+          new OsInfo(json.os?.name || '', json.os?.version || ''),
+          json.azure_sdk_version || '',
+          json.omnect_device_service_version || '',
+          json.boot_time ? String(json.boot_time) : null
+        )
+        await sendEventToCore(new EventVariantSystemInfoUpdated(data))
+        break
+      }
+      case 'TimeoutsV1': {
+        const json = JSON.parse(jsonData) as OdsTimeouts
+        const data = new Timeouts(
+          new Duration(
+            json.wait_online_timeout?.nanos || 0,
+            BigInt(json.wait_online_timeout?.secs || 0)
+          )
+        )
+        await sendEventToCore(new EventVariantTimeoutsUpdated(data))
+        break
+      }
+      case 'NetworkStatusV1': {
+        const json = JSON.parse(jsonData) as OdsNetworkStatus
+        const networks = (json.network_status || []).map((net) =>
+          new DeviceNetwork(
+            new InternetProtocol(
+              (net.ipv4?.addrs || []).map((addr) =>
+                new IpAddress(addr.addr || '', addr.dhcp || false, addr.prefix_len || 0)
+              ),
+              net.ipv4?.dns || [],
+              net.ipv4?.gateways || []
+            ),
+            net.mac || '',
+            net.name || '',
+            net.online || false,
+            net.file || null
+          )
+        )
+        const data = new NetworkStatus(networks)
+        await sendEventToCore(new EventVariantNetworkStatusUpdated(data))
+        break
+      }
+      case 'FactoryResetV1': {
+        const json = JSON.parse(jsonData) as OdsFactoryReset
+        // Only send if we have complete data
+        if (!json.result) {
+          break
         }
 
-        // Notify all subscriptions complete
-        await sendCentrifugoResult(requestId, new CentrifugoOutputVariantConnected())
-      })
-    } else if (operation instanceof CentrifugoOperationVariantUnsubscribeAll) {
-      // Unsubscribe from all channels
-      centrifugoInstance.unsubscribeAll()
-      activeSubscriptions.clear()
-      console.log(`[Centrifugo Effect ${requestId}] Unsubscribed from all channels`)
-      await sendCentrifugoResult(requestId, new CentrifugoOutputVariantDisconnected())
-    } else if (operation instanceof CentrifugoOperationVariantHistory) {
-      // Get history for a specific channel
-      const channel = operation.channel as string
-      console.log(`[Centrifugo Effect ${requestId}] Getting history for ${channel}`)
-
-      await centrifugoInstance.history((data: unknown) => {
-        const jsonData = data ? JSON.stringify(data) : null
-        console.log(`[Centrifugo History] ${channel}:`, jsonData)
-        sendCentrifugoResult(requestId, new CentrifugoOutputVariantHistoryResult(channel, jsonData))
-      }, channel)
-    } else {
-      console.error(`[Centrifugo Effect ${requestId}] Unknown operation:`, operation)
-      await sendCentrifugoResult(
-        requestId,
-        new CentrifugoOutputVariantError('Unknown Centrifugo operation')
-      )
+        const result = new FactoryResetResult(
+          stringToFactoryResetStatus(json.result.status || 'unknown'),
+          json.result.context || null,
+          json.result.error || '',
+          json.result.paths || []
+        )
+        const data = new FactoryReset(json.keys || [], result)
+        await sendEventToCore(new EventVariantFactoryResetUpdated(data))
+        break
+      }
+      case 'UpdateValidationStatusV1': {
+        const json = JSON.parse(jsonData) as OdsUpdateValidationStatus
+        const data = new UpdateValidationStatus(json.status || '')
+        await sendEventToCore(new EventVariantUpdateValidationStatusUpdated(data))
+        break
+      }
+      default:
+        console.warn(`[Centrifugo] Unknown channel: ${channel}`)
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error(`[Centrifugo Effect ${requestId}] Error:`, errorMessage)
-    await sendCentrifugoResult(requestId, new CentrifugoOutputVariantError(errorMessage))
+    console.error(`[Centrifugo] Error parsing ${channel}:`, error)
   }
 }
+
+/**
+ * Execute Centrifugo SubscribeAll operation
+ *
+ * Subscribes to all Centrifugo channels and forwards messages as events to Core.
+ * Uses the event-based architecture where WebSocket data is parsed and sent as
+ * typed events (*Updated) rather than responses.
+ *
+ * Note: Only SubscribeAll is implemented - individual channel operations removed.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function executeCentrifugoOperation(operation: any): Promise<void> {
+  if (operation instanceof CentrifugoOperationVariantSubscribeAll) {
+    const channels = Object.values(CentrifugeSubscriptionType)
+    centrifugoInstance.initializeCentrifuge()
+
+    let subscriptionsStarted = false
+    const performSubscriptions = async () => {
+      if (subscriptionsStarted) return
+      subscriptionsStarted = true
+
+      for (const channel of channels) {
+        await centrifugoInstance.subscribe((data: unknown) => {
+          const jsonData = JSON.stringify(data)
+          parseAndSendChannelEvent(channel, jsonData)
+        }, channel)
+
+        await centrifugoInstance.history((data: unknown) => {
+          try {
+            if (data) {
+              const jsonData = JSON.stringify(data)
+              parseAndSendChannelEvent(channel, jsonData)
+            }
+          } catch (error) {
+            console.error(`[Centrifugo] Error processing history for ${channel}:`, error)
+          }
+        }, channel)
+      }
+    }
+
+    centrifugoInstance.onConnected(() => {
+      performSubscriptions()
+    })
+    performSubscriptions()
+  } else {
+    console.error(`[Centrifugo] Unsupported operation - only SubscribeAll is implemented`)
+  }
+}
+
+// ============================================================================
+// Effect Processing
+// ============================================================================
 
 /**
  * Process effects from the Crux Core
  *
- * When the core returns effects, this function handles them:
- * - Render: Update the view model by fetching it from the core
- * - Http: Make HTTP requests and send responses back to core
- * - Centrifugo: Handle WebSocket subscriptions
+ * Effects are the Core's way of requesting the Shell to perform side effects:
+ * - Render: Fetch and update the viewModel from Core
+ * - Http: Execute HTTP requests and send responses back to Core
+ * - Centrifugo: Subscribe to WebSocket channels (only SubscribeAll)
  */
 async function processEffects(effectsBytes: Uint8Array): Promise<void> {
   if (!wasmModule) {
@@ -488,7 +494,7 @@ async function processEffects(effectsBytes: Uint8Array): Promise<void> {
       console.log(`Centrifugo operation:`, centrifugoOperation)
 
       // Execute the operation asynchronously
-      executeCentrifugoOperation(request.id, centrifugoOperation).catch((error) => {
+      executeCentrifugoOperation(centrifugoOperation).catch((error) => {
         console.error('Failed to execute Centrifugo operation:', error)
       })
     } else {
@@ -497,8 +503,15 @@ async function processEffects(effectsBytes: Uint8Array): Promise<void> {
   }
 }
 
+// ============================================================================
+// ViewModel Synchronization
+// ============================================================================
+
 /**
- * Update the reactive view model from the Crux Core
+ * Fetch and deserialize the view model from Crux Core
+ *
+ * Reads the serialized viewModel bytes from WASM, deserializes using bincode,
+ * and updates the reactive Vue viewModel object.
  */
 function updateViewModelFromCore(): void {
   if (!wasmModule) {
@@ -557,17 +570,22 @@ function updateViewModelFromCore(): void {
       : null
 
     // factory_reset - convert status variant to string literal
-    viewModel.factory_reset = coreViewModel.factory_reset
-      ? {
-          keys: coreViewModel.factory_reset.keys,
-          result: {
-            status: factoryResetStatusToString(coreViewModel.factory_reset.result.status),
-            context: coreViewModel.factory_reset.result.context || null,
-            error: coreViewModel.factory_reset.result.error,
-            paths: coreViewModel.factory_reset.result.paths,
-          },
-        }
-      : null
+    // Note: Skip if deserialization fails (can happen with bincode format mismatches)
+    try {
+      viewModel.factory_reset = coreViewModel.factory_reset
+        ? {
+            keys: coreViewModel.factory_reset.keys,
+            result: coreViewModel.factory_reset.result ? {
+              status: factoryResetStatusToString(coreViewModel.factory_reset.result.status),
+              context: coreViewModel.factory_reset.result.context || null,
+              error: coreViewModel.factory_reset.result.error,
+              paths: coreViewModel.factory_reset.result.paths,
+            } : null,
+          }
+        : null
+    } catch (error) {
+      console.warn('[updateViewModelFromCore] Failed to deserialize factory_reset, keeping existing value:', error)
+    }
 
     // update_validation_status
     viewModel.update_validation_status = coreViewModel.update_validation_status
@@ -606,6 +624,8 @@ function updateViewModelFromCore(): void {
     viewModel.is_connected = coreViewModel.is_connected
   } catch (error) {
     console.error('Failed to update view model from core:', error)
+    // Don't throw - keep the viewModel as-is from events
+    // This allows the app to continue working even if Core's viewModel has deserialization issues
   }
 }
 
@@ -667,25 +687,31 @@ async function initializeCore(): Promise<void> {
   }
 }
 
+// ============================================================================
+// Public API
+// ============================================================================
+
 /**
  * Vue composable for Crux Core integration
  *
- * Usage:
- * ```typescript
- * const { viewModel, sendEvent, initialize } = useCore()
+ * Provides the main interface for Vue components to interact with the Rust
+ * Crux Core compiled to WASM.
  *
- * onMounted(() => {
- *   initialize()
+ * @example
+ * ```typescript
+ * const { viewModel, sendEvent, initialize, subscribeToChannels } = useCore()
+ *
+ * onMounted(async () => {
+ *   await initialize()
+ *   subscribeToChannels()  // Subscribe to all WebSocket channels
  * })
  *
- * // Send events using event constructors
- * sendEvent(new EventVariantLogin('user', 'pass'))
+ * // Access reactive view model
+ * const isOnline = computed(() => viewModel.online_status?.iothub ?? false)
  *
- * // Or use convenience methods
- * login('user', 'pass')
- *
- * // Access view model
- * const isLoading = computed(() => viewModel.is_loading)
+ * // Send events using convenience methods
+ * login('username', 'password')
+ * reboot()
  * ```
  */
 export function useCore() {

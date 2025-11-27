@@ -37,6 +37,9 @@ pub struct DeviceNetwork {
     pub mac: String,
     pub name: String,
     pub online: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -79,7 +82,9 @@ pub struct FactoryResetResult {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FactoryReset {
     pub keys: Vec<String>,
-    pub result: FactoryResetResult,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub result: Option<FactoryResetResult>,
 }
 
 // Update Validation Status

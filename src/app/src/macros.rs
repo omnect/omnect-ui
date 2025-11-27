@@ -32,37 +32,6 @@ macro_rules! update_field {
     }};
 }
 
-/// Macro for parsing JSON channel messages with error handling.
-/// Reduces repetitive JSON parsing in WebSocket message handlers.
-///
-/// # Example
-///
-/// ```ignore
-/// parse_channel_data! {
-///     channel, data, model,
-///     "SystemInfoV1" => system_info: SystemInfo,
-///     "NetworkStatusV1" => network_status: NetworkStatus,
-///     "OnlineStatusV1" => online_status: OnlineStatus,
-/// }
-/// ```
-#[macro_export]
-macro_rules! parse_channel_data {
-    ($channel:expr, $data:expr, $model:expr, $($channel_name:literal => $field:ident: $type:ty),+ $(,)?) => {
-        match $channel {
-            $(
-                $channel_name => {
-                    if let Ok(parsed) = serde_json::from_str::<$type>($data) {
-                        $model.$field = Some(parsed);
-                    }
-                }
-            )+
-            _ => {
-                // Unknown channel, ignore
-            }
-        }
-    };
-}
-
 /// Helper function for standardized HTTP error messages
 pub fn http_error(action: &str, status: impl std::fmt::Display) -> String {
     format!("{action} failed: HTTP {status}")
