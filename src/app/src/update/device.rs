@@ -10,7 +10,7 @@ use crate::Effect;
 /// Handle device action events (reboot, factory reset, network, updates)
 pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
     match event {
-        Event::Reboot => auth_post!(model, "/api/device/reboot", RebootResponse, "Reboot"),
+        Event::Reboot => auth_post!(model, "/reboot", RebootResponse, "Reboot"),
 
         Event::RebootResponse(result) => handle_response!(model, result, {
             success_message: "Reboot initiated",
@@ -18,7 +18,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
 
         Event::FactoryResetRequest { mode, preserve } => {
             let request = FactoryResetRequest { mode, preserve };
-            auth_post!(model, "/api/device/factory-reset", FactoryResetResponse, "Factory reset",
+            auth_post!(model, "/factory-reset", FactoryResetResponse, "Factory reset",
                 body_json: &request
             )
         }
@@ -30,7 +30,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
         Event::ReloadNetwork => {
             auth_post!(
                 model,
-                "/api/device/reload-network",
+                "/reload-network",
                 ReloadNetworkResponse,
                 "Reload network"
             )
@@ -41,7 +41,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
         }),
 
         Event::SetNetworkConfig { config } => {
-            auth_post!(model, "/api/device/network", SetNetworkConfigResponse, "Set network config",
+            auth_post!(model, "/network", SetNetworkConfigResponse, "Set network config",
                 body_string: config
             )
         }
@@ -52,7 +52,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
 
         Event::LoadUpdate { file_path } => {
             let request = LoadUpdateRequest { file_path };
-            auth_post!(model, "/api/update/load", LoadUpdateResponse, "Load update",
+            auth_post!(model, "/update/load", LoadUpdateResponse, "Load update",
                 body_json: &request
             )
         }
@@ -63,7 +63,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
 
         Event::RunUpdate { validate_iothub } => {
             let request = RunUpdateRequest { validate_iothub };
-            auth_post!(model, "/api/update/run", RunUpdateResponse, "Run update",
+            auth_post!(model, "/update/run", RunUpdateResponse, "Run update",
                 body_json: &request
             )
         }

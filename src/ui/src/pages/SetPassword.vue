@@ -2,55 +2,42 @@
 import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
 import OmnectLogo from "../components/OmnectLogo.vue"
-import { useCentrifuge } from "../composables/useCentrifugo"
+import { useCore } from "../composables/useCore"
+import { useSnackbar } from "../composables/useSnackbar"
 
 const router = useRouter()
-const { initializeCentrifuge, unsubscribeAll, disconnect } = useCentrifuge()
+const { viewModel, setPassword, initialize, subscribeToChannels } = useCore()
+const { showError } = useSnackbar()
 const password = ref<string>("")
 const repeatPassword = ref<string>("")
 const visible = ref(false)
 const errorMsg = ref("")
 
 const handleSubmit = async (): Promise<void> => {
-	try {
-		errorMsg.value = ""
-		if (password.value !== repeatPassword.value) {
-			errorMsg.value = "Passwords do not match."
-		} else {
-			const res = await fetch("set-password", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json"
-				},
-				body: JSON.stringify({
-					password: password.value
-				})
-			})
+	errorMsg.value = ""
+	if (password.value !== repeatPassword.value) {
+		errorMsg.value = "Passwords do not match."
+	} else {
+		await setPassword(password.value)
 
-			if (res.ok) {
-				initializeCentrifuge()
-				await router.push("/")
-			} else {
-				errorMsg.value = "Something went wrong while setting your password."
-			}
+		// Wait for Core to process the request
+		await new Promise(resolve => setTimeout(resolve, 100))
+
+		// Check viewModel state from Core
+		if (viewModel.error_message) {
+			errorMsg.value = viewModel.error_message
+			showError(errorMsg.value)
+		} else if (viewModel.success_message) {
+			await initialize()
+			subscribeToChannels()
+			await router.push("/")
 		}
-	} catch (error) {
-		errorMsg.value = "Failed to set password."
 	}
 }
 
 onMounted(async () => {
-	try {
-		const requireSetPassword = await fetch("require-set-password")
-		if (requireSetPassword.status !== 201) {
-			router.push("/")
-		} else {
-			unsubscribeAll()
-			disconnect()
-		}
-	} catch {
-		router.push("/login")
-	}
+	// Initialize Core for this page
+	await initialize()
 })
 </script>
 

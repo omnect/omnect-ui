@@ -2,9 +2,11 @@
 import { ref } from "vue"
 import { useRouter } from "vue-router"
 import { useSnackbar } from "../composables/useSnackbar"
+import { useCore } from "../composables/useCore"
 
 const router = useRouter()
-const { showSuccess } = useSnackbar()
+const { showSuccess, showError } = useSnackbar()
+const { viewModel, updatePassword } = useCore()
 const currentPassword = ref<string>("")
 const password = ref<string>("")
 const repeatPassword = ref<string>("")
@@ -12,32 +14,23 @@ const visible = ref(false)
 const errorMsg = ref("")
 
 const handleSubmit = async (): Promise<void> => {
-	try {
-		errorMsg.value = ""
-		if (password.value !== repeatPassword.value) {
-			errorMsg.value = "Passwords do not match."
-		} else {
-			const res = await fetch("update-password", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json"
-				},
-				body: JSON.stringify({
-					currentPassword: currentPassword.value,
-					password: password.value
-				})
-			})
+	errorMsg.value = ""
+	if (password.value !== repeatPassword.value) {
+		errorMsg.value = "Passwords do not match."
+	} else {
+		await updatePassword(currentPassword.value, password.value)
 
-			if (res.ok) {
-				showSuccess("Password updated successfully.")
-				await router.push("/login")
-			} else {
-				const data = await res.text()
-				errorMsg.value = data ?? "Something went wrong while setting your password."
-			}
+		// Wait for Core to process the request
+		await new Promise(resolve => setTimeout(resolve, 100))
+
+		// Check viewModel state from Core
+		if (viewModel.error_message) {
+			errorMsg.value = viewModel.error_message
+			showError(errorMsg.value)
+		} else if (viewModel.success_message) {
+			showSuccess(viewModel.success_message)
+			await router.push("/login")
 		}
-	} catch (error) {
-		errorMsg.value = "Failed to set password."
 	}
 }
 </script>

@@ -1,31 +1,17 @@
 <script setup lang="ts">
-import { onMounted, type Ref, ref } from "vue"
+import { computed, onMounted, ref } from "vue"
 import NetworkSettings from "../components/NetworkSettings.vue"
-import { useCentrifuge } from "../composables/useCentrifugo"
-import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
-import type { NetworkStatus } from "../types"
+import { useCore } from "../composables/useCore"
 
-const networkStatus: Ref<NetworkStatus | undefined> = ref(undefined)
+const { viewModel, initialize, subscribeToChannels } = useCore()
 
 const tab = ref(0)
 
-const { history, subscribe, onConnected } = useCentrifuge()
+const networkStatus = computed(() => viewModel.network_status)
 
-const updateNetworkStatus = (data: NetworkStatus) => {
-	networkStatus.value = data
-}
-
-const loadHistoryAndSubscribe = () => {
-	history(updateNetworkStatus, CentrifugeSubscriptionType.NetworkStatus)
-	subscribe(updateNetworkStatus, CentrifugeSubscriptionType.NetworkStatus)
-}
-
-onConnected(() => {
-	loadHistoryAndSubscribe()
-})
-
-onMounted(() => {
-	loadHistoryAndSubscribe()
+onMounted(async () => {
+	await initialize()
+	subscribeToChannels()
 })
 </script>
 

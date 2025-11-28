@@ -1,20 +1,17 @@
 <script lang="ts" setup>
 import { ref } from "vue"
 import { useRouter } from "vue-router"
-import { useCentrifuge } from "../composables/useCentrifugo"
+import { useCore } from "../composables/useCore"
 import Menu from "./Menu.vue"
 
-const { unsubscribeAll, disconnect } = useCentrifuge()
+const { logout, unsubscribeFromChannels } = useCore()
 const router = useRouter()
 
 const menu = ref(false)
 
 const logOut = async () => {
-	await fetch("logout", {
-		method: "POST"
-	})
-	unsubscribeAll()
-	disconnect()
+	await logout()
+	unsubscribeFromChannels()
 	router.push("/login")
 }
 </script>

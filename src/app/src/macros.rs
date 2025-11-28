@@ -32,37 +32,6 @@ macro_rules! update_field {
     }};
 }
 
-/// Macro for parsing JSON channel messages with error handling.
-/// Reduces repetitive JSON parsing in WebSocket message handlers.
-///
-/// # Example
-///
-/// ```ignore
-/// parse_channel_data! {
-///     channel, data, model,
-///     "SystemInfoV1" => system_info: SystemInfo,
-///     "NetworkStatusV1" => network_status: NetworkStatus,
-///     "OnlineStatusV1" => online_status: OnlineStatus,
-/// }
-/// ```
-#[macro_export]
-macro_rules! parse_channel_data {
-    ($channel:expr, $data:expr, $model:expr, $($channel_name:literal => $field:ident: $type:ty),+ $(,)?) => {
-        match $channel {
-            $(
-                $channel_name => {
-                    if let Ok(parsed) = serde_json::from_str::<$type>($data) {
-                        $model.$field = Some(parsed);
-                    }
-                }
-            )+
-            _ => {
-                // Unknown channel, ignore
-            }
-        }
-    };
-}
-
 /// Helper function for standardized HTTP error messages
 pub fn http_error(action: &str, status: impl std::fmt::Display) -> String {
     format!("{action} failed: HTTP {status}")
@@ -102,7 +71,7 @@ macro_rules! unauth_post {
         $model.is_loading = true;
         crux_core::Command::all([
             crux_core::render::render(),
-            $crate::HttpCmd::post(format!("{}{}", $crate::API_BASE_URL, $endpoint))
+            $crate::HttpCmd::post($endpoint)
                 .header("Content-Type", "application/json")
                 .body_json($body)
                 .expect(&format!("Failed to serialize {} request", $action))
@@ -125,7 +94,7 @@ macro_rules! unauth_post {
         $model.is_loading = true;
         crux_core::Command::all([
             crux_core::render::render(),
-            $crate::HttpCmd::post(format!("{}{}", $crate::API_BASE_URL, $endpoint))
+            $crate::HttpCmd::post($endpoint)
                 .header("Content-Type", "application/json")
                 .body_json($body)
                 .expect(&format!("Failed to serialize {} request", $action))
@@ -151,7 +120,7 @@ macro_rules! unauth_post {
         $model.is_loading = true;
         crux_core::Command::all([
             crux_core::render::render(),
-            $crate::HttpCmd::get(format!("{}{}", $crate::API_BASE_URL, $endpoint))
+            $crate::HttpCmd::get($endpoint)
                 .expect_json::<$response_type>()
                 .build()
                 .then_send(|result| match result {
@@ -198,7 +167,7 @@ macro_rules! auth_post {
         if let Some(token) = &$model.auth_token {
             crux_core::Command::all([
                 crux_core::render::render(),
-                $crate::HttpCmd::post(format!("{}{}", $crate::API_BASE_URL, $endpoint))
+                $crate::HttpCmd::post($endpoint)
                     .header("Authorization", format!("Bearer {token}"))
                     .build()
                     .then_send(|result| match result {
@@ -216,6 +185,8 @@ macro_rules! auth_post {
                     }),
             ])
         } else {
+            $model.is_loading = false;
+            $model.error_message = Some(format!("{} failed: Not authenticated", $action));
             crux_core::render::render()
         }
     }};
@@ -226,7 +197,7 @@ macro_rules! auth_post {
         if let Some(token) = &$model.auth_token {
             crux_core::Command::all([
                 crux_core::render::render(),
-                $crate::HttpCmd::post(format!("{}{}", $crate::API_BASE_URL, $endpoint))
+                $crate::HttpCmd::post($endpoint)
                     .header("Authorization", format!("Bearer {token}"))
                     .header("Content-Type", "application/json")
                     .body_json($body)
@@ -247,6 +218,8 @@ macro_rules! auth_post {
                     }),
             ])
         } else {
+            $model.is_loading = false;
+            $model.error_message = Some(format!("{} failed: Not authenticated", $action));
             crux_core::render::render()
         }
     }};
@@ -257,7 +230,7 @@ macro_rules! auth_post {
         if let Some(token) = &$model.auth_token {
             crux_core::Command::all([
                 crux_core::render::render(),
-                $crate::HttpCmd::post(format!("{}{}", $crate::API_BASE_URL, $endpoint))
+                $crate::HttpCmd::post($endpoint)
                     .header("Authorization", format!("Bearer {token}"))
                     .header("Content-Type", "application/json")
                     .body_string($body)
@@ -277,6 +250,8 @@ macro_rules! auth_post {
                     }),
             ])
         } else {
+            $model.is_loading = false;
+            $model.error_message = Some(format!("{} failed: Not authenticated", $action));
             crux_core::render::render()
         }
     }};

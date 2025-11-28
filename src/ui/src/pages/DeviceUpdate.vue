@@ -1,55 +1,36 @@
 <script setup lang="ts">
-import { useFetch } from "@vueuse/core"
-import { onMounted, ref } from "vue"
+import { computed, onMounted, ref } from "vue"
 import UpdateFileUpload from "../components/UpdateFileUpload.vue"
 import UpdateInfo from "../components/UpdateInfo.vue"
-import { useCentrifuge } from "../composables/useCentrifugo"
+import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
-import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
-import router from "../plugins/router"
-import type { SystemInfo } from "../types"
 
 const { showError } = useSnackbar()
-const { history, onConnected } = useCentrifuge()
+const { viewModel, initialize, subscribeToChannels, loadUpdate } = useCore()
 
-const currentVersion = ref<string>()
+const loadUpdateFetching = ref(false)
+const data = ref()
 
-const {
-	onFetchError: onLoadUpdateError,
-	error: loadUpdateError,
-	statusCode: loadUpdateStatusCode,
-	execute: loadUpdate,
-	isFetching: loadUpdateFetching,
-	response,
-	data
-} = useFetch("update/load", { immediate: false }).post().json()
+const currentVersion = computed(() => viewModel.system_info?.os?.version)
 
-onLoadUpdateError(async () => {
-	if (loadUpdateStatusCode.value === 401) {
-		router.push("/login")
-	} else {
-		showError(`Uploading file failed: ${(await response.value?.text()) ?? loadUpdateError.value}`)
+const loadUpdateData = async () => {
+	loadUpdateFetching.value = true
+	// loadUpdate is called after file upload, no parameter needed
+	await loadUpdate("")
+
+	// Wait for Core to process the request
+	await new Promise(resolve => setTimeout(resolve, 100))
+	loadUpdateFetching.value = false
+
+	// Check viewModel state from Core
+	if (viewModel.error_message) {
+		showError(viewModel.error_message)
 	}
-})
-
-const loadUpdateData = () => {
-	loadUpdate(false)
 }
 
-const setCurrentVersion = (data: SystemInfo) => {
-	currentVersion.value = data.os.version
-}
-
-const loadHistory = () => {
-	history(setCurrentVersion, CentrifugeSubscriptionType.SystemInfo)
-}
-
-onConnected(() => {
-	loadHistory()
-})
-
-onMounted(() => {
-	loadHistory()
+onMounted(async () => {
+	await initialize()
+	subscribeToChannels()
 })
 </script>
 
@@ -61,7 +42,7 @@ onMounted(() => {
 			</v-col>
 			<v-col sm="12" xl="6">
 				<UpdateInfo :update-manifest="data" :load-update-fetching="loadUpdateFetching"
-					:current-version="currentVersion" @reload-update-info="loadUpdate(false)" />
+					:current-version="currentVersion" @reload-update-info="loadUpdateData" />
 			</v-col>
 		</v-row>
 	</v-sheet>

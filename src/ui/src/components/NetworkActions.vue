@@ -1,48 +1,35 @@
 <script setup lang="ts">
-import { useFetch } from "@vueuse/core"
-import { computed } from "vue"
-import { useRouter } from "vue-router"
+import { ref } from "vue"
 import { useSnackbar } from "../composables/useSnackbar"
+import { useCore } from "../composables/useCore"
 
-const { showError, snackbarState } = useSnackbar()
-const router = useRouter()
+const { showSuccess, showError } = useSnackbar()
+const { viewModel, reloadNetwork } = useCore()
 
-const loading = computed(() => reloadNetworkLoading.value)
+const loading = ref(false)
 
-const {
-	onFetchError: onReloadNetworkError,
-	error: reloadNetworkError,
-	statusCode: reloadNetworkStatusCode,
-	onFetchResponse: onReloadNetworkSuccess,
-	execute: reloadNetwork,
-	isFetching: reloadNetworkLoading
-} = useFetch("reload-network", { immediate: false }).post()
+const handleReloadNetwork = async () => {
+	loading.value = true
+	await reloadNetwork()
 
-onReloadNetworkSuccess(() => {
-	showSuccess("Restart network successful.")
-})
+	// Wait for Core to process the request
+	await new Promise(resolve => setTimeout(resolve, 100))
+	loading.value = false
 
-onReloadNetworkError(() => {
-	if (reloadNetworkStatusCode.value === 401) {
-		router.push("/login")
-	} else {
-		showError(`Reloading network failed: ${JSON.stringify(reloadNetworkError.value)}`)
+	// Check viewModel state from Core
+	if (viewModel.error_message) {
+		showError(viewModel.error_message)
+	} else if (viewModel.success_message) {
+		showSuccess(viewModel.success_message)
 	}
-})
-
-const showSuccess = (successMsg: string) => {
-	snackbarState.msg = successMsg
-	snackbarState.color = "success"
-	snackbarState.timeout = 2000
-	snackbarState.snackbar = true
 }
 </script>
 
 <template>
     <div class="flex flex-col gap-y-4 items-start">
         <div class="text-h4 text-secondary border-b w-100">Commands</div>
-        <v-btn :prepend-icon="'mdi-refresh'" variant="text" :loading="reloadNetworkLoading" :disabled="loading"
-            @click="reloadNetwork(false)">
+        <v-btn :prepend-icon="'mdi-refresh'" variant="text" :loading="loading" :disabled="loading"
+            @click="handleReloadNetwork">
             Restart network
         </v-btn>
     </div>

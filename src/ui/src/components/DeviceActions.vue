@@ -1,94 +1,62 @@
 <script setup lang="ts">
-import { useFetch } from "@vueuse/core"
-import { computed, onMounted, type Ref, ref } from "vue"
-import { useRouter } from "vue-router"
+import { computed, onMounted, ref } from "vue"
 import DialogContent from "../components/DialogContent.vue"
-import { useCentrifuge } from "../composables/useCentrifugo"
+import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
-import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
-import type { FactoryReset } from "../types"
 
-const { subscribe, history, onConnected } = useCentrifuge()
-const { showError } = useSnackbar()
-const router = useRouter()
-const selectedFactoryResetKeys: Ref<string[]> = ref([])
+const { viewModel, initialize, subscribeToChannels, reboot, factoryReset } = useCore()
+const { showSuccess, showError } = useSnackbar()
+const selectedFactoryResetKeys = ref<string[]>([])
 const factoryResetDialog = ref(false)
 const rebootDialog = ref(false)
-const factoryResetKeys: Ref<Pick<FactoryReset, "keys"> | undefined> = ref(undefined)
+const loading = ref(false)
 
-const factoryResetPayload = computed(() => {
-	return {
-		mode: 1,
-		preserve: selectedFactoryResetKeys.value
-	}
-})
+const factoryResetKeys = computed(() => viewModel.factory_reset)
 
 const emit = defineEmits<{
 	(event: "rebootInProgress"): void
 	(event: "factoryResetInProgress"): void
 }>()
 
-const {
-	onFetchError: onRebootError,
-	error: rebootError,
-	statusCode: rebootStatusCode,
-	onFetchResponse: onRebootSuccess,
-	execute: reboot,
-	isFetching: rebootFetching
-} = useFetch("reboot", { immediate: false }).post()
+const handleReboot = async () => {
+	loading.value = true
+	await reboot()
 
-const {
-	onFetchError: onResetError,
-	error: resetError,
-	statusCode: resetStatusCode,
-	onFetchResponse: onResetSuccess,
-	execute: reset,
-	isFetching: resetFetching
-} = useFetch("factory-reset", { immediate: false }).post(factoryResetPayload)
+	// Wait for Core to process the request
+	await new Promise(resolve => setTimeout(resolve, 100))
+	loading.value = false
 
-const loading = computed(() => rebootFetching.value || resetFetching.value)
-
-onRebootSuccess(() => {
-	emit("rebootInProgress")
-	rebootDialog.value = false
-})
-
-onRebootError(() => {
-	if (rebootStatusCode.value === 401) {
-		router.push("/login")
-	} else {
-		showError(`Rebooting device failed: ${JSON.stringify(rebootError.value)}`)
+	// Check viewModel state from Core
+	if (viewModel.error_message) {
+		showError(viewModel.error_message)
+	} else if (viewModel.success_message) {
+		emit("rebootInProgress")
+		rebootDialog.value = false
+		showSuccess(viewModel.success_message)
 	}
-})
-
-onResetSuccess(() => {
-	emit("factoryResetInProgress")
-	factoryResetDialog.value = false
-})
-
-onResetError(() => {
-	if (resetStatusCode.value === 401) {
-		router.push("/login")
-	} else {
-		showError(`Resetting device failed: ${JSON.stringify(resetError.value)}`)
-	}
-})
-
-const updateFactoryResetKeys = (data: FactoryReset) => {
-	factoryResetKeys.value = data
 }
 
-const loadHistoryAndSubscribe = () => {
-	history(updateFactoryResetKeys, CentrifugeSubscriptionType.FactoryReset)
-	subscribe(updateFactoryResetKeys, CentrifugeSubscriptionType.FactoryReset)
+const handleFactoryReset = async () => {
+	loading.value = true
+	await factoryReset("1", selectedFactoryResetKeys.value)
+
+	// Wait for Core to process the request
+	await new Promise(resolve => setTimeout(resolve, 100))
+	loading.value = false
+
+	// Check viewModel state from Core
+	if (viewModel.error_message) {
+		showError(viewModel.error_message)
+	} else if (viewModel.success_message) {
+		emit("factoryResetInProgress")
+		factoryResetDialog.value = false
+		showSuccess(viewModel.success_message)
+	}
 }
 
-onConnected(() => {
-	loadHistoryAndSubscribe()
-})
-
-onMounted(() => {
-	loadHistoryAndSubscribe()
+onMounted(async () => {
+	await initialize()
+	subscribeToChannels()
 })
 </script>
 
@@ -106,7 +74,7 @@ onMounted(() => {
 					</div>
 					<div class="flex justify-end -mr-4 mt-4">
 						<v-btn variant="text" color="warning" :loading="loading" :disabled="loading"
-							@click="reboot(false)">Reboot</v-btn>
+							@click="handleReboot">Reboot</v-btn>
 						<v-btn variant="text" color="primary" @click="rebootDialog = false">Cancel</v-btn>
 					</div>
 				</DialogContent>
@@ -124,7 +92,7 @@ onMounted(() => {
 					</div>
 					<div class="flex justify-end -mr-4 mt-4">
 						<v-btn variant="text" color="error" :loading="loading" :disabled="loading"
-							@click="reset(false)">Reset</v-btn>
+							@click="handleFactoryReset">Reset</v-btn>
 						<v-btn variant="text" color="primary" @click="factoryResetDialog = false">Cancel</v-btn>
 					</div>
 				</DialogContent>

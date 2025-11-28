@@ -1,57 +1,46 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue"
+import { computed, onMounted, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import OmnectLogo from "../components/OmnectLogo.vue"
-import { useCentrifuge } from "../composables/useCentrifugo"
+import { useCore } from "../composables/useCore"
 
-const { initializeCentrifuge, unsubscribeAll, disconnect } = useCentrifuge()
+const { viewModel, login, checkRequiresPasswordSet, initialize } = useCore()
 const router = useRouter()
 
 const password = ref("")
 const visible = ref(false)
-const errorMsg = ref("")
 const isCheckingPasswordSetNeeded = ref(false)
+
+// Use viewModel error message instead of local state
+const errorMsg = computed(() => viewModel.error_message || "")
+
+// Watch for successful authentication
+watch(() => viewModel.is_authenticated, async (isAuthenticated) => {
+	if (isAuthenticated) {
+		await router.push("/")
+	}
+})
 
 const doLogin = async (e: Event) => {
 	e.preventDefault()
-	try {
-		errorMsg.value = ""
-
-		const creds = btoa(`omnect-ui:${password.value}`)
-
-		const res = await fetch("token/login", {
-			method: "POST",
-			headers: {
-				Authorization: `Basic ${creds}`
-			}
-		})
-
-		if (res.ok) {
-			initializeCentrifuge()
-			await router.push("/")
-		}
-
-		if (res.status === 401) {
-			errorMsg.value = "Password is wrong."
-			return
-		}
-
-		errorMsg.value = "Something went wrong while logging you in."
-	} catch (error) {
-		errorMsg.value = "Failed to login."
-	}
+	await login(password.value)
 }
 
 onMounted(async () => {
 	isCheckingPasswordSetNeeded.value = true
-	const requireSetPassword = await fetch("require-set-password")
-	if (requireSetPassword.status === 201) {
-		await router.push(requireSetPassword.headers.get("Location") ?? "/set-password")
-	}
-	isCheckingPasswordSetNeeded.value = false
 
-	unsubscribeAll()
-	disconnect()
+	// Initialize Core and check if password needs to be set
+	await initialize()
+	await checkRequiresPasswordSet()
+
+	// Wait for the response to be processed
+	await new Promise(resolve => setTimeout(resolve, 100))
+
+	if (viewModel.requires_password_set) {
+		await router.push("/set-password")
+	}
+
+	isCheckingPasswordSetNeeded.value = false
 })
 </script>
 

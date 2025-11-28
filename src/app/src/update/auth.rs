@@ -14,7 +14,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
         Event::Login { password } => {
             model.error_message = None;
             let credentials = LoginCredentials { password };
-            unauth_post!(model, "/api/token/login", LoginResponse, "Login",
+            unauth_post!(model, "/token/login", LoginResponse, "Login",
                 body_json: &credentials,
                 expect_json: AuthToken
             )
@@ -28,7 +28,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             },
         }),
 
-        Event::Logout => auth_post!(model, "/api/token/logout", LogoutResponse, "Logout"),
+        Event::Logout => auth_post!(model, "/logout", LogoutResponse, "Logout"),
 
         Event::LogoutResponse(result) => handle_response!(model, result, {
             on_success: |model, _| {
@@ -39,7 +39,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
 
         Event::SetPassword { password } => {
             let request = SetPasswordRequest { password };
-            unauth_post!(model, "/api/token/set-password", SetPasswordResponse, "Set password",
+            unauth_post!(model, "/set-password", SetPasswordResponse, "Set password",
                 body_json: &request
             )
         }
@@ -52,14 +52,14 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
         }),
 
         Event::UpdatePassword {
-            current,
-            new_password,
+            current_password,
+            password,
         } => {
             let request = UpdatePasswordRequest {
-                current,
-                new_password,
+                current_password,
+                password,
             };
-            auth_post!(model, "/api/token/update-password", UpdatePasswordResponse, "Update password",
+            auth_post!(model, "/update-password", UpdatePasswordResponse, "Update password",
                 body_json: &request
             )
         }
@@ -69,7 +69,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
         }),
 
         Event::CheckRequiresPasswordSet => {
-            unauth_post!(model, "/api/token/requires-password-set", CheckRequiresPasswordSetResponse, "Check password",
+            unauth_post!(model, "/require-set-password", CheckRequiresPasswordSetResponse, "Check password",
                 method: get,
                 expect_json: bool
             )
