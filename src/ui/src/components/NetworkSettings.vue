@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
+import { computed, ref, watch } from "vue"
 import { useSnackbar } from "../composables/useSnackbar"
+import { useCore } from "../composables/useCore"
 import type { DeviceNetwork } from "../types"
 import { useWaitForNewIp } from "../composables/useWaitForNewIp";
 import { useOverlaySpinner } from "../composables/useOverlaySpinner";
@@ -8,6 +9,7 @@ import { useOverlaySpinner } from "../composables/useOverlaySpinner";
 const { showSuccess, showError } = useSnackbar()
 const { overlaySpinnerState } = useOverlaySpinner()
 const { startWaitForNewIp, onConnected } = useWaitForNewIp()
+const { viewModel, setNetworkConfig } = useCore()
 
 const props = defineProps<{
     networkAdapter: DeviceNetwork
@@ -18,6 +20,30 @@ const dns = ref(props.networkAdapter?.ipv4?.dns?.join("\n") || "")
 const gateways = ref(props.networkAdapter?.ipv4?.gateways?.join("\n") || "")
 const addressAssignment = ref(props.networkAdapter?.ipv4?.addrs[0]?.dhcp ? "dhcp" : "static")
 const netmask = ref(props.networkAdapter?.ipv4?.addrs[0]?.prefix_len || 24)
+
+// Watch for prop changes from WebSocket updates and sync local state
+// Only sync if user is not currently editing (no pending changes)
+watch(() => props.networkAdapter, (newAdapter) => {
+    if (!newAdapter) return
+
+    // Don't overwrite user's unsaved changes
+    if (isSubmitting.value) {
+        console.log('NetworkSettings: Skipping watcher sync during submit')
+        return
+    }
+
+    console.log('NetworkSettings: Syncing form with WebSocket update:', {
+        name: newAdapter.name,
+        dhcp: newAdapter.ipv4?.addrs[0]?.dhcp
+    })
+
+    ipAddress.value = newAdapter.ipv4?.addrs[0]?.addr || ""
+    dns.value = newAdapter.ipv4?.dns?.join("\n") || ""
+    gateways.value = newAdapter.ipv4?.gateways?.join("\n") || ""
+    addressAssignment.value = newAdapter.ipv4?.addrs[0]?.dhcp ? "dhcp" : "static"
+    netmask.value = newAdapter.ipv4?.addrs[0]?.prefix_len || 24
+}, { deep: true })
+
 const isDHCP = computed(() => addressAssignment.value === "dhcp")
 const isSubmitting = ref(false)
 const isServerAddr = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr === location.hostname)
@@ -56,44 +82,41 @@ onConnected(() => {
 })
 
 const submit = async () => {
-    try {
-        isSubmitting.value = true
+    console.log('NetworkSettings submit called')
+    isSubmitting.value = true
 
-        const res = await fetch("network", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                isServerAddr: isServerAddr.value,
-                ipChanged: ipChanged.value,
-                name: props.networkAdapter.name,
-                dhcp: isDHCP.value,
-                ip: ipAddress.value ?? null,
-                previousIp: props.networkAdapter.ipv4?.addrs[0]?.addr,
-                netmask: netmask.value ?? null,
-                gateway: gateways.value.split("\n") ?? [],
-                dns: dns.value.split("\n") ?? []
-            })
-        })
+    const config = JSON.stringify({
+        is_server_addr: isServerAddr.value,
+        ip_changed: ipChanged.value,
+        name: props.networkAdapter.name,
+        dhcp: isDHCP.value,
+        ip: ipAddress.value ?? null,
+        previous_ip: props.networkAdapter.ipv4?.addrs[0]?.addr,
+        netmask: netmask.value ?? null,
+        gateway: gateways.value.split("\n").filter(g => g.trim()) ?? [],
+        dns: dns.value.split("\n").filter(d => d.trim()) ?? []
+    })
+    console.log('NetworkSettings config:', config)
 
-        if (res.ok) {
-            if (isServerAddr.value && ipChanged.value) {
-                overlaySpinnerState.title = "Applying network setting"
-                overlaySpinnerState.text = "The network settings are applied. You will be forwarded to the new IP. Log in to confirm the settings.If you do not log in within 90 seconds, the IP will be reset."
-                overlaySpinnerState.overlay = true
-                startWaitForNewIp(`https://${ipAddress.value}:${window.location.port}`)
-            } else {
-                showSuccess("Network setting set successfully")
-            }
+    await setNetworkConfig(config)
+
+    // Wait for Core to process the request
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+    isSubmitting.value = false
+
+    // Check if request succeeded by checking viewModel state
+    if (viewModel.error_message) {
+        showError(viewModel.error_message)
+    } else if (viewModel.success_message) {
+        if (isServerAddr.value && ipChanged.value) {
+            overlaySpinnerState.title = "Applying network setting"
+            overlaySpinnerState.text = "The network settings are applied. You will be forwarded to the new IP. Log in to confirm the settings.If you do not log in within 90 seconds, the IP will be reset."
+            overlaySpinnerState.overlay = true
+            startWaitForNewIp(`https://${ipAddress.value}:${window.location.port}`)
         } else {
-            const errorMsg = await res.text()
-            showError(`Failed to set network settings: ${errorMsg}`)
+            showSuccess(viewModel.success_message)
         }
-    } catch (e) {
-        showError(`Failed to set network settings: ${e}`)
-    } finally {
-        isSubmitting.value = false
     }
 }
 </script>

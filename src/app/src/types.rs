@@ -136,9 +136,10 @@ pub struct SetPasswordRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdatePasswordRequest {
-    pub current: String,
-    pub new_password: String,
+    pub current_password: String,
+    pub password: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

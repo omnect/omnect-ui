@@ -181,10 +181,14 @@ const viewModel = reactive<ViewModel>({
 })
 
 const isInitialized = ref(false)
+const isSubscribed = ref(false)
 
 // WASM module reference (will be set when WASM is loaded)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let wasmModule: any = null
+
+// Promise-based initialization guard to prevent both race conditions and premature event sending
+let initializationPromise: Promise<void> | null = null
 
 // Centrifugo instance for WebSocket operations
 const centrifugoInstance = useCentrifuge()
@@ -347,8 +351,10 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
       }
       case 'NetworkStatusV1': {
         const json = JSON.parse(jsonData) as OdsNetworkStatus
-        const networks = (json.network_status || []).map((net) =>
-          new DeviceNetwork(
+        console.log('NetworkStatusV1 WebSocket update received:', json)
+        const networks = (json.network_status || []).map((net) => {
+          console.log('Network adapter:', net.name, 'dhcp:', net.ipv4?.addrs[0]?.dhcp)
+          return new DeviceNetwork(
             new InternetProtocol(
               (net.ipv4?.addrs || []).map((addr) =>
                 new IpAddress(addr.addr || '', addr.dhcp || false, addr.prefix_len || 0)
@@ -361,7 +367,7 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
             net.online || false,
             net.file || null
           )
-        )
+        })
         const data = new NetworkStatus(networks)
         await sendEventToCore(new EventVariantNetworkStatusUpdated(data))
         break
@@ -659,32 +665,42 @@ async function sendEventToCore(event: Event): Promise<void> {
  * Initialize the Crux Core
  *
  * This loads the WASM module and sets up the core state.
+ * Uses a promise-based guard to prevent both race conditions and premature event sending.
  */
 async function initializeCore(): Promise<void> {
-  if (isInitialized.value) {
-    return
+  // If initialization is already in progress or complete, wait for/return that promise
+  if (initializationPromise) {
+    return initializationPromise
   }
 
-  console.log('Initializing Crux Core...')
+  // Create and store the initialization promise
+  initializationPromise = (async () => {
+    console.log('Initializing Crux Core...')
 
-  try {
-    // Dynamically import the WASM module
-    // This will be available after running:
-    // cd src/app && wasm-pack build --target web --out-dir ../ui/src/core/pkg
-    const wasm = await import('../core/pkg/omnect_ui_core')
-    await wasm.default()
-    wasmModule = wasm
+    try {
+      // Dynamically import the WASM module
+      // This will be available after running:
+      // cd src/app && wasm-pack build --target web --out-dir ../ui/src/core/pkg
+      const wasm = await import('../core/pkg/omnect_ui_core')
+      await wasm.default()
+      wasmModule = wasm
 
-    isInitialized.value = true
-    console.log('Crux Core WASM module loaded successfully')
+      console.log('Crux Core WASM module loaded successfully')
 
-    // Send initial event
-    await sendEventToCore(new EventVariantInitialize())
-  } catch (error) {
-    console.error('Failed to load Crux Core WASM module:', error)
-    console.log('Running in fallback mode without WASM')
-    isInitialized.value = true
-  }
+      // Only set initialized flag after WASM is fully loaded
+      isInitialized.value = true
+
+      // Send initial event
+      await sendEventToCore(new EventVariantInitialize())
+    } catch (error) {
+      console.error('Failed to load Crux Core WASM module:', error)
+      console.log('Running in fallback mode without WASM')
+      // Set initialized flag even on error to prevent retry loops
+      isInitialized.value = true
+    }
+  })()
+
+  return initializationPromise
 }
 
 // ============================================================================
@@ -710,7 +726,7 @@ async function initializeCore(): Promise<void> {
  * const isOnline = computed(() => viewModel.online_status?.iothub ?? false)
  *
  * // Send events using convenience methods
- * login('username', 'password')
+ * login('password')
  * reboot()
  * ```
  */
@@ -727,12 +743,12 @@ export function useCore() {
     isInitialized: readonly(isInitialized),
 
     // Convenience methods for common events
-    login: (username: string, password: string) =>
-      sendEventToCore(new EventVariantLogin(username, password)),
+    login: (password: string) =>
+      sendEventToCore(new EventVariantLogin(password)),
     logout: () => sendEventToCore(new EventVariantLogout()),
     setPassword: (password: string) => sendEventToCore(new EventVariantSetPassword(password)),
-    updatePassword: (current: string, newPassword: string) =>
-      sendEventToCore(new EventVariantUpdatePassword(current, newPassword)),
+    updatePassword: (currentPassword: string, password: string) =>
+      sendEventToCore(new EventVariantUpdatePassword(currentPassword, password)),
     checkRequiresPasswordSet: () => sendEventToCore(new EventVariantCheckRequiresPasswordSet()),
     reboot: () => sendEventToCore(new EventVariantReboot()),
     factoryReset: (mode: string, preserve: string[]) =>
@@ -743,8 +759,17 @@ export function useCore() {
     loadUpdate: (filePath: string) => sendEventToCore(new EventVariantLoadUpdate(filePath)),
     runUpdate: (validateIothub: boolean) =>
       sendEventToCore(new EventVariantRunUpdate(validateIothub)),
-    subscribeToChannels: () => sendEventToCore(new EventVariantSubscribeToChannels()),
-    unsubscribeFromChannels: () => sendEventToCore(new EventVariantUnsubscribeFromChannels()),
+    subscribeToChannels: () => {
+      if (isSubscribed.value) {
+        return
+      }
+      isSubscribed.value = true
+      sendEventToCore(new EventVariantSubscribeToChannels())
+    },
+    unsubscribeFromChannels: () => {
+      isSubscribed.value = false
+      sendEventToCore(new EventVariantUnsubscribeFromChannels())
+    },
     clearError: () => sendEventToCore(new EventVariantClearError()),
     clearSuccess: () => sendEventToCore(new EventVariantClearSuccess()),
   }
