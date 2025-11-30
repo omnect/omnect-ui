@@ -238,10 +238,20 @@ async function executeHttpRequest(
     }
 
     if (httpRequest.method !== 'GET' && httpRequest.method !== 'HEAD' && httpRequest.body.length > 0) {
-      fetchOptions.body = httpRequest.body
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fetchOptions.body = httpRequest.body as any
     }
 
-    const response = await fetch(httpRequest.url, fetchOptions)
+    // Workaround: `crux_http` in the Rust core panics on relative URLs.
+    // The Rust side prefixes URLs with `http://omnect-device` to satisfy `crux_http`'s validation.
+    // This side strips the prefix to send a relative URL, which `fetch` handles correctly.
+    // TODO: Remove this workaround once `crux_http` supports relative URLs gracefully.
+    let url = httpRequest.url
+    if (url.startsWith('http://omnect-device')) {
+      url = url.replace('http://omnect-device', '')
+    }
+
+    const response = await fetch(url, fetchOptions)
 
     // Convert response headers
     const responseHeaders: Array<CoreHttpHeader> = []

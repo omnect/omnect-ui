@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { computed, onMounted, ref, watch } from "vue"
 import DialogContent from "../components/DialogContent.vue"
 import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
@@ -18,40 +18,42 @@ const emit = defineEmits<{
 	(event: "factoryResetInProgress"): void
 }>()
 
+watch(
+	() => viewModel.success_message,
+	(newMessage) => {
+		if (newMessage) {
+			if (rebootDialog.value) {
+				emit("rebootInProgress")
+				rebootDialog.value = false
+			}
+			if (factoryResetDialog.value) {
+				emit("factoryResetInProgress")
+				factoryResetDialog.value = false
+			}
+			showSuccess(newMessage)
+			loading.value = false
+		}
+	}
+)
+
+watch(
+	() => viewModel.error_message,
+	(newMessage) => {
+		if (newMessage) {
+			showError(newMessage)
+			loading.value = false
+		}
+	}
+)
+
 const handleReboot = async () => {
 	loading.value = true
 	await reboot()
-
-	// Wait for Core to process the request
-	await new Promise(resolve => setTimeout(resolve, 100))
-	loading.value = false
-
-	// Check viewModel state from Core
-	if (viewModel.error_message) {
-		showError(viewModel.error_message)
-	} else if (viewModel.success_message) {
-		emit("rebootInProgress")
-		rebootDialog.value = false
-		showSuccess(viewModel.success_message)
-	}
 }
 
 const handleFactoryReset = async () => {
 	loading.value = true
 	await factoryReset("1", selectedFactoryResetKeys.value)
-
-	// Wait for Core to process the request
-	await new Promise(resolve => setTimeout(resolve, 100))
-	loading.value = false
-
-	// Check viewModel state from Core
-	if (viewModel.error_message) {
-		showError(viewModel.error_message)
-	} else if (viewModel.success_message) {
-		emit("factoryResetInProgress")
-		factoryResetDialog.value = false
-		showSuccess(viewModel.success_message)
-	}
 }
 
 onMounted(async () => {

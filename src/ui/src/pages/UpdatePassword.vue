@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue"
+import { ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import { useSnackbar } from "../composables/useSnackbar"
 import { useCore } from "../composables/useCore"
@@ -13,24 +13,32 @@ const repeatPassword = ref<string>("")
 const visible = ref(false)
 const errorMsg = ref("")
 
+watch(
+	() => viewModel.success_message,
+	async (newMessage) => {
+		if (newMessage) {
+			showSuccess(newMessage)
+			await router.push("/login")
+		}
+	}
+)
+
+watch(
+	() => viewModel.error_message,
+	(newMessage) => {
+		if (newMessage) {
+			errorMsg.value = newMessage
+			showError(errorMsg.value)
+		}
+	}
+)
+
 const handleSubmit = async (): Promise<void> => {
 	errorMsg.value = ""
 	if (password.value !== repeatPassword.value) {
 		errorMsg.value = "Passwords do not match."
 	} else {
 		await updatePassword(currentPassword.value, password.value)
-
-		// Wait for Core to process the request
-		await new Promise(resolve => setTimeout(resolve, 100))
-
-		// Check viewModel state from Core
-		if (viewModel.error_message) {
-			errorMsg.value = viewModel.error_message
-			showError(errorMsg.value)
-		} else if (viewModel.success_message) {
-			showSuccess(viewModel.success_message)
-			await router.push("/login")
-		}
 	}
 }
 </script>

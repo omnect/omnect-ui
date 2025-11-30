@@ -26,19 +26,19 @@ const doLogin = async (e: Event) => {
 	await login(password.value)
 }
 
+// Watch for requires_password_set state change
+watch(() => viewModel.requires_password_set, async (requiresPasswordSet) => {
+	if (requiresPasswordSet) {
+		await router.push("/set-password")
+	}
+})
+
 onMounted(async () => {
 	isCheckingPasswordSetNeeded.value = true
 
 	// Initialize Core and check if password needs to be set
 	await initialize()
 	await checkRequiresPasswordSet()
-
-	// Wait for the response to be processed
-	await new Promise(resolve => setTimeout(resolve, 100))
-
-	if (viewModel.requires_password_set) {
-		await router.push("/set-password")
-	}
 
 	isCheckingPasswordSetNeeded.value = false
 })

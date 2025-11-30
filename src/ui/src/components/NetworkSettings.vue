@@ -81,6 +81,33 @@ onConnected(() => {
     window.location.replace(`https://${ipAddress.value}:${window.location.port}`)
 })
 
+watch(
+	() => viewModel.error_message,
+	(newMessage) => {
+		if (newMessage) {
+			showError(newMessage)
+			isSubmitting.value = false
+		}
+	}
+)
+
+watch(
+	() => viewModel.success_message,
+	(newMessage) => {
+		if (newMessage) {
+			if (isServerAddr.value && ipChanged.value) {
+				overlaySpinnerState.title = "Applying network setting"
+				overlaySpinnerState.text = "The network settings are applied. You will be forwarded to the new IP. Log in to confirm the settings.If you do not log in within 90 seconds, the IP will be reset."
+				overlaySpinnerState.overlay = true
+				startWaitForNewIp(`https://${ipAddress.value}:${window.location.port}`)
+			} else {
+				showSuccess(newMessage)
+			}
+			isSubmitting.value = false
+		}
+	}
+)
+
 const submit = async () => {
     console.log('NetworkSettings submit called')
     isSubmitting.value = true
@@ -99,25 +126,6 @@ const submit = async () => {
     console.log('NetworkSettings config:', config)
 
     await setNetworkConfig(config)
-
-    // Wait for Core to process the request
-    await new Promise(resolve => setTimeout(resolve, 100))
-
-    isSubmitting.value = false
-
-    // Check if request succeeded by checking viewModel state
-    if (viewModel.error_message) {
-        showError(viewModel.error_message)
-    } else if (viewModel.success_message) {
-        if (isServerAddr.value && ipChanged.value) {
-            overlaySpinnerState.title = "Applying network setting"
-            overlaySpinnerState.text = "The network settings are applied. You will be forwarded to the new IP. Log in to confirm the settings.If you do not log in within 90 seconds, the IP will be reset."
-            overlaySpinnerState.overlay = true
-            startWaitForNewIp(`https://${ipAddress.value}:${window.location.port}`)
-        } else {
-            showSuccess(viewModel.success_message)
-        }
-    }
 }
 </script>
 

@@ -7,6 +7,7 @@ tools/centrifugo
 *.http
 /dist
 CLAUDE.md
+.gemini/
 
 # Generated WASM package (rebuild with wasm-pack)
 src/ui/src/core/pkg/

@@ -58,7 +58,7 @@ export async function testLogin(username = 'admin', password = 'test'): Promise<
   })
 
   // Trigger login
-  await login(username, password)
+  await login(password)
 
   // Note: The login request is async, so the response will come later
   console.log('After login event sent:', {

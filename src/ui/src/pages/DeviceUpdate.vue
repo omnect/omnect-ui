@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { computed, onMounted, ref, watch } from "vue"
 import UpdateFileUpload from "../components/UpdateFileUpload.vue"
 import UpdateInfo from "../components/UpdateInfo.vue"
 import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
 
-const { showError } = useSnackbar()
+const { showError, showSuccess } = useSnackbar()
 const { viewModel, initialize, subscribeToChannels, loadUpdate } = useCore()
 
 const loadUpdateFetching = ref(false)
@@ -13,19 +13,29 @@ const data = ref()
 
 const currentVersion = computed(() => viewModel.system_info?.os?.version)
 
+watch(
+	() => viewModel.error_message,
+	(newMessage) => {
+		if (newMessage) {
+			showError(newMessage)
+		}
+	}
+)
+
+watch(
+	() => viewModel.success_message,
+	(newMessage) => {
+		if (newMessage) {
+			showSuccess(newMessage)
+		}
+	}
+)
+
 const loadUpdateData = async () => {
 	loadUpdateFetching.value = true
 	// loadUpdate is called after file upload, no parameter needed
 	await loadUpdate("")
-
-	// Wait for Core to process the request
-	await new Promise(resolve => setTimeout(resolve, 100))
 	loadUpdateFetching.value = false
-
-	// Check viewModel state from Core
-	if (viewModel.error_message) {
-		showError(viewModel.error_message)
-	}
 }
 
 onMounted(async () => {

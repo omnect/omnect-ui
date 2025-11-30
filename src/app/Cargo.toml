@@ -29,6 +29,7 @@ wasm-bindgen = { version = "0.2", default-features = false }
 lazy_static = { version = "1.4", default-features = false }
 log = { version = "0.4", default-features = false }
 console_log = { version = "1.0", default-features = false }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
 
 [build-dependencies]
 crux_core = { version = "0.16", default-features = false, features = ["typegen"] }

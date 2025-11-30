@@ -167,3 +167,4 @@ The Core infrastructure is complete. All Vue components now use the Crux Core ar
 ### Technical Debt
 
 - [ ] Remove deprecated capabilities once crux_core provides alternative Effect generation mechanism
+- [ ] Refactor `Model.auth_token` to not be serialized to the view model directly. The current approach of removing `#[serde(skip_serializing)]` in `src/app/src/model.rs` is a workaround for `shared_types` deserialization misalignment. A long-term solution should involve either making TypeGen respect `skip_serializing` or separating view-specific model fields.

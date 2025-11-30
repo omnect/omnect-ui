@@ -16,8 +16,8 @@ pub struct Model {
     pub healthcheck: Option<HealthcheckInfo>,
 
     // Authentication state
-    /// Internal auth token - not serialized to the view
-    #[serde(skip_serializing)]
+    /// Internal auth token. Currently serialized to the view model as a workaround
+    /// for a `shared_types` deserialization misalignment. See TODO in README.md.
     pub auth_token: Option<String>,
     pub is_authenticated: bool,
     pub requires_password_set: bool,

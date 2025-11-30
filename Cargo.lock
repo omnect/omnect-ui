@@ -2407,6 +2407,7 @@ dependencies = [
 name = "omnect-ui-core"
 version = "1.1.0"
 dependencies = [
+ "base64 0.22.1",
  "console_log",
  "crux_core",
  "crux_http",

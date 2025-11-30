@@ -40,6 +40,11 @@ pub fn http_error(action: &str, status: impl std::fmt::Display) -> String {
 /// Macro for unauthenticated POST requests with standard error handling.
 /// Used for login, password setup, and other pre-authentication endpoints.
 ///
+/// NOTE: Endpoints are prefixed with `http://omnect-device` as a workaround.
+/// `crux_http` (v0.15) panics when given a relative URL in some environments (e.g. `cargo test`).
+/// The UI shell (`useCore.ts`) strips this prefix before sending the request.
+/// This workaround should be removed once `crux_http` supports relative URLs gracefully.
+///
 /// # Patterns
 ///
 /// Pattern 1: POST with JSON body expecting JSON response
@@ -69,50 +74,64 @@ macro_rules! unauth_post {
     // Pattern 1: POST with JSON body expecting JSON response
     ($model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr, expect_json: $response_type:ty) => {{
         $model.is_loading = true;
-        crux_core::Command::all([
-            crux_core::render::render(),
-            $crate::HttpCmd::post($endpoint)
-                .header("Content-Type", "application/json")
-                .body_json($body)
-                .expect(&format!("Failed to serialize {} request", $action))
-                .expect_json::<$response_type>()
-                .build()
-                .then_send(|result| match result {
-                    Ok(mut response) => match response.take_body() {
-                        Some(data) => $crate::Event::$response_event(Ok(data)),
-                        None => {
-                            $crate::Event::$response_event(Err("Empty response body".to_string()))
-                        }
-                    },
-                    Err(e) => $crate::Event::$response_event(Err(e.to_string())),
-                }),
-        ])
+        match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+            .header("Content-Type", "application/json")
+            .body_json($body)
+        {
+            Ok(builder) => crux_core::Command::all([
+                crux_core::render::render(),
+                builder
+                    .expect_json::<$response_type>()
+                    .build()
+                    .then_send(|result| match result {
+                        Ok(mut response) => match response.take_body() {
+                            Some(data) => $crate::Event::$response_event(Ok(data)),
+                            None => {
+                                $crate::Event::$response_event(Err("Empty response body".to_string()))
+                            }
+                        },
+                        Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                    }),
+            ]),
+            Err(e) => {
+                $model.is_loading = false;
+                $model.error_message = Some(format!("Failed to create {} request: {}", $action, e));
+                crux_core::render::render()
+            }
+        }
     }};
 
     // Pattern 2: POST with JSON body expecting status only
     ($model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr) => {{
         $model.is_loading = true;
-        crux_core::Command::all([
-            crux_core::render::render(),
-            $crate::HttpCmd::post($endpoint)
-                .header("Content-Type", "application/json")
-                .body_json($body)
-                .expect(&format!("Failed to serialize {} request", $action))
-                .build()
-                .then_send(|result| match result {
-                    Ok(response) => {
-                        if response.status().is_success() {
-                            $crate::Event::$response_event(Ok(()))
-                        } else {
-                            $crate::Event::$response_event(Err($crate::macros::http_error(
-                                $action,
-                                response.status(),
-                            )))
+        match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+            .header("Content-Type", "application/json")
+            .body_json($body)
+        {
+            Ok(builder) => crux_core::Command::all([
+                crux_core::render::render(),
+                builder
+                    .build()
+                    .then_send(|result| match result {
+                        Ok(response) => {
+                            if response.status().is_success() {
+                                $crate::Event::$response_event(Ok(()))
+                            } else {
+                                $crate::Event::$response_event(Err($crate::macros::http_error(
+                                    $action,
+                                    response.status(),
+                                )))
+                            }
                         }
-                    }
-                    Err(e) => $crate::Event::$response_event(Err(e.to_string())),
-                }),
-        ])
+                        Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                    }),
+            ]),
+            Err(e) => {
+                $model.is_loading = false;
+                $model.error_message = Some(format!("Failed to create {} request: {}", $action, e));
+                crux_core::render::render()
+            }
+        }
     }};
 
     // Pattern 3: GET expecting JSON response
@@ -120,7 +139,7 @@ macro_rules! unauth_post {
         $model.is_loading = true;
         crux_core::Command::all([
             crux_core::render::render(),
-            $crate::HttpCmd::get($endpoint)
+            $crate::HttpCmd::get(format!("http://omnect-device{}", $endpoint))
                 .expect_json::<$response_type>()
                 .build()
                 .then_send(|result| match result {
@@ -138,6 +157,11 @@ macro_rules! unauth_post {
 
 /// Macro for authenticated POST requests with standard error handling.
 /// Reduces boilerplate for POST requests that require authentication.
+///
+/// NOTE: Endpoints are prefixed with `http://omnect-device` as a workaround.
+/// `crux_http` (v0.15) panics when given a relative URL in some environments (e.g. `cargo test`).
+/// The UI shell (`useCore.ts`) strips this prefix before sending the request.
+/// This workaround should be removed once `crux_http` supports relative URLs gracefully.
 ///
 /// # Patterns
 ///
@@ -167,7 +191,7 @@ macro_rules! auth_post {
         if let Some(token) = &$model.auth_token {
             crux_core::Command::all([
                 crux_core::render::render(),
-                $crate::HttpCmd::post($endpoint)
+                $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
                     .header("Authorization", format!("Bearer {token}"))
                     .build()
                     .then_send(|result| match result {
@@ -195,28 +219,35 @@ macro_rules! auth_post {
     ($model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr) => {{
         $model.is_loading = true;
         if let Some(token) = &$model.auth_token {
-            crux_core::Command::all([
-                crux_core::render::render(),
-                $crate::HttpCmd::post($endpoint)
-                    .header("Authorization", format!("Bearer {token}"))
-                    .header("Content-Type", "application/json")
-                    .body_json($body)
-                    .expect(&format!("Failed to serialize {} request", $action))
-                    .build()
-                    .then_send(|result| match result {
-                        Ok(response) => {
-                            if response.status().is_success() {
-                                $crate::Event::$response_event(Ok(()))
-                            } else {
-                                $crate::Event::$response_event(Err($crate::macros::http_error(
-                                    $action,
-                                    response.status(),
-                                )))
+            match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+                .header("Authorization", format!("Bearer {token}"))
+                .header("Content-Type", "application/json")
+                .body_json($body)
+            {
+                Ok(builder) => crux_core::Command::all([
+                    crux_core::render::render(),
+                    builder
+                        .build()
+                        .then_send(|result| match result {
+                            Ok(response) => {
+                                if response.status().is_success() {
+                                    $crate::Event::$response_event(Ok(()))
+                                } else {
+                                    $crate::Event::$response_event(Err($crate::macros::http_error(
+                                        $action,
+                                        response.status(),
+                                    )))
+                                }
                             }
-                        }
-                        Err(e) => $crate::Event::$response_event(Err(e.to_string())),
-                    }),
-            ])
+                            Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                        }),
+                ]),
+                Err(e) => {
+                    $model.is_loading = false;
+                    $model.error_message = Some(format!("Failed to create {} request: {}", $action, e));
+                    crux_core::render::render()
+                }
+            }
         } else {
             $model.is_loading = false;
             $model.error_message = Some(format!("{} failed: Not authenticated", $action));
@@ -230,7 +261,7 @@ macro_rules! auth_post {
         if let Some(token) = &$model.auth_token {
             crux_core::Command::all([
                 crux_core::render::render(),
-                $crate::HttpCmd::post($endpoint)
+                $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
                     .header("Authorization", format!("Bearer {token}"))
                     .header("Content-Type", "application/json")
                     .body_string($body)

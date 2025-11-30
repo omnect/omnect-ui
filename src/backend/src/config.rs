@@ -44,6 +44,7 @@ pub struct CentrifugoConfig {
     pub publish_endpoint: crate::omnect_device_service_client::PublishEndpoint,
     pub log_level: String,
     pub binary_path: PathBuf,
+    pub config_path: PathBuf,
 }
 
 #[derive(Clone, Debug)]
@@ -167,12 +168,17 @@ impl CentrifugoConfig {
             ],
         };
 
-        // In test/mock mode, use a dummy path since the binary is not actually executed
+        // In test/mock mode, use the local centrifugo instance
         #[cfg(any(test, feature = "mock"))]
-        let binary_path = PathBuf::from("centrifugo_path");
+        let binary_path = PathBuf::from("tools/centrifugo");
         #[cfg(not(any(test, feature = "mock")))]
         let binary_path =
             std::fs::canonicalize("centrifugo").context("failed to find centrifugo binary")?;
+
+        #[cfg(any(test, feature = "mock"))]
+        let config_path = PathBuf::from("src/backend/config/centrifugo_config.json");
+        #[cfg(not(any(test, feature = "mock")))]
+        let config_path = PathBuf::from("/centrifugo_config.json");
 
         Ok(Self {
             port,
@@ -181,14 +187,17 @@ impl CentrifugoConfig {
             publish_endpoint,
             log_level,
             binary_path,
+            config_path,
         })
     }
 }
 
 impl KeycloakConfig {
     fn load() -> Result<Self> {
-        let url = env::var("KEYCLOAK_URL")
-            .unwrap_or_else(|_| "http://127.0.0.1:8080/realms/omnect".to_string());
+        #[cfg(not(test))]
+        let url = env::var("KEYCLOAK_URL")?;
+        #[cfg(test)]
+        let url = "http://127.0.0.1:8080/realms/omnect".to_string();
 
         Ok(Self { url })
     }

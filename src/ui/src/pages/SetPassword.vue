@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue"
+import { onMounted, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import OmnectLogo from "../components/OmnectLogo.vue"
 import { useCore } from "../composables/useCore"
@@ -7,31 +7,37 @@ import { useSnackbar } from "../composables/useSnackbar"
 
 const router = useRouter()
 const { viewModel, setPassword, initialize, subscribeToChannels } = useCore()
-const { showError } = useSnackbar()
+const { showSuccess } = useSnackbar()
 const password = ref<string>("")
 const repeatPassword = ref<string>("")
 const visible = ref(false)
 const errorMsg = ref("")
+
+watch(
+	() => viewModel.success_message,
+	async (newMessage) => {
+		if (newMessage) {
+			console.log("Success message received:", newMessage)
+			showSuccess(newMessage)
+			try {
+				await initialize()
+				subscribeToChannels()
+				await router.push("/")
+			} catch (e) {
+				console.error("Navigation failed:", e)
+			}
+		}
+	}
+)
 
 const handleSubmit = async (): Promise<void> => {
 	errorMsg.value = ""
 	if (password.value !== repeatPassword.value) {
 		errorMsg.value = "Passwords do not match."
 	} else {
+		console.log("Calling setPassword with:", password.value)
+		console.log("ViewModel state *before* setPassword:", JSON.parse(JSON.stringify(viewModel)))
 		await setPassword(password.value)
-
-		// Wait for Core to process the request
-		await new Promise(resolve => setTimeout(resolve, 100))
-
-		// Check viewModel state from Core
-		if (viewModel.error_message) {
-			errorMsg.value = viewModel.error_message
-			showError(errorMsg.value)
-		} else if (viewModel.success_message) {
-			await initialize()
-			subscribeToChannels()
-			await router.push("/")
-		}
 	}
 }
 
