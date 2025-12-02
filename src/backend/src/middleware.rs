@@ -6,7 +6,7 @@ use actix_web::{
     dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
     web,
 };
-use actix_web_httpauth::extractors::basic::BasicAuth;
+use actix_web_httpauth::extractors::{basic::BasicAuth, bearer::BearerAuth};
 use anyhow::Result;
 use log::error;
 use std::{
@@ -67,11 +67,12 @@ where
             };
 
             // Extract TokenManager from app data
-            let Some(token_manager) = req.app_data::<web::Data<TokenManager>>() else {
+            let Some(token_manager) = req.app_data::<web::Data<TokenManager>>().cloned() else {
                 error!("failed to get TokenManager.");
                 return Ok(unauthorized_error(req).map_into_right_body());
             };
 
+            // 1. Check Session Cookie
             if token_manager.verify_token(&token) {
                 let res = service.call(req).await?;
                 return Ok(res.map_into_left_body());
@@ -79,17 +80,23 @@ where
 
             let mut payload = req.take_payload().take();
 
-            let Ok(auth) = BasicAuth::from_request(req.request(), &mut payload).await else {
-                return Ok(unauthorized_error(req).map_into_right_body());
-            };
+            // 2. Check Bearer Token
+            if let Ok(auth) = BearerAuth::from_request(req.request(), &mut payload).await
+                && token_manager.verify_token(auth.token())
+            {
+                let res = service.call(req).await?;
+                return Ok(res.map_into_left_body());
+            }
 
-            let true = verify_user(auth) else {
-                return Ok(unauthorized_error(req).map_into_right_body());
-            };
+            // 3. Check Basic Auth
+            if let Ok(auth) = BasicAuth::from_request(req.request(), &mut payload).await
+                && verify_user(auth)
+            {
+                let res = service.call(req).await?;
+                return Ok(res.map_into_left_body());
+            }
 
-            let res = service.call(req).await?;
-
-            Ok(res.map_into_left_body())
+            Ok(unauthorized_error(req).map_into_right_body())
         })
     }
 }

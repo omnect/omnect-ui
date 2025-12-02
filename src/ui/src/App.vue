@@ -9,7 +9,6 @@ import OmnectLogo from "./components/OmnectLogo.vue"
 import OverlaySpinner from "./components/OverlaySpinner.vue"
 import UserMenu from "./components/UserMenu.vue"
 import { useAwaitUpdate } from "./composables/useAwaitUpdate"
-import { useCentrifuge } from "./composables/useCentrifugo"
 import { useOverlaySpinner } from "./composables/useOverlaySpinner"
 import { useSnackbar } from "./composables/useSnackbar"
 import { useWaitReconnect } from "./composables/useWaitReconnect"
@@ -19,7 +18,6 @@ axios.defaults.validateStatus = (_) => true
 
 const { snackbarState } = useSnackbar()
 const { overlaySpinnerState, reset } = useOverlaySpinner()
-const { initializeCentrifuge } = useCentrifuge()
 const { onConnected } = useWaitReconnect()
 const { onUpdateDone } = useAwaitUpdate()
 const { lgAndUp } = useDisplay()
@@ -49,8 +47,6 @@ const updateSidebarVisibility = (visible: boolean) => {
 }
 
 onMounted(async () => {
-	initializeCentrifuge()
-
 	const res = await fetch("healthcheck", {
 		headers: {
 			"Cache-Control": "no-cache, no-store, must-revalidate",

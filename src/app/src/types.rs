@@ -12,7 +12,6 @@ pub struct SystemInfo {
     pub os: OsInfo,
     pub azure_sdk_version: String,
     pub omnect_device_service_version: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub boot_time: Option<String>,
 }
 
@@ -37,7 +36,6 @@ pub struct DeviceNetwork {
     pub mac: String,
     pub name: String,
     pub online: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub file: Option<String>,
 }
@@ -73,7 +71,6 @@ impl Default for FactoryResetStatus {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FactoryResetResult {
     pub status: FactoryResetStatus,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<String>,
     pub error: String,
     pub paths: Vec<String>,
@@ -82,7 +79,6 @@ pub struct FactoryResetResult {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FactoryReset {
     pub keys: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub result: Option<FactoryResetResult>,
 }

@@ -86,9 +86,9 @@ macro_rules! unauth_post {
                     .then_send(|result| match result {
                         Ok(mut response) => match response.take_body() {
                             Some(data) => $crate::Event::$response_event(Ok(data)),
-                            None => {
-                                $crate::Event::$response_event(Err("Empty response body".to_string()))
-                            }
+                            None => $crate::Event::$response_event(Err(
+                                "Empty response body".to_string()
+                            )),
                         },
                         Err(e) => $crate::Event::$response_event(Err(e.to_string())),
                     }),
@@ -110,21 +110,19 @@ macro_rules! unauth_post {
         {
             Ok(builder) => crux_core::Command::all([
                 crux_core::render::render(),
-                builder
-                    .build()
-                    .then_send(|result| match result {
-                        Ok(response) => {
-                            if response.status().is_success() {
-                                $crate::Event::$response_event(Ok(()))
-                            } else {
-                                $crate::Event::$response_event(Err($crate::macros::http_error(
-                                    $action,
-                                    response.status(),
-                                )))
-                            }
+                builder.build().then_send(|result| match result {
+                    Ok(response) => {
+                        if response.status().is_success() {
+                            $crate::Event::$response_event(Ok(()))
+                        } else {
+                            $crate::Event::$response_event(Err($crate::macros::http_error(
+                                $action,
+                                response.status(),
+                            )))
                         }
-                        Err(e) => $crate::Event::$response_event(Err(e.to_string())),
-                    }),
+                    }
+                    Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                }),
             ]),
             Err(e) => {
                 $model.is_loading = false;
@@ -226,25 +224,24 @@ macro_rules! auth_post {
             {
                 Ok(builder) => crux_core::Command::all([
                     crux_core::render::render(),
-                    builder
-                        .build()
-                        .then_send(|result| match result {
-                            Ok(response) => {
-                                if response.status().is_success() {
-                                    $crate::Event::$response_event(Ok(()))
-                                } else {
-                                    $crate::Event::$response_event(Err($crate::macros::http_error(
-                                        $action,
-                                        response.status(),
-                                    )))
-                                }
+                    builder.build().then_send(|result| match result {
+                        Ok(response) => {
+                            if response.status().is_success() {
+                                $crate::Event::$response_event(Ok(()))
+                            } else {
+                                $crate::Event::$response_event(Err($crate::macros::http_error(
+                                    $action,
+                                    response.status(),
+                                )))
                             }
-                            Err(e) => $crate::Event::$response_event(Err(e.to_string())),
-                        }),
+                        }
+                        Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                    }),
                 ]),
                 Err(e) => {
                     $model.is_loading = false;
-                    $model.error_message = Some(format!("Failed to create {} request: {}", $action, e));
+                    $model.error_message =
+                        Some(format!("Failed to create {} request: {}", $action, e));
                     crux_core::render::render()
                 }
             }
