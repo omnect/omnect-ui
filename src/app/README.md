@@ -168,3 +168,10 @@ The Core infrastructure is complete. All Vue components now use the Crux Core ar
 
 - [ ] Remove deprecated capabilities once crux_core provides alternative Effect generation mechanism
 - [ ] Refactor `Model.auth_token` to not be serialized to the view model directly. The current approach of removing `#[serde(skip_serializing)]` in `src/app/src/model.rs` is a workaround for `shared_types` deserialization misalignment. A long-term solution should involve either making TypeGen respect `skip_serializing` or separating view-specific model fields.
+
+### Code Organization Improvements (from PR #69 review)
+
+- [ ] Split `types.rs` into domain modules: `src/app/src/types/{auth,device,network,factory_reset,update,common}.rs` ([#69](https://github.com/omnect/omnect-ui/pull/69#discussion_r2563918736))
+- [ ] Refactor `macros.rs`: extract builders for simpler re-use in auth/non-auth cases ([#69](https://github.com/omnect/omnect-ui/pull/69#discussion_r2563954064))
+- [ ] Refactor `macros.rs`: extract most logic into separate functions and call from macros for better maintainability ([#69](https://github.com/omnect/omnect-ui/pull/69#discussion_r2563954064))
+- [ ] Create complex end effects macros (follow-up PR) ([#69](https://github.com/omnect/omnect-ui/pull/69#discussion_r2565173893))
