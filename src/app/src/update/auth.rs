@@ -17,6 +17,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             let encoded = BASE64_STANDARD.encode(format!(":{password}"));
 
             model.is_loading = true;
+            // ToDo: replace by macro in future PR
             crux_core::Command::all([
                 crux_core::render::render(),
                 // Use dummy base URL to satisfy URL validation
