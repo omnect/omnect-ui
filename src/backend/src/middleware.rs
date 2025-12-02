@@ -423,6 +423,22 @@ pub mod tests {
     }
 
     #[tokio::test]
+    async fn middleware_correct_bearer_token_should_succeed() {
+        let claim = generate_valid_claim();
+        let token = generate_token(claim);
+
+        let app = create_service().await;
+
+        let req = test::TestRequest::default()
+            .insert_header(ContentType::plaintext())
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert!(resp.status().is_success());
+    }
+
+    #[tokio::test]
     async fn verify_correct_token_should_succeed() {
         let claim = generate_valid_claim();
         let token = generate_token(claim);
