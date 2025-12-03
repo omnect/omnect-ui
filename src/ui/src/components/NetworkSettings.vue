@@ -113,12 +113,12 @@ const submit = async () => {
     isSubmitting.value = true
 
     const config = JSON.stringify({
-        is_server_addr: isServerAddr.value,
-        ip_changed: ipChanged.value,
+        isServerAddr: isServerAddr.value,
+        ipChanged: ipChanged.value,
         name: props.networkAdapter.name,
         dhcp: isDHCP.value,
         ip: ipAddress.value ?? null,
-        previous_ip: props.networkAdapter.ipv4?.addrs[0]?.addr,
+        previousIp: props.networkAdapter.ipv4?.addrs[0]?.addr,
         netmask: netmask.value ?? null,
         gateway: gateways.value.split("\n").filter(g => g.trim()) ?? [],
         dns: dns.value.split("\n").filter(d => d.trim()) ?? []

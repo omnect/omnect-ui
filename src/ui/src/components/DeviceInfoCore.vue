@@ -11,12 +11,10 @@
 import { computed, onMounted } from 'vue'
 import { useCore } from '../composables/useCore'
 
-const { viewModel, initialize, subscribeToChannels } = useCore()
+const { viewModel, initialize } = useCore()
 
-// Initialize Core and subscribe to Centrifugo channels
 onMounted(async () => {
-  await initialize()
-  subscribeToChannels()
+	await initialize()
 })
 
 // All device info computed from the Core's viewModel

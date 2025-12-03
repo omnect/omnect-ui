@@ -283,6 +283,44 @@ macro_rules! auth_post {
             crux_core::render::render()
         }
     }};
+
+    // Pattern 4: POST with JSON body expecting JSON response
+    ($model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr, expect_json: $response_type:ty) => {{
+        $model.is_loading = true;
+        if let Some(token) = &$model.auth_token {
+            match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+                .header("Authorization", format!("Bearer {token}"))
+                .header("Content-Type", "application/json")
+                .body_json($body)
+            {
+                Ok(builder) => crux_core::Command::all([
+                    crux_core::render::render(),
+                    builder
+                        .expect_json::<$response_type>()
+                        .build()
+                        .then_send(|result| match result {
+                            Ok(mut response) => match response.take_body() {
+                                Some(data) => $crate::Event::$response_event(Ok(data)),
+                                None => $crate::Event::$response_event(Err(
+                                    "Empty response body".to_string()
+                                )),
+                            },
+                            Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                        }),
+                ]),
+                Err(e) => {
+                    $model.is_loading = false;
+                    $model.error_message =
+                        Some(format!("Failed to create {} request: {}", $action, e));
+                    crux_core::render::render()
+                }
+            }
+        } else {
+            $model.is_loading = false;
+            $model.error_message = Some(format!("{} failed: Not authenticated", $action));
+            crux_core::render::render()
+        }
+    }};
 }
 
 /// Macro for handling response events with standard loading state and error handling.

@@ -4,11 +4,10 @@ import DeviceNetworks from "../components/DeviceNetworks.vue"
 import NetworkActions from "../components/NetworkActions.vue"
 import { useCore } from "../composables/useCore"
 
-const { initialize, subscribeToChannels } = useCore()
+const { initialize } = useCore()
 
 onMounted(async () => {
 	await initialize()
-	subscribeToChannels()
 })
 </script>
 

@@ -6,10 +6,9 @@ import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
 
 const { showError, showSuccess } = useSnackbar()
-const { viewModel, initialize, subscribeToChannels, loadUpdate } = useCore()
+const { viewModel, initialize, loadUpdate } = useCore()
 
 const loadUpdateFetching = ref(false)
-const data = ref()
 
 const currentVersion = computed(() => viewModel.system_info?.os?.version)
 
@@ -40,7 +39,6 @@ const loadUpdateData = async () => {
 
 onMounted(async () => {
 	await initialize()
-	subscribeToChannels()
 })
 </script>
 
@@ -51,7 +49,7 @@ onMounted(async () => {
 				<UpdateFileUpload @file-uploaded="loadUpdateData" />
 			</v-col>
 			<v-col sm="12" xl="6">
-				<UpdateInfo :update-manifest="data" :load-update-fetching="loadUpdateFetching"
+				<UpdateInfo :update-manifest="viewModel.update_manifest" :load-update-fetching="loadUpdateFetching"
 					:current-version="currentVersion" @reload-update-info="loadUpdateData" />
 			</v-col>
 		</v-row>

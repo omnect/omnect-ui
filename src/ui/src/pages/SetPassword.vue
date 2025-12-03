@@ -6,7 +6,7 @@ import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
 
 const router = useRouter()
-const { viewModel, setPassword, initialize, subscribeToChannels } = useCore()
+const { viewModel, setPassword, initialize } = useCore()
 const { showSuccess } = useSnackbar()
 const password = ref<string>("")
 const repeatPassword = ref<string>("")
@@ -21,7 +21,6 @@ watch(
 			showSuccess(newMessage)
 			try {
 				await initialize()
-				subscribeToChannels()
 				await router.push("/")
 			} catch (e) {
 				console.error("Navigation failed:", e)

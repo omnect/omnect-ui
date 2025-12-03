@@ -4,7 +4,7 @@ use crate::auth_post;
 use crate::events::Event;
 use crate::handle_response;
 use crate::model::Model;
-use crate::types::{FactoryResetRequest, LoadUpdateRequest, RunUpdateRequest};
+use crate::types::{FactoryResetRequest, LoadUpdateRequest, RunUpdateRequest, UpdateManifest};
 use crate::Effect;
 
 /// Handle device action events (reboot, factory reset, network, updates)
@@ -53,11 +53,15 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
         Event::LoadUpdate { file_path } => {
             let request = LoadUpdateRequest { file_path };
             auth_post!(model, "/update/load", LoadUpdateResponse, "Load update",
-                body_json: &request
+                body_json: &request,
+                expect_json: UpdateManifest
             )
         }
 
         Event::LoadUpdateResponse(result) => handle_response!(model, result, {
+            on_success: |model, manifest| {
+                model.update_manifest = Some(manifest);
+            },
             success_message: "Update loaded",
         }),
 

@@ -3,15 +3,14 @@ import { computed, onMounted, ref } from "vue"
 import NetworkSettings from "../components/NetworkSettings.vue"
 import { useCore } from "../composables/useCore"
 
-const { viewModel, initialize, subscribeToChannels } = useCore()
+const { viewModel, initialize } = useCore()
 
-const tab = ref(0)
+const tab = ref(null)
 
 const networkStatus = computed(() => viewModel.network_status)
 
 onMounted(async () => {
 	await initialize()
-	subscribeToChannels()
 })
 </script>
 

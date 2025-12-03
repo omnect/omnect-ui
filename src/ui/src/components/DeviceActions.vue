@@ -4,7 +4,7 @@ import DialogContent from "../components/DialogContent.vue"
 import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
 
-const { viewModel, initialize, subscribeToChannels, reboot, factoryReset } = useCore()
+const { viewModel, initialize, reboot, factoryReset } = useCore()
 const { showSuccess, showError } = useSnackbar()
 const selectedFactoryResetKeys = ref<string[]>([])
 const factoryResetDialog = ref(false)
@@ -58,7 +58,6 @@ const handleFactoryReset = async () => {
 
 onMounted(async () => {
 	await initialize()
-	subscribeToChannels()
 })
 </script>
 

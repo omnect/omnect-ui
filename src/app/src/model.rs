@@ -12,6 +12,7 @@ pub struct Model {
     pub online_status: Option<OnlineStatus>,
     pub factory_reset: Option<FactoryReset>,
     pub update_validation_status: Option<UpdateValidationStatus>,
+    pub update_manifest: Option<UpdateManifest>,
     pub timeouts: Option<Timeouts>,
     pub healthcheck: Option<HealthcheckInfo>,
 

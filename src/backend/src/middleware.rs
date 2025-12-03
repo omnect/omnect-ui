@@ -80,20 +80,29 @@ where
 
             let mut payload = req.take_payload().take();
 
-            // 2. Check Bearer Token
-            if let Ok(auth) = BearerAuth::from_request(req.request(), &mut payload).await
-                && token_manager.verify_token(auth.token())
+            // Check Authorization header to decide which auth scheme to try
+            let auth_header = req.headers().get(actix_web::http::header::AUTHORIZATION);
+            
+            if let Some(header_value) = auth_header
+                && let Ok(header_str) = header_value.to_str()
             {
-                let res = service.call(req).await?;
-                return Ok(res.map_into_left_body());
-            }
-
-            // 3. Check Basic Auth
-            if let Ok(auth) = BasicAuth::from_request(req.request(), &mut payload).await
-                && verify_user(auth)
-            {
-                let res = service.call(req).await?;
-                return Ok(res.map_into_left_body());
+                if header_str.starts_with("Bearer ") {
+                    // 2. Check Bearer Token
+                    if let Ok(auth) = BearerAuth::from_request(req.request(), &mut payload).await
+                        && token_manager.verify_token(auth.token())
+                    {
+                        let res = service.call(req).await?;
+                        return Ok(res.map_into_left_body());
+                    }
+                } else if header_str.starts_with("Basic ") {
+                    // 3. Check Basic Auth
+                    if let Ok(auth) = BasicAuth::from_request(req.request(), &mut payload).await
+                        && verify_user(auth)
+                    {
+                        let res = service.call(req).await?;
+                        return Ok(res.map_into_left_body());
+                    }
+                }
             }
 
             Ok(unauthorized_error(req).map_into_right_body())

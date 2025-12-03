@@ -76,7 +76,7 @@ pub enum Event {
     #[serde(skip)]
     SetNetworkConfigResponse(Result<(), String>),
     #[serde(skip)]
-    LoadUpdateResponse(Result<(), String>),
+    LoadUpdateResponse(Result<UpdateManifest, String>),
     #[serde(skip)]
     RunUpdateResponse(Result<(), String>),
     #[serde(skip)]

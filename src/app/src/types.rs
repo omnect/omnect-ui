@@ -153,3 +153,30 @@ pub struct LoadUpdateRequest {
 pub struct RunUpdateRequest {
     pub validate_iothub: bool,
 }
+
+// Update Manifest
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateId {
+    pub provider: String,
+    pub name: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Compatibility {
+    pub manufacturer: String,
+    pub model: String,
+    pub compatibilityid: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateManifest {
+    pub update_id: UpdateId,
+    pub is_deployable: bool,
+    pub compatibility: Vec<Compatibility>,
+    pub created_date_time: String,
+    pub manifest_version: String,
+}

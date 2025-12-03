@@ -34,6 +34,7 @@ export type {
 	Event,
 	Effect,
 	Model as CoreViewModel,
+	UpdateManifest,
 } from '../../../shared_types/generated/typescript/types/shared_types'
 
 // Import event constructors for sending events to the core
@@ -150,6 +151,7 @@ export interface ViewModel {
     } | null
   } | null
   update_validation_status: { status: string } | null
+  update_manifest: UpdateManifest | null
   timeouts: { wait_online_timeout: { nanos: number; secs: bigint } } | null
 	healthcheck: {
     version_info: { version: string; git_sha: string }
@@ -171,6 +173,7 @@ const viewModel = reactive<ViewModel>({
 	online_status: null,
 	factory_reset: null,
 	update_validation_status: null,
+	update_manifest: null,
 	timeouts: null,
 	healthcheck: null,
 	is_authenticated: false,
@@ -541,6 +544,9 @@ function updateViewModelFromCore(): void {
 	}
 
 	try {
+		// Capture authentication state before update to detect transitions
+		const wasAuthenticated = viewModel.is_authenticated
+
 		// Get serialized view model from WASM
     const viewModelBytes = wasmModule.view() as Uint8Array
 
@@ -614,6 +620,9 @@ function updateViewModelFromCore(): void {
 			? { status: coreViewModel.update_validation_status.status }
       : null
 
+		// update_manifest
+		viewModel.update_manifest = coreViewModel.update_manifest ?? null
+
 		// timeouts
 		viewModel.timeouts = coreViewModel.timeouts
 			? {
@@ -645,9 +654,23 @@ function updateViewModelFromCore(): void {
 		viewModel.success_message = coreViewModel.success_message || null
 		viewModel.is_connected = coreViewModel.is_connected
 		viewModel.auth_token = coreViewModel.auth_token || null
+		
 		// Sync the ref with the view model
-		if (viewModel.auth_token) {
-			authToken.value = viewModel.auth_token
+		authToken.value = viewModel.auth_token
+
+		// Auto-subscribe logic based on authentication state transition
+		if (viewModel.is_authenticated && !wasAuthenticated) {
+			console.log('[useCore] User authenticated, triggering subscription')
+			if (authToken.value && !isSubscribed.value) {
+				isSubscribed.value = true
+				sendEventToCore(new EventVariantSubscribeToChannels())
+			}
+		}
+
+		// Reset subscription state on logout
+		if (!viewModel.is_authenticated && wasAuthenticated) {
+			console.log('[useCore] User logged out, resetting subscription state')
+			isSubscribed.value = false
 		}
 	} catch (error) {
     console.error('Failed to update view model from core:', error)
@@ -736,11 +759,10 @@ async function initializeCore(): Promise<void> {
  *
  * @example
  * ```typescript
- * const { viewModel, sendEvent, initialize, subscribeToChannels } = useCore()
+ * const { viewModel, sendEvent, initialize } = useCore()
  *
  * onMounted(async () => {
  *   await initialize()
- *   subscribeToChannels()  // Subscribe to all WebSocket channels
  * })
  *
  * // Access reactive view model
@@ -785,6 +807,10 @@ export function useCore() {
 		subscribeToChannels: () => {
 			if (isSubscribed.value) {
         return
+			}
+			if (!authToken.value) {
+				console.warn('[useCore] Skipping subscription: no auth token')
+				return
 			}
       isSubscribed.value = true
       sendEventToCore(new EventVariantSubscribeToChannels())
