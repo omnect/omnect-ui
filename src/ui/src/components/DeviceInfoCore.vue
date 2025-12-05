@@ -11,12 +11,10 @@
 import { computed, onMounted } from 'vue'
 import { useCore } from '../composables/useCore'
 
-const { viewModel, initialize, subscribeToChannels } = useCore()
+const { viewModel, initialize } = useCore()
 
-// Initialize Core and subscribe to Centrifugo channels
 onMounted(async () => {
-  await initialize()
-  subscribeToChannels()
+	await initialize()
 })
 
 // All device info computed from the Core's viewModel
@@ -43,7 +41,7 @@ const deviceInfo = computed(
 )
 
 // Factory reset status from Core
-const factoryResetStatus = computed(() => viewModel.factory_reset?.result.status ?? 'unknown')
+const factoryResetStatus = computed(() => viewModel.factory_reset?.result?.status ?? 'unknown')
 const factoryResetResult = computed(() => viewModel.factory_reset?.result ?? null)
 
 // Map Core status strings to display values

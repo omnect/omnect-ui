@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
-use crate::capabilities::centrifugo::CentrifugoOutput;
 use crate::types::*;
 
 /// Events that can happen in the app
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum Event {
     // Initialization
     Initialize,
@@ -18,8 +18,8 @@ pub enum Event {
         password: String,
     },
     UpdatePassword {
-        current: String,
-        new_password: String,
+        current_password: String,
+        password: String,
     },
     CheckRequiresPasswordSet,
 
@@ -36,12 +36,31 @@ pub enum Event {
         config: String,
     },
 
+    // Device reconnection (reboot/factory reset)
+    ReconnectionCheckTick,
+    ReconnectionTimeout,
+
+    // Network IP change (after config update)
+    NewIpCheckTick,
+    NewIpCheckTimeout,
+
+    // Network form editing
+    NetworkFormStartEdit {
+        adapter_name: String,
+    },
+    NetworkFormUpdate {
+        form_data: String, // JSON string of NetworkFormData
+    },
+    NetworkFormReset {
+        adapter_name: String,
+    },
+
     // Update actions
     LoadUpdate {
         file_path: String,
     },
     RunUpdate {
-        validate_iothub: bool,
+        validate_iothub_connection: bool,
     },
 
     // WebSocket subscriptions
@@ -76,7 +95,7 @@ pub enum Event {
     #[serde(skip)]
     SetNetworkConfigResponse(Result<(), String>),
     #[serde(skip)]
-    LoadUpdateResponse(Result<(), String>),
+    LoadUpdateResponse(Result<UpdateManifest, String>),
     #[serde(skip)]
     RunUpdateResponse(Result<(), String>),
     #[serde(skip)]
@@ -86,11 +105,135 @@ pub enum Event {
     Connected,
     Disconnected,
 
-    // Centrifugo responses (internal events)
-    #[serde(skip)]
-    CentrifugoResponse(CentrifugoOutput),
-
     // UI actions
     ClearError,
     ClearSuccess,
+}
+
+/// Custom Debug implementation to redact sensitive data
+impl fmt::Debug for Event {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            // Redact password fields
+            Event::Login { .. } => f
+                .debug_struct("Login")
+                .field("password", &"<redacted>")
+                .finish(),
+            Event::SetPassword { .. } => f
+                .debug_struct("SetPassword")
+                .field("password", &"<redacted>")
+                .finish(),
+            Event::UpdatePassword { .. } => f
+                .debug_struct("UpdatePassword")
+                .field("current_password", &"<redacted>")
+                .field("password", &"<redacted>")
+                .finish(),
+            Event::LoginResponse(result) => match result {
+                Ok(_) => f
+                    .debug_tuple("LoginResponse")
+                    .field(&"Ok(<redacted token>)")
+                    .finish(),
+                Err(e) => f
+                    .debug_tuple("LoginResponse")
+                    .field(&format!("Err({e})"))
+                    .finish(),
+            },
+
+            // All other events use default Debug
+            Event::Initialize => write!(f, "Initialize"),
+            Event::Logout => write!(f, "Logout"),
+            Event::CheckRequiresPasswordSet => write!(f, "CheckRequiresPasswordSet"),
+            Event::Reboot => write!(f, "Reboot"),
+            Event::FactoryResetRequest { mode, preserve } => f
+                .debug_struct("FactoryResetRequest")
+                .field("mode", mode)
+                .field("preserve", preserve)
+                .finish(),
+            Event::ReloadNetwork => write!(f, "ReloadNetwork"),
+            Event::SetNetworkConfig { config } => f
+                .debug_struct("SetNetworkConfig")
+                .field("config", config)
+                .finish(),
+            Event::LoadUpdate { file_path } => f
+                .debug_struct("LoadUpdate")
+                .field("file_path", file_path)
+                .finish(),
+            Event::RunUpdate { validate_iothub_connection } => f
+                .debug_struct("RunUpdate")
+                .field("validate_iothub_connection", validate_iothub_connection)
+                .finish(),
+            Event::SubscribeToChannels => write!(f, "SubscribeToChannels"),
+            Event::UnsubscribeFromChannels => write!(f, "UnsubscribeFromChannels"),
+            Event::SystemInfoUpdated(data) => {
+                f.debug_tuple("SystemInfoUpdated").field(data).finish()
+            }
+            Event::NetworkStatusUpdated(data) => {
+                f.debug_tuple("NetworkStatusUpdated").field(data).finish()
+            }
+            Event::OnlineStatusUpdated(data) => {
+                f.debug_tuple("OnlineStatusUpdated").field(data).finish()
+            }
+            Event::FactoryResetUpdated(data) => {
+                f.debug_tuple("FactoryResetUpdated").field(data).finish()
+            }
+            Event::UpdateValidationStatusUpdated(data) => f
+                .debug_tuple("UpdateValidationStatusUpdated")
+                .field(data)
+                .finish(),
+            Event::TimeoutsUpdated(data) => f.debug_tuple("TimeoutsUpdated").field(data).finish(),
+            Event::LogoutResponse(result) => f.debug_tuple("LogoutResponse").field(result).finish(),
+            Event::SetPasswordResponse(result) => {
+                f.debug_tuple("SetPasswordResponse").field(result).finish()
+            }
+            Event::UpdatePasswordResponse(result) => f
+                .debug_tuple("UpdatePasswordResponse")
+                .field(result)
+                .finish(),
+            Event::CheckRequiresPasswordSetResponse(result) => f
+                .debug_tuple("CheckRequiresPasswordSetResponse")
+                .field(result)
+                .finish(),
+            Event::RebootResponse(result) => f.debug_tuple("RebootResponse").field(result).finish(),
+            Event::FactoryResetResponse(result) => {
+                f.debug_tuple("FactoryResetResponse").field(result).finish()
+            }
+            Event::ReloadNetworkResponse(result) => f
+                .debug_tuple("ReloadNetworkResponse")
+                .field(result)
+                .finish(),
+            Event::SetNetworkConfigResponse(result) => f
+                .debug_tuple("SetNetworkConfigResponse")
+                .field(result)
+                .finish(),
+            Event::LoadUpdateResponse(result) => {
+                f.debug_tuple("LoadUpdateResponse").field(result).finish()
+            }
+            Event::RunUpdateResponse(result) => {
+                f.debug_tuple("RunUpdateResponse").field(result).finish()
+            }
+            Event::HealthcheckResponse(result) => {
+                f.debug_tuple("HealthcheckResponse").field(result).finish()
+            }
+            Event::Connected => write!(f, "Connected"),
+            Event::Disconnected => write!(f, "Disconnected"),
+            Event::ClearError => write!(f, "ClearError"),
+            Event::ClearSuccess => write!(f, "ClearSuccess"),
+            Event::ReconnectionCheckTick => write!(f, "ReconnectionCheckTick"),
+            Event::ReconnectionTimeout => write!(f, "ReconnectionTimeout"),
+            Event::NewIpCheckTick => write!(f, "NewIpCheckTick"),
+            Event::NewIpCheckTimeout => write!(f, "NewIpCheckTimeout"),
+            Event::NetworkFormStartEdit { adapter_name } => f
+                .debug_struct("NetworkFormStartEdit")
+                .field("adapter_name", adapter_name)
+                .finish(),
+            Event::NetworkFormUpdate { form_data } => f
+                .debug_struct("NetworkFormUpdate")
+                .field("form_data", form_data)
+                .finish(),
+            Event::NetworkFormReset { adapter_name } => f
+                .debug_struct("NetworkFormReset")
+                .field("adapter_name", adapter_name)
+                .finish(),
+        }
+    }
 }

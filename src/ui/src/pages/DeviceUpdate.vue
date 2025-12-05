@@ -1,55 +1,45 @@
 <script setup lang="ts">
-import { useFetch } from "@vueuse/core"
-import { onMounted, ref } from "vue"
+import { computed, onMounted, watch } from "vue"
 import UpdateFileUpload from "../components/UpdateFileUpload.vue"
 import UpdateInfo from "../components/UpdateInfo.vue"
-import { useCentrifuge } from "../composables/useCentrifugo"
+import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
-import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
-import router from "../plugins/router"
-import type { SystemInfo } from "../types"
 
-const { showError } = useSnackbar()
-const { history, onConnected } = useCentrifuge()
+const { showError, showSuccess } = useSnackbar()
+const { viewModel, initialize, loadUpdate } = useCore()
 
-const currentVersion = ref<string>()
+const currentVersion = computed(() => viewModel.system_info?.os?.version)
 
-const {
-	onFetchError: onLoadUpdateError,
-	error: loadUpdateError,
-	statusCode: loadUpdateStatusCode,
-	execute: loadUpdate,
-	isFetching: loadUpdateFetching,
-	response,
-	data
-} = useFetch("update/load", { immediate: false }).post().json()
+// Use viewModel.is_loading to track the load update request
+// The Core sets is_loading=true when LoadUpdate is dispatched and false when response is received
+const loadUpdateFetching = computed(() => viewModel.is_loading)
 
-onLoadUpdateError(async () => {
-	if (loadUpdateStatusCode.value === 401) {
-		router.push("/login")
-	} else {
-		showError(`Uploading file failed: ${(await response.value?.text()) ?? loadUpdateError.value}`)
+watch(
+	() => viewModel.error_message,
+	(newMessage) => {
+		if (newMessage) {
+			showError(newMessage)
+		}
 	}
-})
+)
 
-const loadUpdateData = () => {
-	loadUpdate(false)
+watch(
+	() => viewModel.success_message,
+	(newMessage) => {
+		if (newMessage) {
+			showSuccess(newMessage)
+		}
+	}
+)
+
+const loadUpdateData = (filename?: string) => {
+	// filename is passed from file upload, but not from reload button
+	// The backend uses a fixed path regardless of the filename
+	loadUpdate(filename ?? "")
 }
 
-const setCurrentVersion = (data: SystemInfo) => {
-	currentVersion.value = data.os.version
-}
-
-const loadHistory = () => {
-	history(setCurrentVersion, CentrifugeSubscriptionType.SystemInfo)
-}
-
-onConnected(() => {
-	loadHistory()
-})
-
-onMounted(() => {
-	loadHistory()
+onMounted(async () => {
+	await initialize()
 })
 </script>
 
@@ -60,8 +50,8 @@ onMounted(() => {
 				<UpdateFileUpload @file-uploaded="loadUpdateData" />
 			</v-col>
 			<v-col sm="12" xl="6">
-				<UpdateInfo :update-manifest="data" :load-update-fetching="loadUpdateFetching"
-					:current-version="currentVersion" @reload-update-info="loadUpdate(false)" />
+				<UpdateInfo :update-manifest="viewModel.update_manifest" :load-update-fetching="loadUpdateFetching"
+					:current-version="currentVersion" @reload-update-info="loadUpdateData" />
 			</v-col>
 		</v-row>
 	</v-sheet>

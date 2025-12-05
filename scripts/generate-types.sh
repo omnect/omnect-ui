@@ -1,22 +1,17 @@
 #!/bin/bash
-# Generate TypeScript types from Rust and convert to ESM
+# Generate TypeScript types from Rust
 #
-# TypeGen outputs CommonJS by default, but Vite requires ESM.
-# This script regenerates the types and recompiles them as ESM modules.
+# We delete the generated CommonJS .js files so that Vite/Rollup uses 
+# the TypeScript source directly (which has proper 'export' statements).
+# This aligns with the Dockerfile build process.
 
 set -e
 
 echo "Generating TypeScript types from Rust..."
 cargo build -p shared_types
 
-echo "Converting TypeScript compilation to ESM..."
-cd src/shared_types/generated/typescript
+echo "Cleaning up generated CommonJS files..."
+# Remove .js files to force Vite to use .ts sources
+find src/shared_types/generated/typescript -name "*.js" -delete
 
-# Update tsconfig to output ES modules instead of CommonJS
-sed -i 's/"module": "commonjs"/"module": "esnext"/' tsconfig.json
-
-# Recompile TypeScript to JavaScript with ES module syntax
-export PATH="$HOME/.local/share/pnpm:$PATH"
-pnpm exec tsc
-
-echo "TypeScript types generated and converted to ESM successfully!"
+echo "TypeScript types generated successfully!"

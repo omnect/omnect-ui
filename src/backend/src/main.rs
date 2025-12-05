@@ -330,7 +330,7 @@ fn run_centrifugo() -> Result<Child> {
 
     let centrifugo = Command::new(&config.binary_path)
         .arg("-c")
-        .arg("/centrifugo_config.json")
+        .arg(&config.config_path)
         .envs(vec![
             (
                 "CENTRIFUGO_HTTP_SERVER_TLS_CERT_PEM",

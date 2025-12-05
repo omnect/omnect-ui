@@ -24,8 +24,6 @@ pub use crate::model::Model;
 pub use crate::types::*;
 pub use crux_http::Result as HttpResult;
 
-pub const API_BASE_URL: &str = "http://localhost:8000";
-
 /// Capabilities - side effects the app can perform
 ///
 /// Note: We keep the old deprecated capabilities in this struct ONLY for Effect enum generation.

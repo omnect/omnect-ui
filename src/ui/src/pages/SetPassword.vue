@@ -1,56 +1,53 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue"
+import { onMounted, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import OmnectLogo from "../components/OmnectLogo.vue"
-import { useCentrifuge } from "../composables/useCentrifugo"
+import { useCore } from "../composables/useCore"
+import { useSnackbar } from "../composables/useSnackbar"
 
 const router = useRouter()
-const { initializeCentrifuge, unsubscribeAll, disconnect } = useCentrifuge()
+const { viewModel, setPassword, login, initialize } = useCore()
+const { showSuccess } = useSnackbar()
 const password = ref<string>("")
 const repeatPassword = ref<string>("")
 const visible = ref(false)
 const errorMsg = ref("")
 
-const handleSubmit = async (): Promise<void> => {
-	try {
-		errorMsg.value = ""
-		if (password.value !== repeatPassword.value) {
-			errorMsg.value = "Passwords do not match."
-		} else {
-			const res = await fetch("set-password", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json"
-				},
-				body: JSON.stringify({
-					password: password.value
-				})
-			})
-
-			if (res.ok) {
-				initializeCentrifuge()
-				await router.push("/")
-			} else {
-				errorMsg.value = "Something went wrong while setting your password."
-			}
+watch(
+	() => viewModel.success_message,
+	async (newMessage) => {
+		if (newMessage) {
+			console.log("Success message received:", newMessage)
+			showSuccess(newMessage)
+			// Automatically log in with the new password
+			await login(password.value)
 		}
-	} catch (error) {
-		errorMsg.value = "Failed to set password."
+	}
+)
+
+// Watch for successful authentication
+watch(
+	() => viewModel.is_authenticated,
+	async (isAuthenticated) => {
+		if (isAuthenticated) {
+			await router.push("/")
+		}
+	}
+)
+
+const handleSubmit = async (): Promise<void> => {
+	errorMsg.value = ""
+	if (password.value !== repeatPassword.value) {
+		errorMsg.value = "Passwords do not match."
+	} else {
+		console.log("Calling setPassword with:", password.value)
+		await setPassword(password.value)
 	}
 }
 
 onMounted(async () => {
-	try {
-		const requireSetPassword = await fetch("require-set-password")
-		if (requireSetPassword.status !== 201) {
-			router.push("/")
-		} else {
-			unsubscribeAll()
-			disconnect()
-		}
-	} catch {
-		router.push("/login")
-	}
+	// Initialize Core for this page
+	await initialize()
 })
 </script>
 

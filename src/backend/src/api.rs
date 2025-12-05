@@ -216,13 +216,8 @@ where
     pub async fn require_set_password() -> impl Responder {
         debug!("require_set_password() called");
 
-        if !PasswordService::password_exists() {
-            return HttpResponse::Created()
-                .append_header(("Location", "/set-password"))
-                .finish();
-        }
-
-        HttpResponse::Ok().finish()
+        let password_exists = PasswordService::password_exists();
+        HttpResponse::Ok().json(!password_exists)
     }
 
     pub async fn validate_portal_token(body: String, api: web::Data<Self>) -> impl Responder {

@@ -28,9 +28,18 @@ echo -n "Stopping existing centrifugo processes... "
 killall centrifugo 2>/dev/null || true
 echo -e "${GREEN}✓${NC}"
 
-# Setup test password
-echo -n "Setting up test password... "
-cargo run --bin setup-password --features=mock -- 123 >/dev/null 2>&1
+# Build WASM module
+echo -n "Building WASM module... "
+cd src/app
+wasm-pack build --target web --out-dir ../ui/src/core/pkg >/dev/null 2>&1
+cd ../..
+echo -e "${GREEN}✓${NC}"
+
+# Build UI
+echo -n "Building UI... "
+cd src/ui
+pnpm run build >/dev/null 2>&1
+cd ../..
 echo -e "${GREEN}✓${NC}"
 
 echo -e "${GREEN}✅ Development setup complete!${NC}"

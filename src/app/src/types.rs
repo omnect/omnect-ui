@@ -12,7 +12,6 @@ pub struct SystemInfo {
     pub os: OsInfo,
     pub azure_sdk_version: String,
     pub omnect_device_service_version: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub boot_time: Option<String>,
 }
 
@@ -37,6 +36,8 @@ pub struct DeviceNetwork {
     pub mac: String,
     pub name: String,
     pub online: bool,
+    #[serde(default)]
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -70,7 +71,6 @@ impl Default for FactoryResetStatus {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FactoryResetResult {
     pub status: FactoryResetStatus,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<String>,
     pub error: String,
     pub paths: Vec<String>,
@@ -79,7 +79,8 @@ pub struct FactoryResetResult {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FactoryReset {
     pub keys: Vec<String>,
-    pub result: FactoryResetResult,
+    #[serde(default)]
+    pub result: Option<FactoryResetResult>,
 }
 
 // Update Validation Status
@@ -103,8 +104,9 @@ pub struct Timeouts {
 // Health Check
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VersionInfo {
-    pub version: String,
-    pub git_sha: String,
+    pub required: String,
+    pub current: String,
+    pub mismatch: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -131,14 +133,15 @@ pub struct SetPasswordRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdatePasswordRequest {
-    pub current: String,
-    pub new_password: String,
+    pub current_password: String,
+    pub password: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FactoryResetRequest {
-    pub mode: String,
+    pub mode: u8,
     pub preserve: Vec<String>,
 }
 
@@ -149,5 +152,135 @@ pub struct LoadUpdateRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RunUpdateRequest {
-    pub validate_iothub: bool,
+    pub validate_iothub_connection: bool,
+}
+
+// Device Operation States (for reboot/factory reset reconnection)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceOperationState {
+    Idle,
+    Rebooting,
+    FactoryResetting,
+    Updating,
+    WaitingReconnection { operation: String, attempt: u32 },
+    ReconnectionFailed { operation: String, reason: String },
+    ReconnectionSuccessful { operation: String },
+}
+
+impl Default for DeviceOperationState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
+// Network Change States (for IP change after network config)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NetworkChangeState {
+    Idle,
+    ApplyingConfig {
+        is_server_addr: bool,
+        ip_changed: bool,
+        new_ip: String,
+        old_ip: String,
+    },
+    WaitingForNewIp {
+        new_ip: String,
+        attempt: u32,
+    },
+    NewIpReachable {
+        new_ip: String,
+    },
+    NewIpTimeout {
+        new_ip: String,
+    },
+}
+
+impl Default for NetworkChangeState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
+// Network Form State (for form editing without WebSocket interference)
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NetworkFormData {
+    pub name: String,
+    pub ip_address: String,
+    pub dhcp: bool,
+    pub prefix_len: u32,
+    pub dns: Vec<String>,
+    pub gateways: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NetworkFormState {
+    Idle,
+    Editing {
+        adapter_name: String,
+        form_data: NetworkFormData,
+    },
+    Submitting {
+        adapter_name: String,
+        form_data: NetworkFormData,
+    },
+}
+
+impl Default for NetworkFormState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
+// Network Configuration Request (parsed from JSON)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkConfigRequest {
+    pub is_server_addr: bool,
+    pub ip_changed: bool,
+    pub name: String,
+    pub dhcp: bool,
+    pub ip: Option<String>,
+    pub previous_ip: Option<String>,
+    pub netmask: Option<u32>,
+    pub gateway: Vec<String>,
+    pub dns: Vec<String>,
+}
+
+// Overlay Spinner State (moved from Shell to Core for single source of truth)
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OverlaySpinnerState {
+    pub overlay: bool,
+    pub title: String,
+    pub text: Option<String>,
+    pub timed_out: bool,
+}
+
+// Update Manifest
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateId {
+    pub provider: String,
+    pub name: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Compatibility {
+    pub manufacturer: String,
+    pub model: String,
+    pub compatibilityid: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateManifest {
+    pub update_id: UpdateId,
+    pub is_deployable: bool,
+    pub compatibility: Vec<Compatibility>,
+    pub created_date_time: String,
+    pub manifest_version: String,
 }

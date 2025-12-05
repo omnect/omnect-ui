@@ -1,43 +1,55 @@
 <script setup lang="ts">
-import { ref } from "vue"
+import { ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import { useSnackbar } from "../composables/useSnackbar"
+import { useCore } from "../composables/useCore"
 
 const router = useRouter()
-const { showSuccess } = useSnackbar()
+const { showSuccess, showError } = useSnackbar()
+const { viewModel, updatePassword, login } = useCore()
 const currentPassword = ref<string>("")
 const password = ref<string>("")
 const repeatPassword = ref<string>("")
 const visible = ref(false)
 const errorMsg = ref("")
 
-const handleSubmit = async (): Promise<void> => {
-	try {
-		errorMsg.value = ""
-		if (password.value !== repeatPassword.value) {
-			errorMsg.value = "Passwords do not match."
-		} else {
-			const res = await fetch("update-password", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json"
-				},
-				body: JSON.stringify({
-					currentPassword: currentPassword.value,
-					password: password.value
-				})
-			})
-
-			if (res.ok) {
-				showSuccess("Password updated successfully.")
-				await router.push("/login")
-			} else {
-				const data = await res.text()
-				errorMsg.value = data ?? "Something went wrong while setting your password."
-			}
+watch(
+	() => viewModel.success_message,
+	async (newMessage) => {
+		if (newMessage) {
+			showSuccess(newMessage)
+			// Automatically log in with the new password
+			await login(password.value)
 		}
-	} catch (error) {
-		errorMsg.value = "Failed to set password."
+	}
+)
+
+// Watch for successful authentication (re-login)
+watch(
+	() => viewModel.is_authenticated,
+	async (isAuthenticated) => {
+		if (isAuthenticated) {
+			await router.push("/")
+		}
+	}
+)
+
+watch(
+	() => viewModel.error_message,
+	(newMessage) => {
+		if (newMessage) {
+			errorMsg.value = newMessage
+			showError(errorMsg.value)
+		}
+	}
+)
+
+const handleSubmit = async (): Promise<void> => {
+	errorMsg.value = ""
+	if (password.value !== repeatPassword.value) {
+		errorMsg.value = "Passwords do not match."
+	} else {
+		await updatePassword(currentPassword.value, password.value)
 	}
 }
 </script>

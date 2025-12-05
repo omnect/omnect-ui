@@ -1,94 +1,56 @@
 <script setup lang="ts">
-import { useFetch } from "@vueuse/core"
-import { computed, onMounted, type Ref, ref } from "vue"
-import { useRouter } from "vue-router"
+import { computed, onMounted, ref, watch } from "vue"
 import DialogContent from "../components/DialogContent.vue"
-import { useCentrifuge } from "../composables/useCentrifugo"
+import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
-import { CentrifugeSubscriptionType } from "../enums/centrifuge-subscription-type.enum"
-import type { FactoryReset } from "../types"
 
-const { subscribe, history, onConnected } = useCentrifuge()
-const { showError } = useSnackbar()
-const router = useRouter()
-const selectedFactoryResetKeys: Ref<string[]> = ref([])
+const { viewModel, initialize, reboot, factoryReset } = useCore()
+const { showSuccess, showError } = useSnackbar()
+const selectedFactoryResetKeys = ref<string[]>([])
 const factoryResetDialog = ref(false)
 const rebootDialog = ref(false)
-const factoryResetKeys: Ref<Pick<FactoryReset, "keys"> | undefined> = ref(undefined)
+const loading = ref(false)
 
-const factoryResetPayload = computed(() => {
-	return {
-		mode: 1,
-		preserve: selectedFactoryResetKeys.value
+const factoryResetKeys = computed(() => viewModel.factory_reset)
+
+watch(
+	() => viewModel.success_message,
+	(newMessage) => {
+		if (newMessage) {
+			if (rebootDialog.value) {
+				rebootDialog.value = false
+			}
+			if (factoryResetDialog.value) {
+				factoryResetDialog.value = false
+			}
+			showSuccess(newMessage)
+			loading.value = false
+		}
 	}
-})
+)
 
-const emit = defineEmits<{
-	(event: "rebootInProgress"): void
-	(event: "factoryResetInProgress"): void
-}>()
-
-const {
-	onFetchError: onRebootError,
-	error: rebootError,
-	statusCode: rebootStatusCode,
-	onFetchResponse: onRebootSuccess,
-	execute: reboot,
-	isFetching: rebootFetching
-} = useFetch("reboot", { immediate: false }).post()
-
-const {
-	onFetchError: onResetError,
-	error: resetError,
-	statusCode: resetStatusCode,
-	onFetchResponse: onResetSuccess,
-	execute: reset,
-	isFetching: resetFetching
-} = useFetch("factory-reset", { immediate: false }).post(factoryResetPayload)
-
-const loading = computed(() => rebootFetching.value || resetFetching.value)
-
-onRebootSuccess(() => {
-	emit("rebootInProgress")
-	rebootDialog.value = false
-})
-
-onRebootError(() => {
-	if (rebootStatusCode.value === 401) {
-		router.push("/login")
-	} else {
-		showError(`Rebooting device failed: ${JSON.stringify(rebootError.value)}`)
+watch(
+	() => viewModel.error_message,
+	(newMessage) => {
+		if (newMessage) {
+			showError(newMessage)
+			loading.value = false
+		}
 	}
-})
+)
 
-onResetSuccess(() => {
-	emit("factoryResetInProgress")
-	factoryResetDialog.value = false
-})
-
-onResetError(() => {
-	if (resetStatusCode.value === 401) {
-		router.push("/login")
-	} else {
-		showError(`Resetting device failed: ${JSON.stringify(resetError.value)}`)
-	}
-})
-
-const updateFactoryResetKeys = (data: FactoryReset) => {
-	factoryResetKeys.value = data
+const handleReboot = async () => {
+	loading.value = true
+	await reboot()
 }
 
-const loadHistoryAndSubscribe = () => {
-	history(updateFactoryResetKeys, CentrifugeSubscriptionType.FactoryReset)
-	subscribe(updateFactoryResetKeys, CentrifugeSubscriptionType.FactoryReset)
+const handleFactoryReset = async () => {
+	loading.value = true
+	await factoryReset("1", selectedFactoryResetKeys.value)
 }
 
-onConnected(() => {
-	loadHistoryAndSubscribe()
-})
-
-onMounted(() => {
-	loadHistoryAndSubscribe()
+onMounted(async () => {
+	await initialize()
 })
 </script>
 
@@ -106,7 +68,7 @@ onMounted(() => {
 					</div>
 					<div class="flex justify-end -mr-4 mt-4">
 						<v-btn variant="text" color="warning" :loading="loading" :disabled="loading"
-							@click="reboot(false)">Reboot</v-btn>
+							@click="handleReboot">Reboot</v-btn>
 						<v-btn variant="text" color="primary" @click="rebootDialog = false">Cancel</v-btn>
 					</div>
 				</DialogContent>
@@ -119,12 +81,17 @@ onMounted(() => {
 				<DialogContent title="Factory reset" dialog-type="default" :show-close="true"
 					@close="factoryResetDialog = false">
 					<div class="flex flex-col gap-2 mb-8">
-						<v-checkbox-btn v-for="(option, index) in factoryResetKeys?.keys" :label="option"
-							v-model="selectedFactoryResetKeys" :value="option" :key="index"></v-checkbox-btn>
+						<div v-if="factoryResetKeys?.keys && factoryResetKeys.keys.length > 0">
+							<v-checkbox-btn v-for="(option, index) in factoryResetKeys.keys" :label="option"
+								v-model="selectedFactoryResetKeys" :value="option" :key="index"></v-checkbox-btn>
+						</div>
+						<div v-else class="text-grey">
+							No preserve options available
+						</div>
 					</div>
 					<div class="flex justify-end -mr-4 mt-4">
 						<v-btn variant="text" color="error" :loading="loading" :disabled="loading"
-							@click="reset(false)">Reset</v-btn>
+							@click="handleFactoryReset">Reset</v-btn>
 						<v-btn variant="text" color="primary" @click="factoryResetDialog = false">Cancel</v-btn>
 					</div>
 				</DialogContent>

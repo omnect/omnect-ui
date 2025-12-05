@@ -11,6 +11,9 @@ use crate::Effect;
 
 /// Main update dispatcher - routes events to domain-specific handlers
 pub fn update(event: Event, model: &mut Model) -> Command<Effect, Event> {
+    // Log to browser console for debugging
+    log::debug!("Crux Core update: {event:?}");
+
     match event {
         // Initialization
         Event::Initialize => {
@@ -43,12 +46,18 @@ pub fn update(event: Event, model: &mut Model) -> Command<Effect, Event> {
         | Event::LoadUpdateResponse(_)
         | Event::RunUpdate { .. }
         | Event::RunUpdateResponse(_)
-        | Event::HealthcheckResponse(_) => device::handle(event, model),
+        | Event::HealthcheckResponse(_)
+        | Event::ReconnectionCheckTick
+        | Event::ReconnectionTimeout
+        | Event::NewIpCheckTick
+        | Event::NewIpCheckTimeout
+        | Event::NetworkFormStartEdit { .. }
+        | Event::NetworkFormUpdate { .. }
+        | Event::NetworkFormReset { .. } => device::handle(event, model),
 
         // WebSocket domain
         Event::SubscribeToChannels
         | Event::UnsubscribeFromChannels
-        | Event::CentrifugoResponse(_)
         | Event::SystemInfoUpdated(_)
         | Event::NetworkStatusUpdated(_)
         | Event::OnlineStatusUpdated(_)
