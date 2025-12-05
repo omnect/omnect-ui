@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import axios, { AxiosError } from "axios"
 import { onMounted, ref, watch } from "vue"
-import { useOverlaySpinner } from "../composables/useOverlaySpinner"
+import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
 import router from "../plugins/router"
 
 const { showError } = useSnackbar()
-const { updateDone } = useOverlaySpinner()
+const { viewModel } = useCore()
 const emit = defineEmits<(e: "fileUploaded", filename: string) => void>()
 
 const updateFile = ref<File>()
@@ -17,7 +17,22 @@ watch(updateFile, () => {
 	progressPercentage.value = 0
 })
 
+watch(
+	() => viewModel.device_operation_state,
+	(state) => {
+		if (state.type === 'reconnection_successful' && state.operation === 'Update') {
+			updateFile.value = undefined
+		}
+	},
+	{ deep: true }
+)
+
 const uploadFile = async () => {
+	if (!viewModel.is_authenticated) {
+		router.push("/login")
+		return
+	}
+
 	if (!updateFile.value) {
 		showError("Select an update file.")
 		return
@@ -55,12 +70,6 @@ const uploadFile = async () => {
 	formData.delete("file")
 	uploadFetching.value = false
 }
-
-onMounted(() => {
-	updateDone.on(() => {
-		updateFile.value = undefined
-	})
-})
 </script>
 
 <template>

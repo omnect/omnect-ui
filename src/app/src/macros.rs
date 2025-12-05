@@ -37,23 +37,42 @@ pub fn http_error(action: &str, status: impl std::fmt::Display) -> String {
     format!("{action} failed: HTTP {status}")
 }
 
+/// Helper function to extract error message from response body or fallback to status
+pub fn extract_error(
+    action: &str,
+    response: &mut crux_http::Response<Vec<u8>>,
+) -> String {
+    // Check for original status header from shell hack
+    let status = if let Some(original) = response.header("x-original-status") {
+         original.as_str().to_string()
+    } else {
+         response.status().to_string()
+    };
+
+    match response.take_body() {
+        Some(body) => {
+            if body.is_empty() {
+                format!("{action} failed: HTTP {status} (Empty body)")
+            } else {
+                match String::from_utf8(body) {
+                    Ok(msg) => format!("Error: {}", msg),
+                    Err(e) => format!("{action} failed: HTTP {status} (Invalid UTF-8: {e})"),
+                }
+            }
+        },
+        None => format!("{action} failed: HTTP {status} (No body)"),
+    }
+}
+
+/// Helper function to check if a response is successful, handling the shell workaround.
+/// Returns true if the response status is 2xx AND there is no 'x-original-status' header
+/// indicating a masked error.
+pub fn is_success(response: &crux_http::Response<Vec<u8>>) -> bool {
+    let is_hack_error = response.header("x-original-status").is_some();
+    response.status().is_success() && !is_hack_error
+}
+
 /// Macro for unauthenticated POST requests with standard error handling.
-/// Used for login, password setup, and other pre-authentication endpoints.
-///
-/// NOTE: Endpoints are prefixed with `http://omnect-device` as a workaround.
-/// `crux_http` (v0.15) panics when given a relative URL in some environments (e.g. `cargo test`).
-/// The UI shell (`useCore.ts`) strips this prefix before sending the request.
-/// This workaround should be removed once `crux_http` supports relative URLs gracefully.
-///
-/// # Patterns
-///
-/// Pattern 1: POST with JSON body expecting JSON response
-/// ```ignore
-/// unauth_post!(model, "/api/token/login", LoginResponse, "Login",
-///     body_json: &credentials,
-///     expect_json: AuthToken
-/// )
-/// ```
 ///
 /// Pattern 2: POST with JSON body expecting status only
 /// ```ignore
@@ -81,14 +100,27 @@ macro_rules! unauth_post {
             Ok(builder) => crux_core::Command::all([
                 crux_core::render::render(),
                 builder
-                    .expect_json::<$response_type>()
                     .build()
                     .then_send(|result| match result {
-                        Ok(mut response) => match response.take_body() {
-                            Some(data) => $crate::Event::$response_event(Ok(data)),
-                            None => $crate::Event::$response_event(Err(
-                                "Empty response body".to_string()
-                            )),
+                        Ok(mut response) => {
+                            // Check for shell hack
+                            let is_hack_error = response.header("x-original-status").is_some();
+
+                            if response.status().is_success() && !is_hack_error {
+                                match response.take_body() {
+                                    Some(body) => match serde_json::from_slice::<$response_type>(&body) {
+                                        Ok(data) => $crate::Event::$response_event(Ok(data)),
+                                        Err(e) => $crate::Event::$response_event(Err(format!("JSON parse error: {e}"))),
+                                    },
+                                    None => $crate::Event::$response_event(Err(
+                                        "Empty response body".to_string()
+                                    )),
+                                }
+                            } else {
+                                $crate::Event::$response_event(Err(
+                                    $crate::macros::extract_error($action, &mut response)
+                                ))
+                            }
                         },
                         Err(e) => $crate::Event::$response_event(Err(e.to_string())),
                     }),
@@ -111,14 +143,16 @@ macro_rules! unauth_post {
             Ok(builder) => crux_core::Command::all([
                 crux_core::render::render(),
                 builder.build().then_send(|result| match result {
-                    Ok(response) => {
-                        if response.status().is_success() {
+                    Ok(mut response) => {
+                        // Check for shell hack
+                        let is_hack_error = response.header("x-original-status").is_some();
+
+                        if response.status().is_success() && !is_hack_error {
                             $crate::Event::$response_event(Ok(()))
                         } else {
-                            $crate::Event::$response_event(Err($crate::macros::http_error(
-                                $action,
-                                response.status(),
-                            )))
+                            $crate::Event::$response_event(Err(
+                                $crate::macros::extract_error($action, &mut response)
+                            ))
                         }
                     }
                     Err(e) => $crate::Event::$response_event(Err(e.to_string())),
@@ -138,13 +172,26 @@ macro_rules! unauth_post {
         crux_core::Command::all([
             crux_core::render::render(),
             $crate::HttpCmd::get(format!("http://omnect-device{}", $endpoint))
-                .expect_json::<$response_type>()
                 .build()
                 .then_send(|result| match result {
-                    Ok(mut response) => match response.take_body() {
-                        Some(data) => $crate::Event::$response_event(Ok(data)),
-                        None => {
-                            $crate::Event::$response_event(Err("Empty response body".to_string()))
+                    Ok(mut response) => {
+                        // Check for shell hack
+                        let is_hack_error = response.header("x-original-status").is_some();
+
+                        if response.status().is_success() && !is_hack_error {
+                            match response.take_body() {
+                                Some(body) => match serde_json::from_slice::<$response_type>(&body) {
+                                    Ok(data) => $crate::Event::$response_event(Ok(data)),
+                                    Err(e) => $crate::Event::$response_event(Err(format!("JSON parse error: {e}"))),
+                                },
+                                None => $crate::Event::$response_event(Err(
+                                    "Empty response body".to_string()
+                                )),
+                            }
+                        } else {
+                            $crate::Event::$response_event(Err(
+                                $crate::macros::extract_error($action, &mut response)
+                            ))
                         }
                     },
                     Err(e) => $crate::Event::$response_event(Err(e.to_string())),
@@ -193,14 +240,16 @@ macro_rules! auth_post {
                     .header("Authorization", format!("Bearer {token}"))
                     .build()
                     .then_send(|result| match result {
-                        Ok(response) => {
-                            if response.status().is_success() {
+                        Ok(mut response) => {
+                            // Check for shell hack
+                            let is_hack_error = response.header("x-original-status").is_some();
+
+                            if response.status().is_success() && !is_hack_error {
                                 $crate::Event::$response_event(Ok(()))
                             } else {
-                                $crate::Event::$response_event(Err($crate::macros::http_error(
-                                    $action,
-                                    response.status(),
-                                )))
+                                $crate::Event::$response_event(Err(
+                                    $crate::macros::extract_error($action, &mut response)
+                                ))
                             }
                         }
                         Err(e) => $crate::Event::$response_event(Err(e.to_string())),
@@ -225,17 +274,19 @@ macro_rules! auth_post {
                 Ok(builder) => crux_core::Command::all([
                     crux_core::render::render(),
                     builder.build().then_send(|result| match result {
-                        Ok(response) => {
-                            if response.status().is_success() {
+                        Ok(mut response) => {
+                            // Check for shell hack
+                            let is_hack_error = response.header("x-original-status").is_some();
+
+                            if response.status().is_success() && !is_hack_error {
                                 $crate::Event::$response_event(Ok(()))
                             } else {
-                                $crate::Event::$response_event(Err($crate::macros::http_error(
-                                    $action,
-                                    response.status(),
-                                )))
+                                $crate::Event::$response_event(Err(
+                                    $crate::macros::extract_error($action, &mut response)
+                                ))
                             }
                         }
-                        Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                        Err(e) => $crate::Event::$response_event(Err(format!("CRUX_ERR: {}", e))),
                     }),
                 ]),
                 Err(e) => {
@@ -264,14 +315,16 @@ macro_rules! auth_post {
                     .body_string($body)
                     .build()
                     .then_send(|result| match result {
-                        Ok(response) => {
-                            if response.status().is_success() {
+                        Ok(mut response) => {
+                            // Check for shell hack
+                            let is_hack_error = response.header("x-original-status").is_some();
+
+                            if response.status().is_success() && !is_hack_error {
                                 $crate::Event::$response_event(Ok(()))
                             } else {
-                                $crate::Event::$response_event(Err($crate::macros::http_error(
-                                    $action,
-                                    response.status(),
-                                )))
+                                $crate::Event::$response_event(Err(
+                                    $crate::macros::extract_error($action, &mut response)
+                                ))
                             }
                         }
                         Err(e) => $crate::Event::$response_event(Err(e.to_string())),
@@ -295,18 +348,31 @@ macro_rules! auth_post {
             {
                 Ok(builder) => crux_core::Command::all([
                     crux_core::render::render(),
-                    builder
-                        .expect_json::<$response_type>()
-                        .build()
-                        .then_send(|result| match result {
-                            Ok(mut response) => match response.take_body() {
-                                Some(data) => $crate::Event::$response_event(Ok(data)),
-                                None => $crate::Event::$response_event(Err(
-                                    "Empty response body".to_string()
-                                )),
+                    builder.build().then_send(
+                        |result| match result {
+                            Ok(mut response) => {
+                                // Check for shell hack
+                                let is_hack_error = response.header("x-original-status").is_some();
+
+                                if response.status().is_success() && !is_hack_error {
+                                    match response.take_body() {
+                                        Some(body) => match serde_json::from_slice::<$response_type>(&body) {
+                                            Ok(data) => $crate::Event::$response_event(Ok(data)),
+                                            Err(e) => $crate::Event::$response_event(Err(format!("JSON parse error: {e}"))),
+                                        },
+                                        None => $crate::Event::$response_event(Err(
+                                            "Empty response body".to_string()
+                                        )),
+                                    }
+                                } else {
+                                    $crate::Event::$response_event(Err(
+                                        $crate::macros::extract_error($action, &mut response)
+                                    ))
+                                }
                             },
                             Err(e) => $crate::Event::$response_event(Err(e.to_string())),
-                        }),
+                        },
+                    ),
                 ]),
                 Err(e) => {
                     $model.is_loading = false;
@@ -321,6 +387,36 @@ macro_rules! auth_post {
             crux_core::render::render()
         }
     }};
+}
+
+/// Macro for simple HTTP GET requests expecting JSON response.
+/// Does not set loading state or require authentication.
+///
+/// # Example
+/// ```ignore
+/// http_get!("http://omnect-device/healthcheck", HealthcheckResponse, HealthcheckInfo)
+/// ```
+#[macro_export]
+macro_rules! http_get {
+    ($url:expr, $response_event:ident, $response_type:ty) => {
+        $crate::HttpCmd::get($url)
+            .build()
+            .then_send(|result| {
+                $crate::Event::$response_event(match result {
+                    Ok(mut response) => {
+                        // Check for shell hack
+                        let is_hack_error = response.header("x-original-status").is_some();
+
+                        if response.status().is_success() && !is_hack_error {
+                            response.body_json().map_err(|e| format!("Failed to parse response: {e}"))
+                        } else {
+                            Err(format!("Request failed: {}", response.status()))
+                        }
+                    }
+                    Err(e) => Err(e.to_string()),
+                })
+            })
+    };
 }
 
 /// Macro for handling response events with standard loading state and error handling.

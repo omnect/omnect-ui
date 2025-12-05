@@ -3,12 +3,8 @@ import { computed, ref, watch } from "vue"
 import { useSnackbar } from "../composables/useSnackbar"
 import { useCore } from "../composables/useCore"
 import type { DeviceNetwork } from "../types"
-import { useWaitForNewIp } from "../composables/useWaitForNewIp";
-import { useOverlaySpinner } from "../composables/useOverlaySpinner";
 
 const { showSuccess, showError } = useSnackbar()
-const { overlaySpinnerState } = useOverlaySpinner()
-const { startWaitForNewIp, onConnected } = useWaitForNewIp()
 const { viewModel, setNetworkConfig } = useCore()
 
 const props = defineProps<{
@@ -77,10 +73,6 @@ const setNetMask = (mask: string) => {
     netmask.value = prefixLen
 }
 
-onConnected(() => {
-    window.location.replace(`https://${ipAddress.value}:${window.location.port}`)
-})
-
 watch(
 	() => viewModel.error_message,
 	(newMessage) => {
@@ -95,14 +87,7 @@ watch(
 	() => viewModel.success_message,
 	(newMessage) => {
 		if (newMessage) {
-			if (isServerAddr.value && ipChanged.value) {
-				overlaySpinnerState.title = "Applying network setting"
-				overlaySpinnerState.text = "The network settings are applied. You will be forwarded to the new IP. Log in to confirm the settings.If you do not log in within 90 seconds, the IP will be reset."
-				overlaySpinnerState.overlay = true
-				startWaitForNewIp(`https://${ipAddress.value}:${window.location.port}`)
-			} else {
-				showSuccess(newMessage)
-			}
+            showSuccess(newMessage)
 			isSubmitting.value = false
 		}
 	}

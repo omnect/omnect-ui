@@ -82,7 +82,7 @@ where
 
             // Check Authorization header to decide which auth scheme to try
             let auth_header = req.headers().get(actix_web::http::header::AUTHORIZATION);
-            
+
             if let Some(header_value) = auth_header
                 && let Ok(header_str) = header_value.to_str()
             {
@@ -124,7 +124,7 @@ fn verify_user(auth: BasicAuth) -> bool {
 }
 
 fn unauthorized_error(req: ServiceRequest) -> ServiceResponse {
-    let http_res = HttpResponse::Unauthorized().finish();
+    let http_res = HttpResponse::Unauthorized().body("Invalid credentials");
     let (http_req, _) = req.into_parts();
     ServiceResponse::new(http_req, http_res)
 }

@@ -13,21 +13,14 @@ const loading = ref(false)
 
 const factoryResetKeys = computed(() => viewModel.factory_reset)
 
-const emit = defineEmits<{
-	(event: "rebootInProgress"): void
-	(event: "factoryResetInProgress"): void
-}>()
-
 watch(
 	() => viewModel.success_message,
 	(newMessage) => {
 		if (newMessage) {
 			if (rebootDialog.value) {
-				emit("rebootInProgress")
 				rebootDialog.value = false
 			}
 			if (factoryResetDialog.value) {
-				emit("factoryResetInProgress")
 				factoryResetDialog.value = false
 			}
 			showSuccess(newMessage)
@@ -88,8 +81,13 @@ onMounted(async () => {
 				<DialogContent title="Factory reset" dialog-type="default" :show-close="true"
 					@close="factoryResetDialog = false">
 					<div class="flex flex-col gap-2 mb-8">
-						<v-checkbox-btn v-for="(option, index) in factoryResetKeys?.keys" :label="option"
-							v-model="selectedFactoryResetKeys" :value="option" :key="index"></v-checkbox-btn>
+						<div v-if="factoryResetKeys?.keys && factoryResetKeys.keys.length > 0">
+							<v-checkbox-btn v-for="(option, index) in factoryResetKeys.keys" :label="option"
+								v-model="selectedFactoryResetKeys" :value="option" :key="index"></v-checkbox-btn>
+						</div>
+						<div v-else class="text-grey">
+							No preserve options available
+						</div>
 					</div>
 					<div class="flex justify-end -mr-4 mt-4">
 						<v-btn variant="text" color="error" :loading="loading" :disabled="loading"

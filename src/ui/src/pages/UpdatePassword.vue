@@ -6,7 +6,7 @@ import { useCore } from "../composables/useCore"
 
 const router = useRouter()
 const { showSuccess, showError } = useSnackbar()
-const { viewModel, updatePassword } = useCore()
+const { viewModel, updatePassword, login } = useCore()
 const currentPassword = ref<string>("")
 const password = ref<string>("")
 const repeatPassword = ref<string>("")
@@ -18,7 +18,18 @@ watch(
 	async (newMessage) => {
 		if (newMessage) {
 			showSuccess(newMessage)
-			await router.push("/login")
+			// Automatically log in with the new password
+			await login(password.value)
+		}
+	}
+)
+
+// Watch for successful authentication (re-login)
+watch(
+	() => viewModel.is_authenticated,
+	async (isAuthenticated) => {
+		if (isAuthenticated) {
+			await router.push("/")
 		}
 	}
 )

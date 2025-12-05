@@ -30,4 +30,19 @@ pub struct Model {
 
     // WebSocket state
     pub is_connected: bool,
+
+    // Device operation state (reboot/factory reset reconnection)
+    pub device_operation_state: DeviceOperationState,
+    pub reconnection_attempt: u32,
+    pub reconnection_timeout_seconds: u32,
+    pub device_went_offline: bool,
+
+    // Network change state (IP change detection and polling)
+    pub network_change_state: NetworkChangeState,
+
+    // Network form state (editing without WebSocket interference)
+    pub network_form_state: NetworkFormState,
+
+    // Overlay spinner state (moved from Shell for single source of truth)
+    pub overlay_spinner: OverlaySpinnerState,
 }

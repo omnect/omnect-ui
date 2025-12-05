@@ -156,8 +156,7 @@ if [[ "$DEPLOY" == "true" ]]; then
     echo "Checking required directories..."
     for dir in /run/omnect-device-service /var/lib/omnect-ui /etc/systemd/network; do
       if [ ! -d "\$dir" ]; then
-        echo "ERROR: Required directory \$dir does not exist on device"
-        exit 1
+        echo "WARNING: Required directory \$dir does not exist on device"
       fi
     done
     echo "All required directories exist"

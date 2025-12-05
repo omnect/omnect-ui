@@ -17,7 +17,7 @@
  *   export PATH="$HOME/.local/share/pnpm:$PATH" && cargo build -p shared_types
  */
 
-import { ref, reactive, readonly, type DeepReadonly } from 'vue'
+import { ref, reactive, readonly, watch, type DeepReadonly } from 'vue'
 import { useCentrifuge } from './useCentrifugo'
 import { CentrifugeSubscriptionType } from '../enums/centrifuge-subscription-type.enum'
 
@@ -35,6 +35,7 @@ export type {
 	Effect,
 	Model as CoreViewModel,
 	UpdateManifest,
+	NetworkFormData,
 } from '../../../shared_types/generated/typescript/types/shared_types'
 
 // Import event constructors for sending events to the core
@@ -70,6 +71,15 @@ import {
 	EventVariantFactoryResetUpdated,
 	EventVariantUpdateValidationStatusUpdated,
 	EventVariantTimeoutsUpdated,
+	// Timer tick events for reconnection and IP change polling
+	EventVariantReconnectionCheckTick,
+	EventVariantReconnectionTimeout,
+	EventVariantNewIpCheckTick,
+	EventVariantNewIpCheckTimeout,
+	// Network form events
+	EventVariantNetworkFormStartEdit,
+	EventVariantNetworkFormUpdate,
+	EventVariantNetworkFormReset,
 	type Event,
 	SystemInfo,
 	OsInfo,
@@ -101,6 +111,26 @@ import {
 	HttpErrorVariantIo,
 	// Centrifugo types (only SubscribeAll is used)
 	CentrifugoOperationVariantSubscribeAll,
+	// State types for device operations, network changes, and form state
+	DeviceOperationState,
+	DeviceOperationStateVariantidle,
+	DeviceOperationStateVariantrebooting,
+	DeviceOperationStateVariantfactory_resetting,
+	DeviceOperationStateVariantupdating,
+	DeviceOperationStateVariantwaiting_reconnection,
+	DeviceOperationStateVariantreconnection_failed,
+	DeviceOperationStateVariantreconnection_successful,
+	NetworkChangeState,
+	NetworkChangeStateVariantidle,
+	NetworkChangeStateVariantapplying_config,
+	NetworkChangeStateVariantwaiting_for_new_ip,
+	NetworkChangeStateVariantnew_ip_reachable,
+	NetworkChangeStateVariantnew_ip_timeout,
+	NetworkFormState,
+	NetworkFormStateVariantidle,
+	NetworkFormStateVariantediting,
+	NetworkFormStateVariantsubmitting,
+	OverlaySpinnerState as CoreOverlaySpinnerState,
 } from '../../../shared_types/generated/typescript/types/shared_types'
 
 // Import serialization utilities
@@ -118,6 +148,132 @@ function factoryResetStatusToString(status: any): FactoryResetStatusString {
   if (status instanceof FactoryResetStatusVariantbackup_restore_error) return 'backup_restore_error'
   if (status instanceof FactoryResetStatusVariantconfiguration_error) return 'configuration_error'
   return 'unknown'
+}
+
+// Helper to convert DeviceOperationState variant to typed object
+function convertDeviceOperationState(state: DeviceOperationState): DeviceOperationStateType {
+	if (state instanceof DeviceOperationStateVariantidle) {
+		return { type: 'idle' }
+	}
+	if (state instanceof DeviceOperationStateVariantrebooting) {
+		return { type: 'rebooting' }
+	}
+	if (state instanceof DeviceOperationStateVariantfactory_resetting) {
+		return { type: 'factory_resetting' }
+	}
+	if (state instanceof DeviceOperationStateVariantupdating) {
+		return { type: 'updating' }
+	}
+	if (state instanceof DeviceOperationStateVariantwaiting_reconnection) {
+		return { type: 'waiting_reconnection', operation: state.operation, attempt: state.attempt }
+	}
+	if (state instanceof DeviceOperationStateVariantreconnection_failed) {
+		return { type: 'reconnection_failed', operation: state.operation, reason: state.reason }
+	}
+	if (state instanceof DeviceOperationStateVariantreconnection_successful) {
+		return { type: 'reconnection_successful', operation: state.operation }
+	}
+	return { type: 'idle' }
+}
+
+// Helper to convert NetworkChangeState variant to typed object
+function convertNetworkChangeState(state: NetworkChangeState): NetworkChangeStateType {
+	if (state instanceof NetworkChangeStateVariantidle) {
+		return { type: 'idle' }
+	}
+	if (state instanceof NetworkChangeStateVariantapplying_config) {
+		return {
+			type: 'applying_config',
+			is_server_addr: state.is_server_addr,
+			ip_changed: state.ip_changed,
+			new_ip: state.new_ip,
+			old_ip: state.old_ip,
+		}
+	}
+	if (state instanceof NetworkChangeStateVariantwaiting_for_new_ip) {
+		return { type: 'waiting_for_new_ip', new_ip: state.new_ip, attempt: state.attempt }
+	}
+	if (state instanceof NetworkChangeStateVariantnew_ip_reachable) {
+		return { type: 'new_ip_reachable', new_ip: state.new_ip }
+	}
+	if (state instanceof NetworkChangeStateVariantnew_ip_timeout) {
+		return { type: 'new_ip_timeout', new_ip: state.new_ip }
+	}
+	return { type: 'idle' }
+}
+
+// Helper to convert NetworkFormState variant to typed object
+function convertNetworkFormState(state: NetworkFormState): NetworkFormStateType {
+	if (state instanceof NetworkFormStateVariantidle) {
+		return { type: 'idle' }
+	}
+	if (state instanceof NetworkFormStateVariantediting) {
+		return {
+			type: 'editing',
+			adapter_name: state.adapter_name,
+			form_data: {
+				name: state.form_data.name,
+				ip_address: state.form_data.ip_address,
+				dhcp: state.form_data.dhcp,
+				prefix_len: state.form_data.prefix_len,
+				dns: [...state.form_data.dns],
+				gateways: [...state.form_data.gateways],
+			},
+		}
+	}
+	if (state instanceof NetworkFormStateVariantsubmitting) {
+		return {
+			type: 'submitting',
+			adapter_name: state.adapter_name,
+			form_data: {
+				name: state.form_data.name,
+				ip_address: state.form_data.ip_address,
+				dhcp: state.form_data.dhcp,
+				prefix_len: state.form_data.prefix_len,
+				dns: [...state.form_data.dns],
+				gateways: [...state.form_data.gateways],
+			},
+		}
+	}
+	return { type: 'idle' }
+}
+
+// TypeScript types for the new Core state enums
+export type DeviceOperationStateType =
+	| { type: 'idle' }
+	| { type: 'rebooting' }
+	| { type: 'factory_resetting' }
+	| { type: 'updating' }
+	| { type: 'waiting_reconnection'; operation: string; attempt: number }
+	| { type: 'reconnection_failed'; operation: string; reason: string }
+	| { type: 'reconnection_successful'; operation: string }
+
+export type NetworkChangeStateType =
+	| { type: 'idle' }
+	| { type: 'applying_config'; is_server_addr: boolean; ip_changed: boolean; new_ip: string; old_ip: string }
+	| { type: 'waiting_for_new_ip'; new_ip: string; attempt: number }
+	| { type: 'new_ip_reachable'; new_ip: string }
+	| { type: 'new_ip_timeout'; new_ip: string }
+
+export type NetworkFormStateType =
+	| { type: 'idle' }
+	| { type: 'editing'; adapter_name: string; form_data: NetworkFormDataType }
+	| { type: 'submitting'; adapter_name: string; form_data: NetworkFormDataType }
+
+export interface NetworkFormDataType {
+	name: string
+	ip_address: string
+	dhcp: boolean
+	prefix_len: number
+	dns: string[]
+	gateways: string[]
+}
+
+export interface OverlaySpinnerStateType {
+	overlay: boolean
+	title: string
+	text: string | null
+	timed_out: boolean
 }
 
 // Simple ViewModel interface for Vue reactivity (mirrors CoreViewModel but with JS types)
@@ -164,6 +320,20 @@ export interface ViewModel {
   success_message: string | null
   is_connected: boolean
   auth_token: string | null
+
+  // Device operation state (reboot/factory reset reconnection)
+  device_operation_state: DeviceOperationStateType
+  reconnection_attempt: number
+  reconnection_timeout_seconds: number
+
+  // Network change state (IP change detection and polling)
+  network_change_state: NetworkChangeStateType
+
+  // Network form state (editing without WebSocket interference)
+  network_form_state: NetworkFormStateType
+
+  // Overlay spinner state
+  overlay_spinner: OverlaySpinnerStateType
 }
 
 // Singleton state
@@ -183,6 +353,16 @@ const viewModel = reactive<ViewModel>({
 	success_message: null,
 	is_connected: false,
 	auth_token: null,
+	// Device operation state
+	device_operation_state: { type: 'idle' },
+	reconnection_attempt: 0,
+	reconnection_timeout_seconds: 300, // 5 minutes default
+	// Network change state
+	network_change_state: { type: 'idle' },
+	// Network form state
+	network_form_state: { type: 'idle' },
+	// Overlay spinner state
+	overlay_spinner: { overlay: false, title: '', text: null, timed_out: false },
 })
 
 const isInitialized = ref(false)
@@ -200,6 +380,153 @@ let wasmModule: any = null
 
 // Promise-based initialization guard to prevent both race conditions and premature event sending
 let initializationPromise: Promise<void> | null = null
+
+// ============================================================================
+// Timer Management for Device Operations and Network Changes
+// ============================================================================
+
+// Timer IDs for cleanup
+let reconnectionIntervalId: ReturnType<typeof setInterval> | null = null
+let reconnectionTimeoutId: ReturnType<typeof setTimeout> | null = null
+let newIpIntervalId: ReturnType<typeof setInterval> | null = null
+let newIpTimeoutId: ReturnType<typeof setTimeout> | null = null
+
+const RECONNECTION_POLL_INTERVAL_MS = 5000 // 5 seconds
+const REBOOT_TIMEOUT_MS = 300000 // 5 minutes
+const FACTORY_RESET_TIMEOUT_MS = 600000 // 10 minutes
+const NEW_IP_POLL_INTERVAL_MS = 5000 // 5 seconds
+const NEW_IP_TIMEOUT_MS = 90000 // 90 seconds
+
+/**
+ * Start reconnection polling for reboot/factory reset
+ * Sends ReconnectionCheckTick every 5 seconds and sets a timeout
+ */
+function startReconnectionPolling(isFactoryReset: boolean): void {
+	stopReconnectionPolling() // Clear any existing timers
+
+	console.log(`[useCore] Starting reconnection polling (${isFactoryReset ? 'factory reset' : 'reboot'})`)
+
+	// Start polling interval
+	reconnectionIntervalId = setInterval(() => {
+		if (isInitialized.value && wasmModule) {
+			sendEventToCore(new EventVariantReconnectionCheckTick())
+		}
+	}, RECONNECTION_POLL_INTERVAL_MS)
+
+	// Set timeout (factory reset uses longer timeout)
+	const timeoutMs = isFactoryReset ? FACTORY_RESET_TIMEOUT_MS : REBOOT_TIMEOUT_MS
+	reconnectionTimeoutId = setTimeout(() => {
+		console.log('[useCore] Reconnection timeout reached')
+		if (isInitialized.value && wasmModule) {
+			sendEventToCore(new EventVariantReconnectionTimeout())
+		}
+		stopReconnectionPolling()
+	}, timeoutMs)
+}
+
+/**
+ * Stop reconnection polling
+ */
+function stopReconnectionPolling(): void {
+	if (reconnectionIntervalId !== null) {
+		clearInterval(reconnectionIntervalId)
+		reconnectionIntervalId = null
+	}
+	if (reconnectionTimeoutId !== null) {
+		clearTimeout(reconnectionTimeoutId)
+		reconnectionTimeoutId = null
+	}
+}
+
+/**
+ * Start new IP polling after network config change
+ * Sends NewIpCheckTick every 5 seconds and sets a 90-second timeout
+ */
+function startNewIpPolling(): void {
+	stopNewIpPolling() // Clear any existing timers
+
+	console.log('[useCore] Starting new IP polling')
+
+	// Start polling interval
+	newIpIntervalId = setInterval(() => {
+		if (isInitialized.value && wasmModule) {
+			sendEventToCore(new EventVariantNewIpCheckTick())
+		}
+	}, NEW_IP_POLL_INTERVAL_MS)
+
+	// Set timeout
+	newIpTimeoutId = setTimeout(() => {
+		console.log('[useCore] New IP polling timeout reached')
+		if (isInitialized.value && wasmModule) {
+			sendEventToCore(new EventVariantNewIpCheckTimeout())
+		}
+		stopNewIpPolling()
+	}, NEW_IP_TIMEOUT_MS)
+}
+
+/**
+ * Stop new IP polling
+ */
+function stopNewIpPolling(): void {
+	if (newIpIntervalId !== null) {
+		clearInterval(newIpIntervalId)
+		newIpIntervalId = null
+	}
+	if (newIpTimeoutId !== null) {
+		clearTimeout(newIpTimeoutId)
+		newIpTimeoutId = null
+	}
+}
+
+// Watch device_operation_state for reconnection polling
+watch(
+	() => viewModel.device_operation_state,
+	(newState, oldState) => {
+		const newType = newState?.type
+		const oldType = oldState?.type
+
+		// Start polling when entering rebooting, factory_resetting, or updating state
+		if (newType === 'rebooting' || newType === 'factory_resetting' || newType === 'updating') {
+			startReconnectionPolling(newType === 'factory_resetting')
+		}
+		// Stop polling when leaving these states or entering terminal states
+		else if (
+			(oldType === 'rebooting' || oldType === 'factory_resetting' || oldType === 'updating' || oldType === 'waiting_reconnection') &&
+			(newType === 'idle' || newType === 'reconnection_successful' || newType === 'reconnection_failed')
+		) {
+			stopReconnectionPolling()
+		}
+	},
+	{ deep: true }
+)
+
+// Watch network_change_state for new IP polling and redirect
+watch(
+	() => viewModel.network_change_state,
+	(newState, oldState) => {
+		const newType = newState?.type
+		const oldType = oldState?.type
+
+		// Start polling when entering waiting_for_new_ip state
+		if (newType === 'waiting_for_new_ip') {
+			startNewIpPolling()
+		}
+		// Stop polling when leaving waiting_for_new_ip state
+		else if (oldType === 'waiting_for_new_ip') {
+			stopNewIpPolling()
+		}
+
+		// Navigate to new IP when it's reachable
+		if (newType === 'new_ip_reachable' && 'new_ip' in newState) {
+			const newIp = newState.new_ip
+			console.log(`[useCore] Redirecting to new IP: ${newIp}`)
+			const port = window.location.port
+			const protocol = window.location.protocol
+			window.location.replace(`${protocol}//${newIp}${port ? `:${port}` : ''}`)
+		}
+	},
+	{ deep: true }
+)
 
 // ============================================================================
 // Event Serialization
@@ -262,9 +589,21 @@ async function executeHttpRequest(
 
     const response = await fetch(url, fetchOptions)
 
+    // Workaround: crux_http (0.15) appears to discard the response body for 4xx/5xx errors
+    // and returns a generic error. To preserve the body (which contains validation messages),
+    // we map error statuses to 200 OK and pass the original status in a header.
+    // The Core macro will detect this header and treat it as an error.
+    let status = response.status
+    const responseHeadersMap = new Headers(response.headers)
+    if (status >= 400) {
+      console.log(`[HTTP Effect ${requestId}] Masking status ${status} as 200 to preserve body`)
+      responseHeadersMap.append('x-original-status', status.toString())
+      status = 200
+    }
+
 		// Convert response headers
     const responseHeaders: Array<CoreHttpHeader> = []
-		response.headers.forEach((value, name) => {
+		responseHeadersMap.forEach((value, name) => {
       responseHeaders.push(new CoreHttpHeader(name, value))
     })
 
@@ -274,7 +613,7 @@ async function executeHttpRequest(
     console.log(`[HTTP Effect ${requestId}] Response body: ${bodyBytes.length} bytes`)
 
 		// Create HttpResponse
-    const httpResponse = new CoreHttpResponse(response.status, responseHeaders, bodyBytes)
+    const httpResponse = new CoreHttpResponse(status, responseHeaders, bodyBytes)
 
 		// Create success result
     const result = new HttpResultVariantOk(httpResponse)
@@ -393,17 +732,13 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
 			}
       case 'FactoryResetV1': {
         const json = JSON.parse(jsonData) as OdsFactoryReset
-				// Only send if we have complete data
-				if (!json.result) {
-          break
-				}
-
-				const result = new FactoryResetResult(
+				
+				const result = json.result ? new FactoryResetResult(
           stringToFactoryResetStatus(json.result.status || 'unknown'),
 					json.result.context || null,
           json.result.error || '',
           json.result.paths || []
-        )
+        ) : null
         const data = new FactoryReset(json.keys || [], result)
         await sendEventToCore(new EventVariantFactoryResetUpdated(data))
         break
@@ -654,9 +989,28 @@ function updateViewModelFromCore(): void {
 		viewModel.success_message = coreViewModel.success_message || null
 		viewModel.is_connected = coreViewModel.is_connected
 		viewModel.auth_token = coreViewModel.auth_token || null
-		
+
 		// Sync the ref with the view model
 		authToken.value = viewModel.auth_token
+
+		// Device operation state - convert bincode variant to typed object
+		viewModel.device_operation_state = convertDeviceOperationState(coreViewModel.device_operation_state)
+		viewModel.reconnection_attempt = coreViewModel.reconnection_attempt
+		viewModel.reconnection_timeout_seconds = coreViewModel.reconnection_timeout_seconds
+
+		// Network change state
+		viewModel.network_change_state = convertNetworkChangeState(coreViewModel.network_change_state)
+
+		// Network form state
+		viewModel.network_form_state = convertNetworkFormState(coreViewModel.network_form_state)
+
+		// Overlay spinner state
+		viewModel.overlay_spinner = {
+			overlay: coreViewModel.overlay_spinner.overlay,
+			title: coreViewModel.overlay_spinner.title,
+			text: coreViewModel.overlay_spinner.text || null,
+			timed_out: coreViewModel.overlay_spinner.timed_out,
+		}
 
 		// Auto-subscribe logic based on authentication state transition
 		if (viewModel.is_authenticated && !wasAuthenticated) {
@@ -669,8 +1023,10 @@ function updateViewModelFromCore(): void {
 
 		// Reset subscription state on logout
 		if (!viewModel.is_authenticated && wasAuthenticated) {
-			console.log('[useCore] User logged out, resetting subscription state')
+			console.log('[useCore] User logged out, resetting subscription state and disconnecting Centrifugo')
 			isSubscribed.value = false
+			// Disconnect Centrifugo to ensure old tokens are not reused
+			centrifugoInstance.disconnect()
 		}
 	} catch (error) {
     console.error('Failed to update view model from core:', error)
@@ -797,7 +1153,7 @@ export function useCore() {
     checkRequiresPasswordSet: () => sendEventToCore(new EventVariantCheckRequiresPasswordSet()),
 		reboot: () => sendEventToCore(new EventVariantReboot()),
 		factoryReset: (mode: string, preserve: string[]) =>
-			sendEventToCore(new EventVariantFactoryResetRequest(mode, preserve)),
+			sendEventToCore(new EventVariantFactoryResetRequest(parseInt(mode, 10), preserve)),
 		reloadNetwork: () => sendEventToCore(new EventVariantReloadNetwork()),
 		setNetworkConfig: (config: string) =>
 			sendEventToCore(new EventVariantSetNetworkConfig(config)),
@@ -821,5 +1177,13 @@ export function useCore() {
 		},
 		clearError: () => sendEventToCore(new EventVariantClearError()),
 		clearSuccess: () => sendEventToCore(new EventVariantClearSuccess()),
+
+		// Network form state management
+		networkFormStartEdit: (adapterName: string) =>
+			sendEventToCore(new EventVariantNetworkFormStartEdit(adapterName)),
+		networkFormUpdate: (formDataJson: string) =>
+			sendEventToCore(new EventVariantNetworkFormUpdate(formDataJson)),
+		networkFormReset: (adapterName: string) =>
+			sendEventToCore(new EventVariantNetworkFormReset(adapterName)),
   }
 }

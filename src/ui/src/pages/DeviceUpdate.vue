@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue"
+import { computed, onMounted, watch } from "vue"
 import UpdateFileUpload from "../components/UpdateFileUpload.vue"
 import UpdateInfo from "../components/UpdateInfo.vue"
 import { useCore } from "../composables/useCore"
@@ -8,9 +8,11 @@ import { useSnackbar } from "../composables/useSnackbar"
 const { showError, showSuccess } = useSnackbar()
 const { viewModel, initialize, loadUpdate } = useCore()
 
-const loadUpdateFetching = ref(false)
-
 const currentVersion = computed(() => viewModel.system_info?.os?.version)
+
+// Use viewModel.is_loading to track the load update request
+// The Core sets is_loading=true when LoadUpdate is dispatched and false when response is received
+const loadUpdateFetching = computed(() => viewModel.is_loading)
 
 watch(
 	() => viewModel.error_message,
@@ -30,11 +32,10 @@ watch(
 	}
 )
 
-const loadUpdateData = async () => {
-	loadUpdateFetching.value = true
-	// loadUpdate is called after file upload, no parameter needed
-	await loadUpdate("")
-	loadUpdateFetching.value = false
+const loadUpdateData = (filename?: string) => {
+	// filename is passed from file upload, but not from reload button
+	// The backend uses a fixed path regardless of the filename
+	loadUpdate(filename ?? "")
 }
 
 onMounted(async () => {

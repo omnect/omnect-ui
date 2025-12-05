@@ -104,8 +104,9 @@ pub struct Timeouts {
 // Health Check
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VersionInfo {
-    pub version: String,
-    pub git_sha: String,
+    pub required: String,
+    pub current: String,
+    pub mismatch: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -140,7 +141,7 @@ pub struct UpdatePasswordRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FactoryResetRequest {
-    pub mode: String,
+    pub mode: u8,
     pub preserve: Vec<String>,
 }
 
@@ -151,7 +152,124 @@ pub struct LoadUpdateRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RunUpdateRequest {
-    pub validate_iothub: bool,
+    pub validate_iothub_connection: bool,
+}
+
+// Device Operation States (for reboot/factory reset reconnection)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceOperationState {
+    Idle,
+    Rebooting,
+    FactoryResetting,
+    Updating,
+    WaitingReconnection { operation: String, attempt: u32 },
+    ReconnectionFailed { operation: String, reason: String },
+    ReconnectionSuccessful { operation: String },
+}
+
+impl Default for DeviceOperationState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
+impl DeviceOperationState {
+    pub fn operation_name(&self) -> String {
+        match self {
+            Self::Rebooting => "Reboot".to_string(),
+            Self::FactoryResetting => "Factory Reset".to_string(),
+            Self::Updating => "Update".to_string(),
+            Self::WaitingReconnection { operation, .. }
+            | Self::ReconnectionFailed { operation, .. }
+            | Self::ReconnectionSuccessful { operation } => operation.clone(),
+            Self::Idle => "Unknown".to_string(),
+        }
+    }
+}
+
+// Network Change States (for IP change after network config)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NetworkChangeState {
+    Idle,
+    ApplyingConfig {
+        is_server_addr: bool,
+        ip_changed: bool,
+        new_ip: String,
+        old_ip: String,
+    },
+    WaitingForNewIp {
+        new_ip: String,
+        attempt: u32,
+    },
+    NewIpReachable {
+        new_ip: String,
+    },
+    NewIpTimeout {
+        new_ip: String,
+    },
+}
+
+impl Default for NetworkChangeState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
+// Network Form State (for form editing without WebSocket interference)
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NetworkFormData {
+    pub name: String,
+    pub ip_address: String,
+    pub dhcp: bool,
+    pub prefix_len: u32,
+    pub dns: Vec<String>,
+    pub gateways: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NetworkFormState {
+    Idle,
+    Editing {
+        adapter_name: String,
+        form_data: NetworkFormData,
+    },
+    Submitting {
+        adapter_name: String,
+        form_data: NetworkFormData,
+    },
+}
+
+impl Default for NetworkFormState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
+// Network Configuration Request (parsed from JSON)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkConfigRequest {
+    pub is_server_addr: bool,
+    pub ip_changed: bool,
+    pub name: String,
+    pub dhcp: bool,
+    pub ip: Option<String>,
+    pub previous_ip: Option<String>,
+    pub netmask: Option<u32>,
+    pub gateway: Vec<String>,
+    pub dns: Vec<String>,
+}
+
+// Overlay Spinner State (moved from Shell to Core for single source of truth)
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct OverlaySpinnerState {
+    pub overlay: bool,
+    pub title: String,
+    pub text: Option<String>,
+    pub timed_out: bool,
 }
 
 // Update Manifest

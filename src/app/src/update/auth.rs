@@ -22,23 +22,35 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
                 crux_core::render::render(),
                 // Use dummy base URL to satisfy URL validation
                 crate::HttpCmd::post("http://omnect-device/token/login")
-                    .header("Authorization", format!("Basic {}", encoded))
+                    .header("Authorization", format!("Basic {encoded}"))
                     .build()
                     .then_send(|result| match result {
-                        Ok(mut response) => match response.take_body() {
-                            Some(bytes) => match String::from_utf8(bytes) {
-                                Ok(token) => {
-                                    let auth = AuthToken { token };
-                                    crate::Event::LoginResponse(Ok(auth))
+                        Ok(mut response) => {
+                            // Check for shell hack
+                            let is_hack_error = response.header("x-original-status").is_some();
+
+                            if response.status().is_success() && !is_hack_error {
+                                match response.take_body() {
+                                    Some(bytes) => match String::from_utf8(bytes) {
+                                        Ok(token) => {
+                                            let auth = AuthToken { token };
+                                            crate::Event::LoginResponse(Ok(auth))
+                                        }
+                                        Err(_) => crate::Event::LoginResponse(Err(
+                                            "Invalid UTF-8 in response".to_string(),
+                                        )),
+                                    },
+                                    None => {
+                                        crate::Event::LoginResponse(Err("Empty response body".to_string()))
+                                    }
                                 }
-                                Err(_) => crate::Event::LoginResponse(Err(
-                                    "Invalid UTF-8 in response".to_string(),
-                                )),
-                            },
-                            None => {
-                                crate::Event::LoginResponse(Err("Empty response body".to_string()))
+                            } else {
+                                // Authentication failed - extract error message
+                                crate::Event::LoginResponse(Err(
+                                    crate::macros::extract_error("Login", &mut response)
+                                ))
                             }
-                        },
+                        }
                         Err(e) => crate::Event::LoginResponse(Err(e.to_string())),
                     }),
             ])
@@ -90,6 +102,10 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
         }
 
         Event::UpdatePasswordResponse(result) => handle_response!(model, result, {
+            on_success: |model, _| {
+                model.auth_token = None;
+                model.is_authenticated = false;
+            },
             success_message: "Password updated successfully",
         }),
 

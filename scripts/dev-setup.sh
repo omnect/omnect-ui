@@ -35,6 +35,11 @@ wasm-pack build --target web --out-dir ../ui/src/core/pkg >/dev/null 2>&1
 cd ../..
 echo -e "${GREEN}✓${NC}"
 
+# Generate TypeScript types
+echo -n "Generating TypeScript types... "
+./scripts/generate-types.sh >/dev/null 2>&1
+echo -e "${GREEN}✓${NC}"
+
 # Build UI
 echo -n "Building UI... "
 cd src/ui
