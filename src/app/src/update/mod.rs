@@ -46,7 +46,14 @@ pub fn update(event: Event, model: &mut Model) -> Command<Effect, Event> {
         | Event::LoadUpdateResponse(_)
         | Event::RunUpdate { .. }
         | Event::RunUpdateResponse(_)
-        | Event::HealthcheckResponse(_) => device::handle(event, model),
+        | Event::HealthcheckResponse(_)
+        | Event::ReconnectionCheckTick
+        | Event::ReconnectionTimeout
+        | Event::NewIpCheckTick
+        | Event::NewIpCheckTimeout
+        | Event::NetworkFormStartEdit { .. }
+        | Event::NetworkFormUpdate { .. }
+        | Event::NetworkFormReset { .. } => device::handle(event, model),
 
         // WebSocket domain
         Event::SubscribeToChannels

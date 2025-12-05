@@ -6,7 +6,7 @@ import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
 
 const router = useRouter()
-const { viewModel, setPassword, initialize } = useCore()
+const { viewModel, setPassword, login, initialize } = useCore()
 const { showSuccess } = useSnackbar()
 const password = ref<string>("")
 const repeatPassword = ref<string>("")
@@ -19,12 +19,18 @@ watch(
 		if (newMessage) {
 			console.log("Success message received:", newMessage)
 			showSuccess(newMessage)
-			try {
-				await initialize()
-				await router.push("/")
-			} catch (e) {
-				console.error("Navigation failed:", e)
-			}
+			// Automatically log in with the new password
+			await login(password.value)
+		}
+	}
+)
+
+// Watch for successful authentication
+watch(
+	() => viewModel.is_authenticated,
+	async (isAuthenticated) => {
+		if (isAuthenticated) {
+			await router.push("/")
 		}
 	}
 )
@@ -35,7 +41,6 @@ const handleSubmit = async (): Promise<void> => {
 		errorMsg.value = "Passwords do not match."
 	} else {
 		console.log("Calling setPassword with:", password.value)
-		console.log("ViewModel state *before* setPassword:", JSON.parse(JSON.stringify(viewModel)))
 		await setPassword(password.value)
 	}
 }

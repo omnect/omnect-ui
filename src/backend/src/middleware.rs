@@ -82,7 +82,7 @@ where
 
             // Check Authorization header to decide which auth scheme to try
             let auth_header = req.headers().get(actix_web::http::header::AUTHORIZATION);
-            
+
             if let Some(header_value) = auth_header
                 && let Ok(header_str) = header_value.to_str()
             {

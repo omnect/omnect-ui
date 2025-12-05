@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import axios from "axios"
-import { onMounted, type Ref, ref } from "vue"
+import { onMounted, type Ref, ref, computed, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useDisplay } from "vuetify"
 import BaseSideBar from "./components/BaseSideBar.vue"
@@ -8,18 +8,15 @@ import DialogContent from "./components/DialogContent.vue"
 import OmnectLogo from "./components/OmnectLogo.vue"
 import OverlaySpinner from "./components/OverlaySpinner.vue"
 import UserMenu from "./components/UserMenu.vue"
-import { useAwaitUpdate } from "./composables/useAwaitUpdate"
-import { useOverlaySpinner } from "./composables/useOverlaySpinner"
+import { useCore } from "./composables/useCore"
 import { useSnackbar } from "./composables/useSnackbar"
-import { useWaitReconnect } from "./composables/useWaitReconnect"
 import type { HealthcheckResponse } from "./types"
 
 axios.defaults.validateStatus = (_) => true
 
 const { snackbarState } = useSnackbar()
-const { overlaySpinnerState, reset } = useOverlaySpinner()
-const { onConnected } = useWaitReconnect()
-const { onUpdateDone } = useAwaitUpdate()
+const { viewModel } = useCore()
+
 const { lgAndUp } = useDisplay()
 const router = useRouter()
 const route = useRoute()
@@ -28,15 +25,7 @@ const overlay: Ref<boolean> = ref(false)
 const errorTitle = ref("")
 const errorMsg = ref("")
 
-onUpdateDone(() => {
-	reset()
-	router.push("/login")
-})
-
-onConnected(() => {
-	reset()
-	router.push("/login")
-})
+const overlaySpinnerState = computed(() => viewModel.overlay_spinner)
 
 const toggleSideBar = () => {
 	showSideBar.value = !showSideBar.value
@@ -45,6 +34,17 @@ const toggleSideBar = () => {
 const updateSidebarVisibility = (visible: boolean) => {
 	showSideBar.value = visible
 }
+
+// Watch authentication state to redirect to login if session is lost
+// This handles the case where the backend restarts (reboot/factory reset) and the session becomes invalid
+watch(
+	() => viewModel.is_authenticated,
+	async (isAuthenticated) => {
+		if (!isAuthenticated && route.meta.requiresAuth) {
+			await router.push("/login")
+		}
+	}
+)
 
 onMounted(async () => {
 	const res = await fetch("healthcheck", {

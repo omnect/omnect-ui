@@ -1,6 +1,9 @@
 use anyhow::Result;
 use crux_core::typegen::TypeGen;
-use omnect_ui_core::{types::FactoryResetStatus, App};
+use omnect_ui_core::{
+    types::{DeviceOperationState, FactoryResetStatus, NetworkChangeState, NetworkFormState},
+    App,
+};
 use std::path::PathBuf;
 
 fn main() -> Result<()> {
@@ -12,6 +15,9 @@ fn main() -> Result<()> {
 
     // Explicitly register enums to ensure all variants are traced
     gen.register_type::<FactoryResetStatus>()?;
+    gen.register_type::<DeviceOperationState>()?;
+    gen.register_type::<NetworkChangeState>()?;
+    gen.register_type::<NetworkFormState>()?;
 
     let output_root = PathBuf::from("./generated");
 

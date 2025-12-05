@@ -90,6 +90,10 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
         }
 
         Event::UpdatePasswordResponse(result) => handle_response!(model, result, {
+            on_success: |model, _| {
+                model.auth_token = None;
+                model.is_authenticated = false;
+            },
             success_message: "Password updated successfully",
         }),
 

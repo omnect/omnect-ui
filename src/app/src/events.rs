@@ -36,12 +36,31 @@ pub enum Event {
         config: String,
     },
 
+    // Device reconnection (reboot/factory reset)
+    ReconnectionCheckTick,
+    ReconnectionTimeout,
+
+    // Network IP change (after config update)
+    NewIpCheckTick,
+    NewIpCheckTimeout,
+
+    // Network form editing
+    NetworkFormStartEdit {
+        adapter_name: String,
+    },
+    NetworkFormUpdate {
+        form_data: String, // JSON string of NetworkFormData
+    },
+    NetworkFormReset {
+        adapter_name: String,
+    },
+
     // Update actions
     LoadUpdate {
         file_path: String,
     },
     RunUpdate {
-        validate_iothub: bool,
+        validate_iothub_connection: bool,
     },
 
     // WebSocket subscriptions
@@ -139,9 +158,9 @@ impl fmt::Debug for Event {
                 .debug_struct("LoadUpdate")
                 .field("file_path", file_path)
                 .finish(),
-            Event::RunUpdate { validate_iothub } => f
+            Event::RunUpdate { validate_iothub_connection } => f
                 .debug_struct("RunUpdate")
-                .field("validate_iothub", validate_iothub)
+                .field("validate_iothub_connection", validate_iothub_connection)
                 .finish(),
             Event::SubscribeToChannels => write!(f, "SubscribeToChannels"),
             Event::UnsubscribeFromChannels => write!(f, "UnsubscribeFromChannels"),
@@ -199,6 +218,22 @@ impl fmt::Debug for Event {
             Event::Disconnected => write!(f, "Disconnected"),
             Event::ClearError => write!(f, "ClearError"),
             Event::ClearSuccess => write!(f, "ClearSuccess"),
+            Event::ReconnectionCheckTick => write!(f, "ReconnectionCheckTick"),
+            Event::ReconnectionTimeout => write!(f, "ReconnectionTimeout"),
+            Event::NewIpCheckTick => write!(f, "NewIpCheckTick"),
+            Event::NewIpCheckTimeout => write!(f, "NewIpCheckTimeout"),
+            Event::NetworkFormStartEdit { adapter_name } => f
+                .debug_struct("NetworkFormStartEdit")
+                .field("adapter_name", adapter_name)
+                .finish(),
+            Event::NetworkFormUpdate { form_data } => f
+                .debug_struct("NetworkFormUpdate")
+                .field("form_data", form_data)
+                .finish(),
+            Event::NetworkFormReset { adapter_name } => f
+                .debug_struct("NetworkFormReset")
+                .field("adapter_name", adapter_name)
+                .finish(),
         }
     }
 }
