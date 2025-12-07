@@ -14,7 +14,7 @@ pub use reconnection::{
 use crux_core::Command;
 
 use crate::auth_post;
-use crate::events::Event;
+use crate::events::{DeviceEvent, Event};
 use crate::handle_response;
 use crate::model::Model;
 use crate::types::{
@@ -24,19 +24,19 @@ use crate::types::{
 use crate::Effect;
 
 /// Handle device action events (reboot, factory reset, network, updates)
-pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
+pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
     match event {
-        Event::Reboot => {
+        DeviceEvent::Reboot => {
             model.overlay_spinner = OverlaySpinnerState {
                 overlay: true,
                 title: "Requesting device reboot...".to_string(),
                 text: None,
                 timed_out: false,
             };
-            auth_post!(model, "/reboot", RebootResponse, "Reboot")
+            auth_post!(Device, DeviceEvent, model, "/reboot", RebootResponse, "Reboot")
         }
 
-        Event::RebootResponse(result) => handle_device_operation_response(
+        DeviceEvent::RebootResponse(result) => handle_device_operation_response(
             result,
             model,
             DeviceOperationState::Rebooting,
@@ -46,7 +46,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             None,
         ),
 
-        Event::FactoryResetRequest { mode, preserve } => {
+        DeviceEvent::FactoryResetRequest { mode, preserve } => {
             let parsed_mode = match mode.parse::<u8>() {
                 Ok(m) => m,
                 Err(e) => {
@@ -64,12 +64,12 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
                 text: None,
                 timed_out: false,
             };
-            auth_post!(model, "/factory-reset", FactoryResetResponse, "Factory reset",
+            auth_post!(Device, DeviceEvent, model, "/factory-reset", FactoryResetResponse, "Factory reset",
                 body_json: &request
             )
         }
 
-        Event::FactoryResetResponse(result) => handle_device_operation_response(
+        DeviceEvent::FactoryResetResponse(result) => handle_device_operation_response(
             result,
             model,
             DeviceOperationState::FactoryResetting,
@@ -83,8 +83,10 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             ),
         ),
 
-        Event::ReloadNetwork => {
+        DeviceEvent::ReloadNetwork => {
             auth_post!(
+                Device,
+                DeviceEvent,
                 model,
                 "/reload-network",
                 ReloadNetworkResponse,
@@ -92,32 +94,32 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             )
         }
 
-        Event::ReloadNetworkResponse(result) => handle_response!(model, result, {
+        DeviceEvent::ReloadNetworkResponse(result) => handle_response!(model, result, {
             success_message: "Network reloaded",
         }),
 
-        Event::SetNetworkConfig { config } => handle_set_network_config(config, model),
+        DeviceEvent::SetNetworkConfig { config } => handle_set_network_config(config, model),
 
-        Event::SetNetworkConfigResponse(result) => {
+        DeviceEvent::SetNetworkConfigResponse(result) => {
             handle_set_network_config_response(result, model)
         }
 
-        Event::LoadUpdate { file_path } => {
+        DeviceEvent::LoadUpdate { file_path } => {
             let request = LoadUpdateRequest { file_path };
-            auth_post!(model, "/update/load", LoadUpdateResponse, "Load update",
+            auth_post!(Device, DeviceEvent, model, "/update/load", LoadUpdateResponse, "Load update",
                 body_json: &request,
                 expect_json: UpdateManifest
             )
         }
 
-        Event::LoadUpdateResponse(result) => handle_response!(model, result, {
+        DeviceEvent::LoadUpdateResponse(result) => handle_response!(model, result, {
             on_success: |model, manifest| {
                 model.update_manifest = Some(manifest);
             },
             success_message: "Update loaded",
         }),
 
-        Event::RunUpdate { validate_iothub_connection } => {
+        DeviceEvent::RunUpdate { validate_iothub_connection } => {
             let request = RunUpdateRequest { validate_iothub_connection };
             model.overlay_spinner = OverlaySpinnerState {
                 overlay: true,
@@ -125,12 +127,12 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
                 text: None,
                 timed_out: false,
             };
-            auth_post!(model, "/update/run", RunUpdateResponse, "Run update",
+            auth_post!(Device, DeviceEvent, model, "/update/run", RunUpdateResponse, "Run update",
                 body_json: &request
             )
         }
 
-        Event::RunUpdateResponse(result) => handle_device_operation_response(
+        DeviceEvent::RunUpdateResponse(result) => handle_device_operation_response(
             result,
             model,
             DeviceOperationState::Updating,
@@ -140,25 +142,23 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             Some("Please have some patience, the update may take some time.".to_string()),
         ),
 
-        Event::HealthcheckResponse(result) => handle_healthcheck_response(result, model),
+        DeviceEvent::HealthcheckResponse(result) => handle_healthcheck_response(result, model),
 
         // Device reconnection events (reboot/factory reset/update)
         // Shell sends these tick events based on watching device_operation_state
-        Event::ReconnectionCheckTick => handle_reconnection_check_tick(model),
-        Event::ReconnectionTimeout => handle_reconnection_timeout(model),
+        DeviceEvent::ReconnectionCheckTick => handle_reconnection_check_tick(model),
+        DeviceEvent::ReconnectionTimeout => handle_reconnection_timeout(model),
 
         // Network IP change events
         // Shell sends these tick events based on watching network_change_state
-        Event::NewIpCheckTick => handle_new_ip_check_tick(model),
-        Event::NewIpCheckTimeout => handle_new_ip_check_timeout(model),
+        DeviceEvent::NewIpCheckTick => handle_new_ip_check_tick(model),
+        DeviceEvent::NewIpCheckTimeout => handle_new_ip_check_timeout(model),
 
         // Network form events
-        Event::NetworkFormStartEdit { adapter_name } => {
+        DeviceEvent::NetworkFormStartEdit { adapter_name } => {
             handle_network_form_start_edit(adapter_name, model)
         }
-        Event::NetworkFormUpdate { form_data } => handle_network_form_update(form_data, model),
-        Event::NetworkFormReset { adapter_name } => handle_network_form_start_edit(adapter_name, model),
-
-        _ => unreachable!("Non-device event passed to device handler"),
+        DeviceEvent::NetworkFormUpdate { form_data } => handle_network_form_update(form_data, model),
+        DeviceEvent::NetworkFormReset { adapter_name } => handle_network_form_start_edit(adapter_name, model),
     }
 }

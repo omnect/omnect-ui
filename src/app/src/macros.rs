@@ -73,17 +73,18 @@ pub fn is_success(response: &crux_http::Response<Vec<u8>>) -> bool {
 }
 
 /// Macro for unauthenticated POST requests with standard error handling.
+/// Requires domain parameters for event wrapping.
 ///
 /// Pattern 2: POST with JSON body expecting status only
 /// ```ignore
-/// unauth_post!(model, "/api/token/set-password", SetPasswordResponse, "Set password",
+/// unauth_post!(Auth, AuthEvent, model, "/set-password", SetPasswordResponse, "Set password",
 ///     body_json: &request
 /// )
 /// ```
 ///
 /// Pattern 3: GET expecting JSON response
 /// ```ignore
-/// unauth_post!(model, "/api/token/requires-password-set", CheckRequiresPasswordSetResponse, "Check password",
+/// unauth_post!(Auth, AuthEvent, model, "/require-set-password", CheckRequiresPasswordSetResponse, "Check password",
 ///     method: get,
 ///     expect_json: bool
 /// )
@@ -91,7 +92,7 @@ pub fn is_success(response: &crux_http::Response<Vec<u8>>) -> bool {
 #[macro_export]
 macro_rules! unauth_post {
     // Pattern 1: POST with JSON body expecting JSON response
-    ($model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr, expect_json: $response_type:ty) => {{
+    ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr, expect_json: $response_type:ty) => {{
         $model.is_loading = true;
         match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
             .header("Content-Type", "application/json")
@@ -109,20 +110,20 @@ macro_rules! unauth_post {
                             if response.status().is_success() && !is_hack_error {
                                 match response.take_body() {
                                     Some(body) => match serde_json::from_slice::<$response_type>(&body) {
-                                        Ok(data) => $crate::Event::$response_event(Ok(data)),
-                                        Err(e) => $crate::Event::$response_event(Err(format!("JSON parse error: {e}"))),
+                                        Ok(data) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Ok(data))),
+                                        Err(e) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(format!("JSON parse error: {e}")))),
                                     },
-                                    None => $crate::Event::$response_event(Err(
+                                    None => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(
                                         "Empty response body".to_string()
-                                    )),
+                                    ))),
                                 }
                             } else {
-                                $crate::Event::$response_event(Err(
+                                $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(
                                     $crate::macros::extract_error($action, &mut response)
-                                ))
+                                )))
                             }
                         },
-                        Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                        Err(e) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(e.to_string()))),
                     }),
             ]),
             Err(e) => {
@@ -134,7 +135,7 @@ macro_rules! unauth_post {
     }};
 
     // Pattern 2: POST with JSON body expecting status only
-    ($model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr) => {{
+    ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr) => {{
         $model.is_loading = true;
         match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
             .header("Content-Type", "application/json")
@@ -148,14 +149,14 @@ macro_rules! unauth_post {
                         let is_hack_error = response.header("x-original-status").is_some();
 
                         if response.status().is_success() && !is_hack_error {
-                            $crate::Event::$response_event(Ok(()))
+                            $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Ok(())))
                         } else {
-                            $crate::Event::$response_event(Err(
+                            $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(
                                 $crate::macros::extract_error($action, &mut response)
-                            ))
+                            )))
                         }
                     }
-                    Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                    Err(e) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(e.to_string()))),
                 }),
             ]),
             Err(e) => {
@@ -167,7 +168,7 @@ macro_rules! unauth_post {
     }};
 
     // Pattern 3: GET expecting JSON response
-    ($model:expr, $endpoint:expr, $response_event:ident, $action:expr, method: get, expect_json: $response_type:ty) => {{
+    ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, method: get, expect_json: $response_type:ty) => {{
         $model.is_loading = true;
         crux_core::Command::all([
             crux_core::render::render(),
@@ -181,20 +182,20 @@ macro_rules! unauth_post {
                         if response.status().is_success() && !is_hack_error {
                             match response.take_body() {
                                 Some(body) => match serde_json::from_slice::<$response_type>(&body) {
-                                    Ok(data) => $crate::Event::$response_event(Ok(data)),
-                                    Err(e) => $crate::Event::$response_event(Err(format!("JSON parse error: {e}"))),
+                                    Ok(data) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Ok(data))),
+                                    Err(e) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(format!("JSON parse error: {e}")))),
                                 },
-                                None => $crate::Event::$response_event(Err(
+                                None => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(
                                     "Empty response body".to_string()
-                                )),
+                                ))),
                             }
                         } else {
-                            $crate::Event::$response_event(Err(
+                            $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(
                                 $crate::macros::extract_error($action, &mut response)
-                            ))
+                            )))
                         }
                     },
-                    Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                    Err(e) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(e.to_string()))),
                 }),
         ])
     }};
@@ -228,10 +229,15 @@ macro_rules! unauth_post {
 ///     body_string: config
 /// )
 /// ```
+///
+/// NOTE: The macro now requires a domain parameter to specify the event wrapper.
+/// Examples:
+/// - Auth domain: `auth_post!(Auth, AuthEvent, model, "/logout", LogoutResponse, "Logout")`
+/// - Device domain: `auth_post!(Device, DeviceEvent, model, "/reboot", RebootResponse, "Reboot")`
 #[macro_export]
 macro_rules! auth_post {
     // Pattern 1: Simple POST without body
-    ($model:expr, $endpoint:expr, $response_event:ident, $action:expr) => {{
+    ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr) => {{
         $model.is_loading = true;
         if let Some(token) = &$model.auth_token {
             crux_core::Command::all([
@@ -245,14 +251,14 @@ macro_rules! auth_post {
                             let is_hack_error = response.header("x-original-status").is_some();
 
                             if response.status().is_success() && !is_hack_error {
-                                $crate::Event::$response_event(Ok(()))
+                                $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Ok(())))
                             } else {
-                                $crate::Event::$response_event(Err(
+                                $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(
                                     $crate::macros::extract_error($action, &mut response)
-                                ))
+                                )))
                             }
                         }
-                        Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                        Err(e) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(e.to_string()))),
                     }),
             ])
         } else {
@@ -263,7 +269,7 @@ macro_rules! auth_post {
     }};
 
     // Pattern 2: POST with JSON body
-    ($model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr) => {{
+    ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr) => {{
         $model.is_loading = true;
         if let Some(token) = &$model.auth_token {
             match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
@@ -279,14 +285,14 @@ macro_rules! auth_post {
                             let is_hack_error = response.header("x-original-status").is_some();
 
                             if response.status().is_success() && !is_hack_error {
-                                $crate::Event::$response_event(Ok(()))
+                                $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Ok(())))
                             } else {
-                                $crate::Event::$response_event(Err(
+                                $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(
                                     $crate::macros::extract_error($action, &mut response)
-                                ))
+                                )))
                             }
                         }
-                        Err(e) => $crate::Event::$response_event(Err(format!("CRUX_ERR: {}", e))),
+                        Err(e) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(format!("CRUX_ERR: {e}")))),
                     }),
                 ]),
                 Err(e) => {
@@ -304,7 +310,7 @@ macro_rules! auth_post {
     }};
 
     // Pattern 3: POST with string body
-    ($model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_string: $body:expr) => {{
+    ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_string: $body:expr) => {{
         $model.is_loading = true;
         if let Some(token) = &$model.auth_token {
             crux_core::Command::all([
@@ -320,14 +326,14 @@ macro_rules! auth_post {
                             let is_hack_error = response.header("x-original-status").is_some();
 
                             if response.status().is_success() && !is_hack_error {
-                                $crate::Event::$response_event(Ok(()))
+                                $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Ok(())))
                             } else {
-                                $crate::Event::$response_event(Err(
+                                $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(
                                     $crate::macros::extract_error($action, &mut response)
-                                ))
+                                )))
                             }
                         }
-                        Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                        Err(e) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(e.to_string()))),
                     }),
             ])
         } else {
@@ -338,7 +344,7 @@ macro_rules! auth_post {
     }};
 
     // Pattern 4: POST with JSON body expecting JSON response
-    ($model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr, expect_json: $response_type:ty) => {{
+    ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr, expect_json: $response_type:ty) => {{
         $model.is_loading = true;
         if let Some(token) = &$model.auth_token {
             match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
@@ -357,20 +363,20 @@ macro_rules! auth_post {
                                 if response.status().is_success() && !is_hack_error {
                                     match response.take_body() {
                                         Some(body) => match serde_json::from_slice::<$response_type>(&body) {
-                                            Ok(data) => $crate::Event::$response_event(Ok(data)),
-                                            Err(e) => $crate::Event::$response_event(Err(format!("JSON parse error: {e}"))),
+                                            Ok(data) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Ok(data))),
+                                            Err(e) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(format!("JSON parse error: {e}")))),
                                         },
-                                        None => $crate::Event::$response_event(Err(
+                                        None => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(
                                             "Empty response body".to_string()
-                                        )),
+                                        ))),
                                     }
                                 } else {
-                                    $crate::Event::$response_event(Err(
+                                    $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(
                                         $crate::macros::extract_error($action, &mut response)
-                                    ))
+                                    )))
                                 }
                             },
-                            Err(e) => $crate::Event::$response_event(Err(e.to_string())),
+                            Err(e) => $crate::events::Event::$domain($crate::events::$domain_event::$response_event(Err(e.to_string()))),
                         },
                     ),
                 ]),
@@ -391,18 +397,19 @@ macro_rules! auth_post {
 
 /// Macro for simple HTTP GET requests expecting JSON response.
 /// Does not set loading state or require authentication.
+/// Requires domain parameters for event wrapping.
 ///
 /// # Example
 /// ```ignore
-/// http_get!("http://omnect-device/healthcheck", HealthcheckResponse, HealthcheckInfo)
+/// http_get!(Device, DeviceEvent, "http://omnect-device/healthcheck", HealthcheckResponse, HealthcheckInfo)
 /// ```
 #[macro_export]
 macro_rules! http_get {
-    ($url:expr, $response_event:ident, $response_type:ty) => {
+    ($domain:ident, $domain_event:ident, $url:expr, $response_event:ident, $response_type:ty) => {
         $crate::HttpCmd::get($url)
             .build()
             .then_send(|result| {
-                $crate::Event::$response_event(match result {
+                $crate::events::Event::$domain($crate::events::$domain_event::$response_event(match result {
                     Ok(mut response) => {
                         // Check for shell hack
                         let is_hack_error = response.header("x-original-status").is_some();
@@ -414,7 +421,7 @@ macro_rules! http_get {
                         }
                     }
                     Err(e) => Err(e.to_string()),
-                })
+                }))
             })
     };
 }

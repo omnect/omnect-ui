@@ -1,9 +1,10 @@
 use crux_core::Command;
 
+use crate::events::Event;
 use crate::http_get;
 use crate::model::Model;
 use crate::types::{DeviceOperationState, NetworkChangeState, OverlaySpinnerState};
-use crate::{Effect, Event};
+use crate::Effect;
 
 use super::operations::is_update_complete;
 
@@ -24,6 +25,8 @@ pub fn handle_reconnection_check_tick(model: &mut Model) -> Command<Effect, Even
 
     // Send healthcheck request
     http_get!(
+        Device,
+        DeviceEvent,
         "http://omnect-device/healthcheck",
         HealthcheckResponse,
         crate::types::HealthcheckInfo

@@ -15,59 +15,13 @@ pub fn update(event: Event, model: &mut Model) -> Command<Effect, Event> {
     log::debug!("Crux Core update: {event:?}");
 
     match event {
-        // Initialization
         Event::Initialize => {
             model.is_loading = true;
             render()
         }
-
-        // Authentication domain
-        Event::Login { .. }
-        | Event::LoginResponse(_)
-        | Event::Logout
-        | Event::LogoutResponse(_)
-        | Event::SetPassword { .. }
-        | Event::SetPasswordResponse(_)
-        | Event::UpdatePassword { .. }
-        | Event::UpdatePasswordResponse(_)
-        | Event::CheckRequiresPasswordSet
-        | Event::CheckRequiresPasswordSetResponse(_) => auth::handle(event, model),
-
-        // Device actions domain
-        Event::Reboot
-        | Event::RebootResponse(_)
-        | Event::FactoryResetRequest { .. }
-        | Event::FactoryResetResponse(_)
-        | Event::ReloadNetwork
-        | Event::ReloadNetworkResponse(_)
-        | Event::SetNetworkConfig { .. }
-        | Event::SetNetworkConfigResponse(_)
-        | Event::LoadUpdate { .. }
-        | Event::LoadUpdateResponse(_)
-        | Event::RunUpdate { .. }
-        | Event::RunUpdateResponse(_)
-        | Event::HealthcheckResponse(_)
-        | Event::ReconnectionCheckTick
-        | Event::ReconnectionTimeout
-        | Event::NewIpCheckTick
-        | Event::NewIpCheckTimeout
-        | Event::NetworkFormStartEdit { .. }
-        | Event::NetworkFormUpdate { .. }
-        | Event::NetworkFormReset { .. } => device::handle(event, model),
-
-        // WebSocket domain
-        Event::SubscribeToChannels
-        | Event::UnsubscribeFromChannels
-        | Event::SystemInfoUpdated(_)
-        | Event::NetworkStatusUpdated(_)
-        | Event::OnlineStatusUpdated(_)
-        | Event::FactoryResetUpdated(_)
-        | Event::UpdateValidationStatusUpdated(_)
-        | Event::TimeoutsUpdated(_)
-        | Event::Connected
-        | Event::Disconnected => websocket::handle(event, model),
-
-        // UI actions domain
-        Event::ClearError | Event::ClearSuccess => ui::handle(event, model),
+        Event::Auth(auth_event) => auth::handle(auth_event, model),
+        Event::Device(device_event) => device::handle(device_event, model),
+        Event::WebSocket(ws_event) => websocket::handle(ws_event, model),
+        Event::Ui(ui_event) => ui::handle(ui_event, model),
     }
 }

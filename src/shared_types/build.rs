@@ -1,6 +1,7 @@
 use anyhow::Result;
 use crux_core::typegen::TypeGen;
 use omnect_ui_core::{
+    events::{AuthEvent, DeviceEvent, UiEvent, WebSocketEvent},
     types::{DeviceOperationState, FactoryResetStatus, NetworkChangeState, NetworkFormState},
     App,
 };
@@ -13,7 +14,13 @@ fn main() -> Result<()> {
 
     gen.register_app::<App>()?;
 
-    // Explicitly register enums to ensure all variants are traced
+    // Explicitly register domain event enums to ensure all variants are traced
+    gen.register_type::<AuthEvent>()?;
+    gen.register_type::<DeviceEvent>()?;
+    gen.register_type::<WebSocketEvent>()?;
+    gen.register_type::<UiEvent>()?;
+
+    // Explicitly register other enums to ensure all variants are traced
     gen.register_type::<FactoryResetStatus>()?;
     gen.register_type::<DeviceOperationState>()?;
     gen.register_type::<NetworkChangeState>()?;

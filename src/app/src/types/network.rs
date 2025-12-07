@@ -1,0 +1,110 @@
+use serde::{Deserialize, Serialize};
+
+/// IP address configuration
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IpAddress {
+    pub addr: String,
+    pub dhcp: bool,
+    pub prefix_len: u32,
+}
+
+/// Internet protocol configuration (IPv4/IPv6)
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InternetProtocol {
+    pub addrs: Vec<IpAddress>,
+    pub dns: Vec<String>,
+    pub gateways: Vec<String>,
+}
+
+/// Network adapter information
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DeviceNetwork {
+    pub ipv4: InternetProtocol,
+    pub mac: String,
+    pub name: String,
+    pub online: bool,
+    #[serde(default)]
+    pub file: Option<String>,
+}
+
+/// Network status from WebSocket
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NetworkStatus {
+    pub network_status: Vec<DeviceNetwork>,
+}
+
+/// Network configuration request
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkConfigRequest {
+    pub is_server_addr: bool,
+    pub ip_changed: bool,
+    pub name: String,
+    pub dhcp: bool,
+    pub ip: Option<String>,
+    pub previous_ip: Option<String>,
+    pub netmask: Option<u32>,
+    pub gateway: Vec<String>,
+    pub dns: Vec<String>,
+}
+
+/// Form data for network configuration
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NetworkFormData {
+    pub name: String,
+    pub ip_address: String,
+    pub dhcp: bool,
+    pub prefix_len: u32,
+    pub dns: Vec<String>,
+    pub gateways: Vec<String>,
+}
+
+/// State of network form (to prevent WebSocket interference)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NetworkFormState {
+    Idle,
+    Editing {
+        adapter_name: String,
+        form_data: NetworkFormData,
+    },
+    Submitting {
+        adapter_name: String,
+        form_data: NetworkFormData,
+    },
+}
+
+impl Default for NetworkFormState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
+/// State of network IP change after configuration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NetworkChangeState {
+    Idle,
+    ApplyingConfig {
+        is_server_addr: bool,
+        ip_changed: bool,
+        new_ip: String,
+        old_ip: String,
+    },
+    WaitingForNewIp {
+        new_ip: String,
+        attempt: u32,
+    },
+    NewIpReachable {
+        new_ip: String,
+    },
+    NewIpTimeout {
+        new_ip: String,
+    },
+}
+
+impl Default for NetworkChangeState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}

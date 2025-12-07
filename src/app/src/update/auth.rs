@@ -2,7 +2,7 @@ use base64::prelude::*;
 use crux_core::Command;
 
 use crate::auth_post;
-use crate::events::Event;
+use crate::events::{AuthEvent, Event};
 use crate::handle_response;
 use crate::model::Model;
 use crate::types::{AuthToken, SetPasswordRequest, UpdatePasswordRequest};
@@ -10,9 +10,9 @@ use crate::unauth_post;
 use crate::Effect;
 
 /// Handle authentication-related events
-pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
+pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
     match event {
-        Event::Login { password } => {
+        AuthEvent::Login { password } => {
             model.error_message = None;
             let encoded = BASE64_STANDARD.encode(format!(":{password}"));
 
@@ -34,29 +34,29 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
                                     Some(bytes) => match String::from_utf8(bytes) {
                                         Ok(token) => {
                                             let auth = AuthToken { token };
-                                            crate::Event::LoginResponse(Ok(auth))
+                                            Event::Auth(AuthEvent::LoginResponse(Ok(auth)))
                                         }
-                                        Err(_) => crate::Event::LoginResponse(Err(
+                                        Err(_) => Event::Auth(AuthEvent::LoginResponse(Err(
                                             "Invalid UTF-8 in response".to_string(),
-                                        )),
+                                        ))),
                                     },
                                     None => {
-                                        crate::Event::LoginResponse(Err("Empty response body".to_string()))
+                                        Event::Auth(AuthEvent::LoginResponse(Err("Empty response body".to_string())))
                                     }
                                 }
                             } else {
                                 // Authentication failed - extract error message
-                                crate::Event::LoginResponse(Err(
+                                Event::Auth(AuthEvent::LoginResponse(Err(
                                     crate::macros::extract_error("Login", &mut response)
-                                ))
+                                )))
                             }
                         }
-                        Err(e) => crate::Event::LoginResponse(Err(e.to_string())),
+                        Err(e) => Event::Auth(AuthEvent::LoginResponse(Err(e.to_string()))),
                     }),
             ])
         }
 
-        Event::LoginResponse(result) => handle_response!(model, result, {
+        AuthEvent::LoginResponse(result) => handle_response!(model, result, {
             on_success: |model, auth| {
                 model.auth_token = Some(auth.token);
                 model.is_authenticated = true;
@@ -64,23 +64,23 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             },
         }),
 
-        Event::Logout => auth_post!(model, "/logout", LogoutResponse, "Logout"),
+        AuthEvent::Logout => auth_post!(Auth, AuthEvent, model, "/logout", LogoutResponse, "Logout"),
 
-        Event::LogoutResponse(result) => handle_response!(model, result, {
+        AuthEvent::LogoutResponse(result) => handle_response!(model, result, {
             on_success: |model, _| {
                 model.auth_token = None;
                 model.is_authenticated = false;
             },
         }),
 
-        Event::SetPassword { password } => {
+        AuthEvent::SetPassword { password } => {
             let request = SetPasswordRequest { password };
-            unauth_post!(model, "/set-password", SetPasswordResponse, "Set password",
+            unauth_post!(Auth, AuthEvent, model, "/set-password", SetPasswordResponse, "Set password",
                 body_json: &request
             )
         }
 
-        Event::SetPasswordResponse(result) => handle_response!(model, result, {
+        AuthEvent::SetPasswordResponse(result) => handle_response!(model, result, {
             on_success: |model, _| {
                 model.requires_password_set = false;
                 model.error_message = None;
@@ -88,7 +88,7 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             success_message: "Password set successfully",
         }),
 
-        Event::UpdatePassword {
+        AuthEvent::UpdatePassword {
             current_password,
             password,
         } => {
@@ -96,12 +96,12 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
                 current_password,
                 password,
             };
-            auth_post!(model, "/update-password", UpdatePasswordResponse, "Update password",
+            auth_post!(Auth, AuthEvent, model, "/update-password", UpdatePasswordResponse, "Update password",
                 body_json: &request
             )
         }
 
-        Event::UpdatePasswordResponse(result) => handle_response!(model, result, {
+        AuthEvent::UpdatePasswordResponse(result) => handle_response!(model, result, {
             on_success: |model, _| {
                 model.auth_token = None;
                 model.is_authenticated = false;
@@ -109,19 +109,17 @@ pub fn handle(event: Event, model: &mut Model) -> Command<Effect, Event> {
             success_message: "Password updated successfully",
         }),
 
-        Event::CheckRequiresPasswordSet => {
-            unauth_post!(model, "/require-set-password", CheckRequiresPasswordSetResponse, "Check password",
+        AuthEvent::CheckRequiresPasswordSet => {
+            unauth_post!(Auth, AuthEvent, model, "/require-set-password", CheckRequiresPasswordSetResponse, "Check password",
                 method: get,
                 expect_json: bool
             )
         }
 
-        Event::CheckRequiresPasswordSetResponse(result) => handle_response!(model, result, {
+        AuthEvent::CheckRequiresPasswordSetResponse(result) => handle_response!(model, result, {
             on_success: |model, requires| {
                 model.requires_password_set = requires;
             },
         }),
-
-        event => unreachable!("Non-auth event passed to auth handler: {:?}", event),
     }
 }

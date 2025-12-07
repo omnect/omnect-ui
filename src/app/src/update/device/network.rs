@@ -1,11 +1,12 @@
 use crux_core::Command;
 
 use crate::auth_post;
+use crate::events::{DeviceEvent, Event};
 use crate::model::Model;
 use crate::types::{
     NetworkChangeState, NetworkConfigRequest, NetworkFormData, NetworkFormState, OverlaySpinnerState,
 };
-use crate::{Effect, Event, HttpCmd};
+use crate::{Effect, HttpCmd};
 
 /// Handle network configuration request
 pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<Effect, Event> {
@@ -38,6 +39,8 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
 
             // Send the request to backend
             auth_post!(
+                Device,
+                DeviceEvent,
                 model,
                 "/network",
                 SetNetworkConfigResponse,
@@ -135,11 +138,11 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
             .then_send(move |result| match result {
                 Ok(response) if response.status().is_success() => {
                     // New IP is reachable!
-                    Event::HealthcheckResponse(Ok(crate::types::HealthcheckInfo::default()))
+                    Event::Device(DeviceEvent::HealthcheckResponse(Ok(crate::types::HealthcheckInfo::default())))
                 }
                 _ => {
                     // Still waiting - don't send error response, just render
-                    Event::ClearSuccess
+                    Event::Ui(crate::events::UiEvent::ClearSuccess)
                 }
             })
     } else {

@@ -48,38 +48,44 @@ import type {
 	OdsUpdateValidationStatus,
 } from '../types/ods'
 import {
-	EventVariantInitialize,
-	EventVariantLogin,
-	EventVariantLogout,
-	EventVariantSetPassword,
-	EventVariantUpdatePassword,
-	EventVariantCheckRequiresPasswordSet,
-	EventVariantReboot,
-	EventVariantFactoryResetRequest,
-	EventVariantReloadNetwork,
-	EventVariantSetNetworkConfig,
-	EventVariantLoadUpdate,
-	EventVariantRunUpdate,
-	EventVariantSubscribeToChannels,
-	EventVariantUnsubscribeFromChannels,
-	EventVariantClearError,
-	EventVariantClearSuccess,
-	// Update events for Centrifugo data
-	EventVariantSystemInfoUpdated,
-	EventVariantNetworkStatusUpdated,
-	EventVariantOnlineStatusUpdated,
-	EventVariantFactoryResetUpdated,
-	EventVariantUpdateValidationStatusUpdated,
-	EventVariantTimeoutsUpdated,
-	// Timer tick events for reconnection and IP change polling
-	EventVariantReconnectionCheckTick,
-	EventVariantReconnectionTimeout,
-	EventVariantNewIpCheckTick,
-	EventVariantNewIpCheckTimeout,
-	// Network form events
-	EventVariantNetworkFormStartEdit,
-	EventVariantNetworkFormUpdate,
-	EventVariantNetworkFormReset,
+	// Main Event wrapper variants (snake_case from serde rename_all)
+	EventVariantinitialize,
+	EventVariantauth,
+	EventVariantdevice,
+	EventVariantweb_socket,
+	EventVariantui,
+	// Auth event variants
+	AuthEventVariantLogin,
+	AuthEventVariantLogout,
+	AuthEventVariantSetPassword,
+	AuthEventVariantUpdatePassword,
+	AuthEventVariantCheckRequiresPasswordSet,
+	// Device event variants
+	DeviceEventVariantReboot,
+	DeviceEventVariantFactoryResetRequest,
+	DeviceEventVariantReloadNetwork,
+	DeviceEventVariantSetNetworkConfig,
+	DeviceEventVariantLoadUpdate,
+	DeviceEventVariantRunUpdate,
+	DeviceEventVariantReconnectionCheckTick,
+	DeviceEventVariantReconnectionTimeout,
+	DeviceEventVariantNewIpCheckTick,
+	DeviceEventVariantNewIpCheckTimeout,
+	DeviceEventVariantNetworkFormStartEdit,
+	DeviceEventVariantNetworkFormUpdate,
+	DeviceEventVariantNetworkFormReset,
+	// WebSocket event variants
+	WebSocketEventVariantSubscribeToChannels,
+	WebSocketEventVariantUnsubscribeFromChannels,
+	WebSocketEventVariantSystemInfoUpdated,
+	WebSocketEventVariantNetworkStatusUpdated,
+	WebSocketEventVariantOnlineStatusUpdated,
+	WebSocketEventVariantFactoryResetUpdated,
+	WebSocketEventVariantUpdateValidationStatusUpdated,
+	WebSocketEventVariantTimeoutsUpdated,
+	// UI event variants
+	UiEventVariantClearError,
+	UiEventVariantClearSuccess,
 	type Event,
 	SystemInfo,
 	OsInfo,
@@ -409,7 +415,7 @@ function startReconnectionPolling(isFactoryReset: boolean): void {
 	// Start polling interval
 	reconnectionIntervalId = setInterval(() => {
 		if (isInitialized.value && wasmModule) {
-			sendEventToCore(new EventVariantReconnectionCheckTick())
+			sendEventToCore(new EventVariantdevice(new DeviceEventVariantReconnectionCheckTick()))
 		}
 	}, RECONNECTION_POLL_INTERVAL_MS)
 
@@ -418,7 +424,7 @@ function startReconnectionPolling(isFactoryReset: boolean): void {
 	reconnectionTimeoutId = setTimeout(() => {
 		console.log('[useCore] Reconnection timeout reached')
 		if (isInitialized.value && wasmModule) {
-			sendEventToCore(new EventVariantReconnectionTimeout())
+			sendEventToCore(new EventVariantdevice(new DeviceEventVariantReconnectionTimeout()))
 		}
 		stopReconnectionPolling()
 	}, timeoutMs)
@@ -450,7 +456,7 @@ function startNewIpPolling(): void {
 	// Start polling interval
 	newIpIntervalId = setInterval(() => {
 		if (isInitialized.value && wasmModule) {
-			sendEventToCore(new EventVariantNewIpCheckTick())
+			sendEventToCore(new EventVariantdevice(new DeviceEventVariantNewIpCheckTick()))
 		}
 	}, NEW_IP_POLL_INTERVAL_MS)
 
@@ -458,7 +464,7 @@ function startNewIpPolling(): void {
 	newIpTimeoutId = setTimeout(() => {
 		console.log('[useCore] New IP polling timeout reached')
 		if (isInitialized.value && wasmModule) {
-			sendEventToCore(new EventVariantNewIpCheckTimeout())
+			sendEventToCore(new EventVariantdevice(new DeviceEventVariantNewIpCheckTimeout()))
 		}
 		stopNewIpPolling()
 	}, NEW_IP_TIMEOUT_MS)
@@ -682,7 +688,7 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
       case 'OnlineStatusV1': {
         const json = JSON.parse(jsonData) as OdsOnlineStatus
         const data = new OnlineStatus(json.iothub)
-        await sendEventToCore(new EventVariantOnlineStatusUpdated(data))
+        await sendEventToCore(new EventVariantweb_socket(new WebSocketEventVariantOnlineStatusUpdated(data)))
         break
 			}
       case 'SystemInfoV1': {
@@ -693,7 +699,7 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
           json.omnect_device_service_version || '',
           json.boot_time ? String(json.boot_time) : null
         )
-        await sendEventToCore(new EventVariantSystemInfoUpdated(data))
+        await sendEventToCore(new EventVariantweb_socket(new WebSocketEventVariantSystemInfoUpdated(data)))
         break
 			}
       case 'TimeoutsV1': {
@@ -704,7 +710,7 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
             BigInt(json.wait_online_timeout?.secs || 0)
           )
         )
-        await sendEventToCore(new EventVariantTimeoutsUpdated(data))
+        await sendEventToCore(new EventVariantweb_socket(new WebSocketEventVariantTimeoutsUpdated(data)))
         break
 			}
       case 'NetworkStatusV1': {
@@ -727,12 +733,12 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
           )
         })
         const data = new NetworkStatus(networks)
-        await sendEventToCore(new EventVariantNetworkStatusUpdated(data))
+        await sendEventToCore(new EventVariantweb_socket(new WebSocketEventVariantNetworkStatusUpdated(data)))
         break
 			}
       case 'FactoryResetV1': {
         const json = JSON.parse(jsonData) as OdsFactoryReset
-				
+
 				const result = json.result ? new FactoryResetResult(
           stringToFactoryResetStatus(json.result.status || 'unknown'),
 					json.result.context || null,
@@ -740,13 +746,13 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
           json.result.paths || []
         ) : null
         const data = new FactoryReset(json.keys || [], result)
-        await sendEventToCore(new EventVariantFactoryResetUpdated(data))
+        await sendEventToCore(new EventVariantweb_socket(new WebSocketEventVariantFactoryResetUpdated(data)))
         break
 			}
       case 'UpdateValidationStatusV1': {
         const json = JSON.parse(jsonData) as OdsUpdateValidationStatus
         const data = new UpdateValidationStatus(json.status || '')
-        await sendEventToCore(new EventVariantUpdateValidationStatusUpdated(data))
+        await sendEventToCore(new EventVariantweb_socket(new WebSocketEventVariantUpdateValidationStatusUpdated(data)))
         break
 			}
 			default:
@@ -1017,7 +1023,7 @@ function updateViewModelFromCore(): void {
 			console.log('[useCore] User authenticated, triggering subscription')
 			if (authToken.value && !isSubscribed.value) {
 				isSubscribed.value = true
-				sendEventToCore(new EventVariantSubscribeToChannels())
+				sendEventToCore(new EventVariantweb_socket(new WebSocketEventVariantSubscribeToChannels()))
 			}
 		}
 
@@ -1091,7 +1097,7 @@ async function initializeCore(): Promise<void> {
       isInitialized.value = true
 
 			// Send initial event
-      await sendEventToCore(new EventVariantInitialize())
+      await sendEventToCore(new EventVariantinitialize())
 		} catch (error) {
       console.error('Failed to load Crux Core WASM module:', error)
       console.log('Running in fallback mode without WASM')
@@ -1145,45 +1151,45 @@ export function useCore() {
 
 		// Convenience methods for common events
 		login: (password: string) =>
-			sendEventToCore(new EventVariantLogin(password)),
-		logout: () => sendEventToCore(new EventVariantLogout()),
-    setPassword: (password: string) => sendEventToCore(new EventVariantSetPassword(password)),
+			sendEventToCore(new EventVariantauth(new AuthEventVariantLogin(password))),
+		logout: () => sendEventToCore(new EventVariantauth(new AuthEventVariantLogout())),
+		setPassword: (password: string) => sendEventToCore(new EventVariantauth(new AuthEventVariantSetPassword(password))),
 		updatePassword: (currentPassword: string, password: string) =>
-      sendEventToCore(new EventVariantUpdatePassword(currentPassword, password)),
-    checkRequiresPasswordSet: () => sendEventToCore(new EventVariantCheckRequiresPasswordSet()),
-		reboot: () => sendEventToCore(new EventVariantReboot()),
+			sendEventToCore(new EventVariantauth(new AuthEventVariantUpdatePassword(currentPassword, password))),
+		checkRequiresPasswordSet: () => sendEventToCore(new EventVariantauth(new AuthEventVariantCheckRequiresPasswordSet())),
+		reboot: () => sendEventToCore(new EventVariantdevice(new DeviceEventVariantReboot())),
 		factoryReset: (mode: string, preserve: string[]) =>
-			sendEventToCore(new EventVariantFactoryResetRequest(parseInt(mode, 10), preserve)),
-		reloadNetwork: () => sendEventToCore(new EventVariantReloadNetwork()),
+			sendEventToCore(new EventVariantdevice(new DeviceEventVariantFactoryResetRequest(mode, preserve))),
+		reloadNetwork: () => sendEventToCore(new EventVariantdevice(new DeviceEventVariantReloadNetwork())),
 		setNetworkConfig: (config: string) =>
-			sendEventToCore(new EventVariantSetNetworkConfig(config)),
-    loadUpdate: (filePath: string) => sendEventToCore(new EventVariantLoadUpdate(filePath)),
+			sendEventToCore(new EventVariantdevice(new DeviceEventVariantSetNetworkConfig(config))),
+		loadUpdate: (filePath: string) => sendEventToCore(new EventVariantdevice(new DeviceEventVariantLoadUpdate(filePath))),
 		runUpdate: (validateIothub: boolean) =>
-			sendEventToCore(new EventVariantRunUpdate(validateIothub)),
+			sendEventToCore(new EventVariantdevice(new DeviceEventVariantRunUpdate(validateIothub))),
 		subscribeToChannels: () => {
 			if (isSubscribed.value) {
-        return
+				return
 			}
 			if (!authToken.value) {
 				console.warn('[useCore] Skipping subscription: no auth token')
 				return
 			}
-      isSubscribed.value = true
-      sendEventToCore(new EventVariantSubscribeToChannels())
+			isSubscribed.value = true
+			sendEventToCore(new EventVariantweb_socket(new WebSocketEventVariantSubscribeToChannels()))
 		},
 		unsubscribeFromChannels: () => {
-      isSubscribed.value = false
-      sendEventToCore(new EventVariantUnsubscribeFromChannels())
+			isSubscribed.value = false
+			sendEventToCore(new EventVariantweb_socket(new WebSocketEventVariantUnsubscribeFromChannels()))
 		},
-		clearError: () => sendEventToCore(new EventVariantClearError()),
-		clearSuccess: () => sendEventToCore(new EventVariantClearSuccess()),
+		clearError: () => sendEventToCore(new EventVariantui(new UiEventVariantClearError())),
+		clearSuccess: () => sendEventToCore(new EventVariantui(new UiEventVariantClearSuccess())),
 
 		// Network form state management
 		networkFormStartEdit: (adapterName: string) =>
-			sendEventToCore(new EventVariantNetworkFormStartEdit(adapterName)),
+			sendEventToCore(new EventVariantdevice(new DeviceEventVariantNetworkFormStartEdit(adapterName))),
 		networkFormUpdate: (formDataJson: string) =>
-			sendEventToCore(new EventVariantNetworkFormUpdate(formDataJson)),
+			sendEventToCore(new EventVariantdevice(new DeviceEventVariantNetworkFormUpdate(formDataJson))),
 		networkFormReset: (adapterName: string) =>
-			sendEventToCore(new EventVariantNetworkFormReset(adapterName)),
-  }
+			sendEventToCore(new EventVariantdevice(new DeviceEventVariantNetworkFormReset(adapterName))),
+	}
 }
