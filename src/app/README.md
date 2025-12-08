@@ -156,10 +156,13 @@ The Core infrastructure is complete. All Vue components now use the Crux Core ar
    - ✅ Replaced `useFetch` with Core event (`setPassword`)
 9. [x] `Network.vue` - Network page wrapper
    - ✅ Removed duplicate state, now uses Core initialization
+10. [x] `UpdateFileUpload.vue` - Firmware upload
+   - ✅ Replaced local state with Core events (`UploadStarted`, `UploadProgress`, `UploadCompleted`, `UploadFailed`)
+   - ✅ Replaced local ref based UI logic with Core `firmware_upload_state`
 
 **Additional Tasks:**
 
-- [ ] Remove `useCentrifuge` composable once verified all WebSocket data flows through Core
+- [x] Verify all WebSocket data flows through Core (components no longer import `useCentrifuge` directly - it's only used by `core/state.ts` as the shell's WebSocket capability)
 - [ ] Add comprehensive integration tests for all migrated components
 - [ ] Add more unit tests for Core edge cases
 - [ ] Performance testing and bundle size optimization
@@ -172,7 +175,7 @@ The Core infrastructure is complete. All Vue components now use the Crux Core ar
 
 ### Code Organization Improvements (from PR #69 review)
 
-- [ ] Split `types.rs` into domain modules: `src/app/src/types/{auth,device,network,factory_reset,update,common}.rs` ([#69](https://github.com/omnect/omnect-ui/pull/69#discussion_r2563918736))
+- [x] Split `types.rs` into domain modules: `src/app/src/types/{auth,device,network,factory_reset,update,common}.rs` ([#69](https://github.com/omnect/omnect-ui/pull/69#discussion_r2563918736))
 - [ ] Refactor `macros.rs`: extract builders for simpler re-use in auth/non-auth cases ([#69](https://github.com/omnect/omnect-ui/pull/69#discussion_r2563954064))
 - [ ] Refactor `macros.rs`: extract most logic into separate functions and call from macros for better maintainability ([#69](https://github.com/omnect/omnect-ui/pull/69#discussion_r2563954064))
 - [ ] Create complex end effects macros (follow-up PR) ([#69](https://github.com/omnect/omnect-ui/pull/69#discussion_r2565173893))
