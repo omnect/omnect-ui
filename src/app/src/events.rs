@@ -50,6 +50,10 @@ pub enum DeviceEvent {
     LoadUpdate {
         file_path: String,
     },
+    UploadStarted,
+    UploadProgress(u8),
+    UploadCompleted(String),
+    UploadFailed(String),
     RunUpdate {
         validate_iothub_connection: bool,
     },
@@ -97,7 +101,6 @@ pub enum UiEvent {
 
 /// Main event enum - wraps domain events
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
 pub enum Event {
     Initialize,
     Auth(AuthEvent),
@@ -181,6 +184,19 @@ impl fmt::Debug for DeviceEvent {
             DeviceEvent::LoadUpdate { file_path } => f
                 .debug_struct("LoadUpdate")
                 .field("file_path", file_path)
+                .finish(),
+            DeviceEvent::UploadStarted => write!(f, "UploadStarted"),
+            DeviceEvent::UploadProgress(progress) => f
+                .debug_tuple("UploadProgress")
+                .field(progress)
+                .finish(),
+            DeviceEvent::UploadCompleted(filename) => f
+                .debug_tuple("UploadCompleted")
+                .field(filename)
+                .finish(),
+            DeviceEvent::UploadFailed(error) => f
+                .debug_tuple("UploadFailed")
+                .field(error)
                 .finish(),
             DeviceEvent::RunUpdate {
                 validate_iothub_connection,

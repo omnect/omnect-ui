@@ -61,3 +61,13 @@ pub struct UpdateManifest {
     pub created_date_time: String,
     pub manifest_version: String,
 }
+
+/// State of the firmware upload
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum UploadState {
+    #[default]
+    Idle,
+    Uploading(u8),
+    Completed,
+    Failed(String),
+}

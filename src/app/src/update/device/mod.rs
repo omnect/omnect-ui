@@ -19,13 +19,36 @@ use crate::handle_response;
 use crate::model::Model;
 use crate::types::{
     DeviceOperationState, FactoryResetRequest, LoadUpdateRequest, OverlaySpinnerState,
-    RunUpdateRequest, UpdateManifest,
+    RunUpdateRequest, UpdateManifest, UploadState,
 };
 use crate::Effect;
 
 /// Handle device action events (reboot, factory reset, network, updates)
 pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
     match event {
+        DeviceEvent::UploadStarted => {
+            model.firmware_upload_state = UploadState::Uploading(0);
+            model.error_message = None; // Clear previous errors
+            crux_core::render::render()
+        }
+
+        DeviceEvent::UploadProgress(percentage) => {
+            model.firmware_upload_state = UploadState::Uploading(percentage);
+            crux_core::render::render()
+        }
+
+        DeviceEvent::UploadCompleted(_) => {
+            model.firmware_upload_state = UploadState::Completed;
+            model.success_message = Some("Upload successful".to_string());
+            crux_core::render::render()
+        }
+
+        DeviceEvent::UploadFailed(error) => {
+            model.firmware_upload_state = UploadState::Failed(error.clone());
+            model.error_message = Some(format!("Upload failed: {error}"));
+            crux_core::render::render()
+        }
+
         DeviceEvent::Reboot => {
             model.overlay_spinner = OverlaySpinnerState {
                 overlay: true,

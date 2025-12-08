@@ -43,6 +43,9 @@ pub struct Model {
     // Network form state (editing without WebSocket interference)
     pub network_form_state: NetworkFormState,
 
+    // Firmware upload state
+    pub firmware_upload_state: UploadState,
+
     // Overlay spinner state (moved from Shell for single source of truth)
     pub overlay_spinner: OverlaySpinnerState,
 }

@@ -49,6 +49,11 @@ import {
 	FactoryResetStatusVariantmode_unsupported,
 	FactoryResetStatusVariantbackup_restore_error,
 	FactoryResetStatusVariantconfiguration_error,
+	UploadState,
+	UploadStateVariantIdle,
+	UploadStateVariantUploading,
+	UploadStateVariantCompleted,
+	UploadStateVariantFailed,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 
 // Re-export variant classes for external use
@@ -57,6 +62,7 @@ export {
 	NetworkChangeState,
 	NetworkFormState,
 	FactoryResetStatus,
+	UploadState,
 }
 
 // ============================================================================
@@ -83,6 +89,12 @@ export type NetworkFormStateType =
 	| { type: 'idle' }
 	| { type: 'editing'; adapter_name: string; form_data: NetworkFormDataType }
 	| { type: 'submitting'; adapter_name: string; form_data: NetworkFormDataType }
+
+export type UploadStateType =
+	| { type: 'idle' }
+	| { type: 'uploading'; content: number }
+	| { type: 'completed' }
+	| { type: 'failed'; content: string }
 
 export interface NetworkFormDataType {
 	name: string
@@ -165,6 +177,9 @@ export interface ViewModel {
 
 	// Network form state (editing without WebSocket interference)
 	network_form_state: NetworkFormStateType
+
+	// Firmware upload state
+	firmware_upload_state: UploadStateType
 
 	// Overlay spinner state
 	overlay_spinner: OverlaySpinnerStateType
@@ -295,6 +310,25 @@ export function convertNetworkFormState(state: NetworkFormState): NetworkFormSta
 				gateways: [...state.form_data.gateways],
 			},
 		}
+	}
+	return { type: 'idle' }
+}
+
+/**
+ * Convert UploadState variant to typed object
+ */
+export function convertUploadState(state: UploadState): UploadStateType {
+	if (state instanceof UploadStateVariantIdle) {
+		return { type: 'idle' }
+	}
+	if (state instanceof UploadStateVariantUploading) {
+		return { type: 'uploading', content: state.value }
+	}
+	if (state instanceof UploadStateVariantCompleted) {
+		return { type: 'completed' }
+	}
+	if (state instanceof UploadStateVariantFailed) {
+		return { type: 'failed', content: state.value }
 	}
 	return { type: 'idle' }
 }

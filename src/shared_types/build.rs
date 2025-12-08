@@ -2,7 +2,9 @@ use anyhow::Result;
 use crux_core::typegen::TypeGen;
 use omnect_ui_core::{
     events::{AuthEvent, DeviceEvent, UiEvent, WebSocketEvent},
-    types::{DeviceOperationState, FactoryResetStatus, NetworkChangeState, NetworkFormState},
+    types::{
+        DeviceOperationState, FactoryResetStatus, NetworkChangeState, NetworkFormState, UploadState,
+    },
     App,
 };
 use std::path::PathBuf;
@@ -25,6 +27,7 @@ fn main() -> Result<()> {
     gen.register_type::<DeviceOperationState>()?;
     gen.register_type::<NetworkChangeState>()?;
     gen.register_type::<NetworkFormState>()?;
+    gen.register_type::<UploadState>()?;
 
     let output_root = PathBuf::from("./generated");
 

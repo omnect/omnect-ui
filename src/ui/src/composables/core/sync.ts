@@ -11,13 +11,14 @@ import {
 	convertDeviceOperationState,
 	convertNetworkChangeState,
 	convertNetworkFormState,
+	convertUploadState,
 } from './types'
 import { setViewModelUpdater } from './effects'
 import { Model as GeneratedViewModel } from '../../../../shared_types/generated/typescript/types/shared_types'
 import { BincodeDeserializer } from '../../../../shared_types/generated/typescript/bincode/mod'
 import type { Event } from '../../../../shared_types/generated/typescript/types/shared_types'
 import {
-	EventVariantweb_socket,
+	EventVariantWebSocket,
 	WebSocketEventVariantSubscribeToChannels,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 
@@ -168,6 +169,11 @@ export function updateViewModelFromCore(): void {
 		// Network form state
 		viewModel.network_form_state = convertNetworkFormState(coreViewModel.network_form_state)
 
+		// Firmware upload state
+		console.log('[sync] Raw upload state:', coreViewModel.firmware_upload_state, coreViewModel.firmware_upload_state.constructor.name)
+		viewModel.firmware_upload_state = convertUploadState(coreViewModel.firmware_upload_state)
+		console.log('[sync] Converted upload state:', viewModel.firmware_upload_state)
+
 		// Overlay spinner state
 		viewModel.overlay_spinner = {
 			overlay: coreViewModel.overlay_spinner.overlay,
@@ -181,7 +187,7 @@ export function updateViewModelFromCore(): void {
 			console.log('[useCore] User authenticated, triggering subscription')
 			if (authToken.value && !isSubscribed.value && sendEventCallback) {
 				isSubscribed.value = true
-				sendEventCallback(new EventVariantweb_socket(new WebSocketEventVariantSubscribeToChannels()))
+				sendEventCallback(new EventVariantWebSocket(new WebSocketEventVariantSubscribeToChannels()))
 			}
 		}
 

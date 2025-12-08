@@ -17,7 +17,7 @@ import type {
 	OdsUpdateValidationStatus,
 } from '../../types/ods'
 import {
-	EventVariantweb_socket,
+	EventVariantWebSocket,
 	WebSocketEventVariantOnlineStatusUpdated,
 	WebSocketEventVariantSystemInfoUpdated,
 	WebSocketEventVariantNetworkStatusUpdated,
@@ -73,7 +73,7 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
 			case 'OnlineStatusV1': {
 				const json = JSON.parse(jsonData) as OdsOnlineStatus
 				const data = new OnlineStatus(json.iothub)
-				await sendEventCallback(new EventVariantweb_socket(new WebSocketEventVariantOnlineStatusUpdated(data)))
+				await sendEventCallback(new EventVariantWebSocket(new WebSocketEventVariantOnlineStatusUpdated(data)))
 				break
 			}
 			case 'SystemInfoV1': {
@@ -84,7 +84,7 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
 					json.omnect_device_service_version || '',
 					json.boot_time ? String(json.boot_time) : null
 				)
-				await sendEventCallback(new EventVariantweb_socket(new WebSocketEventVariantSystemInfoUpdated(data)))
+				await sendEventCallback(new EventVariantWebSocket(new WebSocketEventVariantSystemInfoUpdated(data)))
 				break
 			}
 			case 'TimeoutsV1': {
@@ -92,7 +92,7 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
 				const data = new Timeouts(
 					new Duration(json.wait_online_timeout?.nanos || 0, BigInt(json.wait_online_timeout?.secs || 0))
 				)
-				await sendEventCallback(new EventVariantweb_socket(new WebSocketEventVariantTimeoutsUpdated(data)))
+				await sendEventCallback(new EventVariantWebSocket(new WebSocketEventVariantTimeoutsUpdated(data)))
 				break
 			}
 			case 'NetworkStatusV1': {
@@ -115,7 +115,7 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
 					)
 				})
 				const data = new NetworkStatus(networks)
-				await sendEventCallback(new EventVariantweb_socket(new WebSocketEventVariantNetworkStatusUpdated(data)))
+				await sendEventCallback(new EventVariantWebSocket(new WebSocketEventVariantNetworkStatusUpdated(data)))
 				break
 			}
 			case 'FactoryResetV1': {
@@ -129,14 +129,14 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
 						)
 					: null
 				const data = new FactoryReset(json.keys || [], result)
-				await sendEventCallback(new EventVariantweb_socket(new WebSocketEventVariantFactoryResetUpdated(data)))
+				await sendEventCallback(new EventVariantWebSocket(new WebSocketEventVariantFactoryResetUpdated(data)))
 				break
 			}
 			case 'UpdateValidationStatusV1': {
 				const json = JSON.parse(jsonData) as OdsUpdateValidationStatus
 				const data = new UpdateValidationStatus(json.status || '')
 				await sendEventCallback(
-					new EventVariantweb_socket(new WebSocketEventVariantUpdateValidationStatusUpdated(data))
+					new EventVariantWebSocket(new WebSocketEventVariantUpdateValidationStatusUpdated(data))
 				)
 				break
 			}

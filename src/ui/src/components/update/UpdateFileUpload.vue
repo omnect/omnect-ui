@@ -1,20 +1,25 @@
 <script setup lang="ts">
 import axios, { AxiosError } from "axios"
-import { onMounted, ref, watch } from "vue"
+import { computed, onMounted, ref, watch } from "vue"
 import { useCore } from "../../composables/useCore"
 import { useSnackbar } from "../../composables/useSnackbar"
 import router from "../../plugins/router"
+import { DeviceEventVariantUploadStarted, DeviceEventVariantUploadProgress, DeviceEventVariantUploadCompleted, DeviceEventVariantUploadFailed, EventVariantDevice } from "../../../../shared_types/generated/typescript/types/shared_types"
 
 const { showError } = useSnackbar()
-const { viewModel } = useCore()
+const { viewModel, sendEvent } = useCore()
 const emit = defineEmits<(e: "fileUploaded", filename: string) => void>()
 
 const updateFile = ref<File>()
-const progressPercentage = ref<number | undefined>(0)
-const uploadFetching = ref(false)
 
-watch(updateFile, () => {
-	progressPercentage.value = 0
+// Derived state from Core
+const uploadState = computed(() => viewModel.firmware_upload_state)
+const isUploading = computed(() => uploadState.value?.type === 'uploading')
+const uploadProgress = computed(() => {
+	if (uploadState.value?.type === 'uploading') {
+		return uploadState.value.content
+	}
+	return 0
 })
 
 watch(
@@ -46,55 +51,65 @@ const uploadFile = async () => {
 	const formData = new FormData()
 	formData.append("file", updateFile.value as File)
 
-	uploadFetching.value = true
+	// Notify Core: Upload Started
+	sendEvent(new EventVariantDevice(new DeviceEventVariantUploadStarted()))
 
 	try {
 		const res = await axios.post("update/file", formData, {
 			withCredentials: true,
 			onUploadProgress({ progress }) {
-				progressPercentage.value = progress ? Math.ceil(progress * 100) : 0
+				const percentage = progress ? Math.ceil(progress * 100) : 0
+				// Notify Core: Upload Progress
+				sendEvent(new EventVariantDevice(new DeviceEventVariantUploadProgress(percentage)))
 			},
 			responseType: "text"
 		})
 
 		if (res.status < 300) {
+			// Notify Core: Upload Completed
+			sendEvent(new EventVariantDevice(new DeviceEventVariantUploadCompleted(updateFile.value.name)))
 			emit("fileUploaded", updateFile.value.name)
 		} else if (res.status === 401) {
 			router.push("/login")
 		} else {
-			showError(`Uploading file failed: ${res.data}`)
+			const errorMsg = `Uploading file failed: ${res.data}`
+			showError(errorMsg)
+			// Notify Core: Upload Failed
+			sendEvent(new EventVariantDevice(new DeviceEventVariantUploadFailed(errorMsg)))
 		}
 	} catch (err) {
-		showError(`Uploading file failed: ${err as AxiosError}`)
+		const errorMsg = `Uploading file failed: ${err as AxiosError}`
+		showError(errorMsg)
+		// Notify Core: Upload Failed
+		sendEvent(new EventVariantDevice(new DeviceEventVariantUploadFailed(errorMsg)))
 	}
 
 	formData.delete("file")
-	uploadFetching.value = false
 }
 </script>
 
 <template>
 	<v-form @submit.prevent="uploadFile" enctype="multipart/form-data">
 		<v-file-upload icon="mdi-file-upload" v-model="updateFile" clearable density="default"
-			:disabled="uploadFetching">
+			:disabled="isUploading">
 			<template #item="{ file, props }">
 				<v-file-upload-item v-bind="props">
 					<template #title>
 						<div class="flex justify-between">
 							<div>{{ file.name }}</div>
-							<div v-if="uploadFetching || progressPercentage === 100">{{ progressPercentage }}%</div>
+							<div v-if="isUploading || uploadProgress === 100">{{ uploadProgress }}%</div>
 						</div>
 					</template>
 					<template #subtitle>
-						<v-progress-linear v-if="uploadFetching || progressPercentage === 100" class="mt-1"
-							:model-value="progressPercentage" :striped="uploadFetching"
-							:color="progressPercentage === 100 ? 'success' : 'secondary'"
+						<v-progress-linear v-if="isUploading || uploadProgress === 100" class="mt-1"
+							:model-value="uploadProgress" :striped="isUploading"
+							:color="uploadProgress === 100 ? 'success' : 'secondary'"
 							:height="10"></v-progress-linear>
 					</template>
 				</v-file-upload-item>
 			</template>
 		</v-file-upload>
 		<v-btn type="submit" prepend-icon="mdi-file-upload-outline" variant="text"
-			:disabled="!updateFile || uploadFetching" class="mt-4">Upload</v-btn>
+			:disabled="!updateFile || isUploading" class="mt-4">Upload</v-btn>
 	</v-form>
 </template>

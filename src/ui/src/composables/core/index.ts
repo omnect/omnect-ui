@@ -49,11 +49,11 @@ import { BincodeSerializer } from '../../../../shared_types/generated/typescript
 // Import event types
 import type { Event } from '../../../../shared_types/generated/typescript/types/shared_types'
 import {
-	EventVariantinitialize,
-	EventVariantauth,
-	EventVariantdevice,
-	EventVariantweb_socket,
-	EventVariantui,
+	EventVariantInitialize,
+	EventVariantAuth,
+	EventVariantDevice,
+	EventVariantWebSocket,
+	EventVariantUi,
 	AuthEventVariantLogin,
 	AuthEventVariantLogout,
 	AuthEventVariantSetPassword,
@@ -182,7 +182,7 @@ async function initializeCore(): Promise<void> {
 			isInitialized.value = true
 
 			// Send initial event
-			await sendEventToCore(new EventVariantinitialize())
+			await sendEventToCore(new EventVariantInitialize())
 		} catch (error) {
 			console.error('Failed to load Crux Core WASM module:', error)
 			console.log('Running in fallback mode without WASM')
@@ -236,24 +236,24 @@ export function useCore() {
 		isInitialized: readonly(isInitialized),
 
 		// Convenience methods for common events
-		login: (password: string) => sendEventToCore(new EventVariantauth(new AuthEventVariantLogin(password))),
-		logout: () => sendEventToCore(new EventVariantauth(new AuthEventVariantLogout())),
+		login: (password: string) => sendEventToCore(new EventVariantAuth(new AuthEventVariantLogin(password))),
+		logout: () => sendEventToCore(new EventVariantAuth(new AuthEventVariantLogout())),
 		setPassword: (password: string) =>
-			sendEventToCore(new EventVariantauth(new AuthEventVariantSetPassword(password))),
+			sendEventToCore(new EventVariantAuth(new AuthEventVariantSetPassword(password))),
 		updatePassword: (currentPassword: string, password: string) =>
-			sendEventToCore(new EventVariantauth(new AuthEventVariantUpdatePassword(currentPassword, password))),
+			sendEventToCore(new EventVariantAuth(new AuthEventVariantUpdatePassword(currentPassword, password))),
 		checkRequiresPasswordSet: () =>
-			sendEventToCore(new EventVariantauth(new AuthEventVariantCheckRequiresPasswordSet())),
-		reboot: () => sendEventToCore(new EventVariantdevice(new DeviceEventVariantReboot())),
+			sendEventToCore(new EventVariantAuth(new AuthEventVariantCheckRequiresPasswordSet())),
+		reboot: () => sendEventToCore(new EventVariantDevice(new DeviceEventVariantReboot())),
 		factoryReset: (mode: string, preserve: string[]) =>
-			sendEventToCore(new EventVariantdevice(new DeviceEventVariantFactoryResetRequest(mode, preserve))),
-		reloadNetwork: () => sendEventToCore(new EventVariantdevice(new DeviceEventVariantReloadNetwork())),
+			sendEventToCore(new EventVariantDevice(new DeviceEventVariantFactoryResetRequest(mode, preserve))),
+		reloadNetwork: () => sendEventToCore(new EventVariantDevice(new DeviceEventVariantReloadNetwork())),
 		setNetworkConfig: (config: string) =>
-			sendEventToCore(new EventVariantdevice(new DeviceEventVariantSetNetworkConfig(config))),
+			sendEventToCore(new EventVariantDevice(new DeviceEventVariantSetNetworkConfig(config))),
 		loadUpdate: (filePath: string) =>
-			sendEventToCore(new EventVariantdevice(new DeviceEventVariantLoadUpdate(filePath))),
+			sendEventToCore(new EventVariantDevice(new DeviceEventVariantLoadUpdate(filePath))),
 		runUpdate: (validateIothub: boolean) =>
-			sendEventToCore(new EventVariantdevice(new DeviceEventVariantRunUpdate(validateIothub))),
+			sendEventToCore(new EventVariantDevice(new DeviceEventVariantRunUpdate(validateIothub))),
 		subscribeToChannels: () => {
 			if (isSubscribed.value) {
 				return
@@ -263,21 +263,21 @@ export function useCore() {
 				return
 			}
 			isSubscribed.value = true
-			sendEventToCore(new EventVariantweb_socket(new WebSocketEventVariantSubscribeToChannels()))
+			sendEventToCore(new EventVariantWebSocket(new WebSocketEventVariantSubscribeToChannels()))
 		},
 		unsubscribeFromChannels: () => {
 			isSubscribed.value = false
-			sendEventToCore(new EventVariantweb_socket(new WebSocketEventVariantUnsubscribeFromChannels()))
+			sendEventToCore(new EventVariantWebSocket(new WebSocketEventVariantUnsubscribeFromChannels()))
 		},
-		clearError: () => sendEventToCore(new EventVariantui(new UiEventVariantClearError())),
-		clearSuccess: () => sendEventToCore(new EventVariantui(new UiEventVariantClearSuccess())),
+		clearError: () => sendEventToCore(new EventVariantUi(new UiEventVariantClearError())),
+		clearSuccess: () => sendEventToCore(new EventVariantUi(new UiEventVariantClearSuccess())),
 
 		// Network form state management
 		networkFormStartEdit: (adapterName: string) =>
-			sendEventToCore(new EventVariantdevice(new DeviceEventVariantNetworkFormStartEdit(adapterName))),
+			sendEventToCore(new EventVariantDevice(new DeviceEventVariantNetworkFormStartEdit(adapterName))),
 		networkFormUpdate: (formDataJson: string) =>
-			sendEventToCore(new EventVariantdevice(new DeviceEventVariantNetworkFormUpdate(formDataJson))),
+			sendEventToCore(new EventVariantDevice(new DeviceEventVariantNetworkFormUpdate(formDataJson))),
 		networkFormReset: (adapterName: string) =>
-			sendEventToCore(new EventVariantdevice(new DeviceEventVariantNetworkFormReset(adapterName))),
+			sendEventToCore(new EventVariantDevice(new DeviceEventVariantNetworkFormReset(adapterName))),
 	}
 }

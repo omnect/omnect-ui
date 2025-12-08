@@ -11,7 +11,7 @@ import { watch } from 'vue'
 import { viewModel, isInitialized, wasmModule } from './state'
 import type { Event } from '../../../../shared_types/generated/typescript/types/shared_types'
 import {
-	EventVariantdevice,
+	EventVariantDevice,
 	DeviceEventVariantReconnectionCheckTick,
 	DeviceEventVariantReconnectionTimeout,
 	DeviceEventVariantNewIpCheckTick,
@@ -63,7 +63,7 @@ export function startReconnectionPolling(isFactoryReset: boolean): void {
 	// Start polling interval
 	reconnectionIntervalId = setInterval(() => {
 		if (isInitialized.value && wasmModule && sendEventCallback) {
-			sendEventCallback(new EventVariantdevice(new DeviceEventVariantReconnectionCheckTick()))
+			sendEventCallback(new EventVariantDevice(new DeviceEventVariantReconnectionCheckTick()))
 		}
 	}, RECONNECTION_POLL_INTERVAL_MS)
 
@@ -72,7 +72,7 @@ export function startReconnectionPolling(isFactoryReset: boolean): void {
 	reconnectionTimeoutId = setTimeout(() => {
 		console.log('[useCore] Reconnection timeout reached')
 		if (isInitialized.value && wasmModule && sendEventCallback) {
-			sendEventCallback(new EventVariantdevice(new DeviceEventVariantReconnectionTimeout()))
+			sendEventCallback(new EventVariantDevice(new DeviceEventVariantReconnectionTimeout()))
 		}
 		stopReconnectionPolling()
 	}, timeoutMs)
@@ -108,7 +108,7 @@ export function startNewIpPolling(): void {
 	// Start polling interval
 	newIpIntervalId = setInterval(() => {
 		if (isInitialized.value && wasmModule && sendEventCallback) {
-			sendEventCallback(new EventVariantdevice(new DeviceEventVariantNewIpCheckTick()))
+			sendEventCallback(new EventVariantDevice(new DeviceEventVariantNewIpCheckTick()))
 		}
 	}, NEW_IP_POLL_INTERVAL_MS)
 
@@ -116,7 +116,7 @@ export function startNewIpPolling(): void {
 	newIpTimeoutId = setTimeout(() => {
 		console.log('[useCore] New IP polling timeout reached')
 		if (isInitialized.value && wasmModule && sendEventCallback) {
-			sendEventCallback(new EventVariantdevice(new DeviceEventVariantNewIpCheckTimeout()))
+			sendEventCallback(new EventVariantDevice(new DeviceEventVariantNewIpCheckTimeout()))
 		}
 		stopNewIpPolling()
 	}, NEW_IP_TIMEOUT_MS)
