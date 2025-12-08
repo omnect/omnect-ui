@@ -50,6 +50,7 @@ const uploadFile = async () => {
 
 	try {
 		const res = await axios.post("update/file", formData, {
+			withCredentials: true,
 			onUploadProgress({ progress }) {
 				progressPercentage.value = progress ? Math.ceil(progress * 100) : 0
 			},

@@ -9,7 +9,7 @@
  * - No local refs for data - all computed from Core state
  */
 import { computed, onMounted } from 'vue'
-import { useCore } from '../composables/useCore'
+import { useCore } from '../../composables/useCore'
 
 const { viewModel, initialize } = useCore()
 
