@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue"
-import { useSnackbar } from "../composables/useSnackbar"
-import { useCore } from "../composables/useCore"
+import { useSnackbar } from "../../composables/useSnackbar"
+import { useCore } from "../../composables/useCore"
 
 const { showSuccess, showError } = useSnackbar()
 const { viewModel, reloadNetwork } = useCore()

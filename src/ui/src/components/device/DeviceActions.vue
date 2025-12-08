@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue"
-import DialogContent from "../components/DialogContent.vue"
-import { useCore } from "../composables/useCore"
-import { useSnackbar } from "../composables/useSnackbar"
+import DialogContent from "../DialogContent.vue"
+import { useCore } from "../../composables/useCore"
+import { useSnackbar } from "../../composables/useSnackbar"
 
 const { viewModel, initialize, reboot, factoryReset } = useCore()
 const { showSuccess, showError } = useSnackbar()

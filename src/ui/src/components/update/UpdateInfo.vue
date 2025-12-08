@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, toRef } from "vue"
-import { useCore } from "../composables/useCore"
-import type { UpdateManifest } from "../types/update-manifest"
-import KeyValuePair from "./ui-components/KeyValuePair.vue"
+import { useCore } from "../../composables/useCore"
+import type { UpdateManifest } from "../../types/update-manifest"
+import KeyValuePair from "../ui-components/KeyValuePair.vue"
 
 const { viewModel, runUpdate } = useCore()
 

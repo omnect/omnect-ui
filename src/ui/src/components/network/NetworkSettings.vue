@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
-import { useSnackbar } from "../composables/useSnackbar"
-import { useCore } from "../composables/useCore"
-import type { DeviceNetwork } from "../types"
+import { useSnackbar } from "../../composables/useSnackbar"
+import { useCore } from "../../composables/useCore"
+import type { DeviceNetwork } from "../../types"
 
 const { showSuccess, showError } = useSnackbar()
 const { viewModel, setNetworkConfig } = useCore()

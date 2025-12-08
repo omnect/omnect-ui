@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import axios, { AxiosError } from "axios"
 import { onMounted, ref, watch } from "vue"
-import { useCore } from "../composables/useCore"
-import { useSnackbar } from "../composables/useSnackbar"
-import router from "../plugins/router"
+import { useCore } from "../../composables/useCore"
+import { useSnackbar } from "../../composables/useSnackbar"
+import router from "../../plugins/router"
 
 const { showError } = useSnackbar()
 const { viewModel } = useCore()

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from "vue"
-import DeviceNetworks from "../components/DeviceNetworks.vue"
-import NetworkActions from "../components/NetworkActions.vue"
+import DeviceNetworks from "../components/network/DeviceNetworks.vue"
+import NetworkActions from "../components/network/NetworkActions.vue"
 import { useCore } from "../composables/useCore"
 
 const { initialize } = useCore()

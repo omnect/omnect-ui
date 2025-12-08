@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from "vue"
-import UpdateFileUpload from "../components/UpdateFileUpload.vue"
-import UpdateInfo from "../components/UpdateInfo.vue"
+import UpdateFileUpload from "../components/update/UpdateFileUpload.vue"
+import UpdateInfo from "../components/update/UpdateInfo.vue"
 import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
 

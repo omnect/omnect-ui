@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
-import NetworkSettings from "../components/NetworkSettings.vue"
-import { useCore } from "../composables/useCore"
+import NetworkSettings from "./NetworkSettings.vue"
+import { useCore } from "../../composables/useCore"
 
 const { viewModel, initialize } = useCore()
 

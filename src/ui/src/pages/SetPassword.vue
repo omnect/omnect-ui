@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue"
 import { useRouter } from "vue-router"
-import OmnectLogo from "../components/OmnectLogo.vue"
+import OmnectLogo from "../components/branding/OmnectLogo.vue"
 import { useCore } from "../composables/useCore"
 import { useSnackbar } from "../composables/useSnackbar"
 

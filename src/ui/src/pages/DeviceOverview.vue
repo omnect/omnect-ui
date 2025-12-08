@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import DeviceActions from "../components/DeviceActions.vue"
-import DeviceInfo from "../components/DeviceInfoCore.vue"
+import DeviceActions from "../components/device/DeviceActions.vue"
+import DeviceInfo from "../components/device/DeviceInfoCore.vue"
 </script>
 
 <template>
