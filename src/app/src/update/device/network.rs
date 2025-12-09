@@ -1,12 +1,14 @@
 use crux_core::Command;
 
 use crate::auth_post;
-use crate::events::{DeviceEvent, Event};
+use crate::events::{DeviceEvent, Event, UiEvent};
+use crate::http_get_silent;
 use crate::model::Model;
 use crate::types::{
-    NetworkChangeState, NetworkConfigRequest, NetworkFormData, NetworkFormState, OverlaySpinnerState,
+    HealthcheckInfo, NetworkChangeState, NetworkConfigRequest, NetworkFormData, NetworkFormState,
+    OverlaySpinnerState,
 };
-use crate::{Effect, HttpCmd};
+use crate::Effect;
 
 /// Handle network configuration request
 pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<Effect, Event> {
@@ -76,17 +78,12 @@ pub fn handle_set_network_config_response(
                 model.success_message = Some("Network configuration updated".to_string());
 
                 // Set overlay spinner for IP change
-                model.overlay_spinner = OverlaySpinnerState {
-                    overlay: true,
-                    title: "Applying network settings".to_string(),
-                    text: Some(
+                model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
+                    .with_text(
                         "The network settings are applied. You will be forwarded to the new IP. \
                          Log in to confirm the settings. If you do not log in within 90 seconds, \
-                         the IP will be reset."
-                            .to_string(),
-                    ),
-                    timed_out: false,
-                };
+                         the IP will be reset.",
+                    );
 
                 // Reset form state after successful submission
                 model.network_form_state = NetworkFormState::Idle;
@@ -131,20 +128,13 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
             attempt: new_attempt,
         };
 
-        // Try to reach the new IP
+        // Try to reach the new IP (silent GET - no error shown on failure)
         let url = format!("http://{new_ip}/healthcheck");
-        HttpCmd::get(url)
-            .build()
-            .then_send(move |result| match result {
-                Ok(response) if response.status().is_success() => {
-                    // New IP is reachable!
-                    Event::Device(DeviceEvent::HealthcheckResponse(Ok(crate::types::HealthcheckInfo::default())))
-                }
-                _ => {
-                    // Still waiting - don't send error response, just render
-                    Event::Ui(crate::events::UiEvent::ClearSuccess)
-                }
-            })
+        http_get_silent!(
+            url,
+            on_success: Event::Device(DeviceEvent::HealthcheckResponse(Ok(HealthcheckInfo::default()))),
+            on_error: Event::Ui(UiEvent::ClearSuccess)
+        )
     } else {
         crux_core::render::render()
     }
@@ -158,10 +148,10 @@ pub fn handle_new_ip_check_timeout(model: &mut Model) -> Command<Effect, Event> 
         };
 
         // Update overlay spinner to show timeout
-        model.overlay_spinner.text = Some(
-            "New IP not reachable within 90 seconds. Settings may have been reverted.".to_string(),
-        );
-        model.overlay_spinner.timed_out = true;
+        model
+            .overlay_spinner
+            .set_text("New IP not reachable within 90 seconds. Settings may have been reverted.");
+        model.overlay_spinner.set_timed_out();
     }
 
     crux_core::render::render()
@@ -209,7 +199,10 @@ pub fn handle_network_form_start_edit(
 }
 
 /// Handle network form update - update form data from user input
-pub fn handle_network_form_update(form_data_json: String, model: &mut Model) -> Command<Effect, Event> {
+pub fn handle_network_form_update(
+    form_data_json: String,
+    model: &mut Model,
+) -> Command<Effect, Event> {
     // Parse the JSON form data
     let parsed: Result<NetworkFormData, _> = serde_json::from_str(&form_data_json);
 

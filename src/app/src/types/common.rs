@@ -38,8 +38,76 @@ pub struct Timeouts {
 /// Overlay spinner state (UI state)
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OverlaySpinnerState {
-    pub overlay: bool,
-    pub title: String,
-    pub text: Option<String>,
-    pub timed_out: bool,
+    overlay: bool,
+    title: String,
+    text: Option<String>,
+    timed_out: bool,
+}
+
+impl OverlaySpinnerState {
+    /// Create a new overlay spinner with the given title (shown by default)
+    pub fn new(title: impl Into<String>) -> Self {
+        Self {
+            overlay: true,
+            title: title.into(),
+            text: None,
+            timed_out: false,
+        }
+    }
+
+    /// Builder pattern: add optional text to the spinner
+    pub fn with_text(mut self, text: impl Into<String>) -> Self {
+        self.text = Some(text.into());
+        self
+    }
+
+    /// Update the optional text message
+    pub fn set_text(&mut self, text: impl Into<String>) {
+        self.text = Some(text.into());
+    }
+
+    /// Mark the spinner as timed out
+    pub fn set_timed_out(&mut self) {
+        self.timed_out = true;
+    }
+
+    /// Show the overlay spinner
+    pub fn show(&mut self) {
+        self.overlay = true;
+    }
+
+    /// Hide the overlay spinner
+    pub fn hide(&mut self) {
+        self.overlay = false;
+    }
+
+    /// Check if the overlay is currently visible
+    pub fn is_visible(&self) -> bool {
+        self.overlay
+    }
+
+    /// Reset to default (hidden) state
+    pub fn clear(&mut self) {
+        *self = Self::default();
+    }
+
+    /// Get the overlay visibility state
+    pub fn overlay(&self) -> bool {
+        self.overlay
+    }
+
+    /// Get the title
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    /// Get the optional text
+    pub fn text(&self) -> Option<&str> {
+        self.text.as_deref()
+    }
+
+    /// Check if the spinner has timed out
+    pub fn timed_out(&self) -> bool {
+        self.timed_out
+    }
 }

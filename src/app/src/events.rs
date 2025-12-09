@@ -6,9 +6,13 @@ use crate::types::*;
 /// Authentication events
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum AuthEvent {
-    Login { password: String },
+    Login {
+        password: String,
+    },
     Logout,
-    SetPassword { password: String },
+    SetPassword {
+        password: String,
+    },
     UpdatePassword {
         current_password: String,
         password: String,
@@ -27,7 +31,7 @@ pub enum AuthEvent {
 }
 
 /// Device operation events
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum DeviceEvent {
     Reboot,
     FactoryResetRequest {
@@ -78,7 +82,7 @@ pub enum DeviceEvent {
 }
 
 /// WebSocket/Centrifugo events
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum WebSocketEvent {
     SubscribeToChannels,
     UnsubscribeFromChannels,
@@ -93,7 +97,7 @@ pub enum WebSocketEvent {
 }
 
 /// UI action events
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum UiEvent {
     ClearError,
     ClearSuccess,
@@ -142,133 +146,13 @@ impl fmt::Debug for AuthEvent {
             AuthEvent::SetPasswordResponse(r) => {
                 f.debug_tuple("SetPasswordResponse").field(r).finish()
             }
-            AuthEvent::UpdatePasswordResponse(r) => f
-                .debug_tuple("UpdatePasswordResponse")
-                .field(r)
-                .finish(),
+            AuthEvent::UpdatePasswordResponse(r) => {
+                f.debug_tuple("UpdatePasswordResponse").field(r).finish()
+            }
             AuthEvent::CheckRequiresPasswordSetResponse(r) => f
                 .debug_tuple("CheckRequiresPasswordSetResponse")
                 .field(r)
                 .finish(),
-        }
-    }
-}
-
-/// Custom Debug implementation for DeviceEvent
-impl fmt::Debug for DeviceEvent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            DeviceEvent::Reboot => write!(f, "Reboot"),
-            DeviceEvent::FactoryResetRequest { mode, preserve } => f
-                .debug_struct("FactoryResetRequest")
-                .field("mode", mode)
-                .field("preserve", preserve)
-                .finish(),
-            DeviceEvent::ReloadNetwork => write!(f, "ReloadNetwork"),
-            DeviceEvent::SetNetworkConfig { config } => f
-                .debug_struct("SetNetworkConfig")
-                .field("config", config)
-                .finish(),
-            DeviceEvent::NetworkFormStartEdit { adapter_name } => f
-                .debug_struct("NetworkFormStartEdit")
-                .field("adapter_name", adapter_name)
-                .finish(),
-            DeviceEvent::NetworkFormUpdate { form_data } => f
-                .debug_struct("NetworkFormUpdate")
-                .field("form_data", form_data)
-                .finish(),
-            DeviceEvent::NetworkFormReset { adapter_name } => f
-                .debug_struct("NetworkFormReset")
-                .field("adapter_name", adapter_name)
-                .finish(),
-            DeviceEvent::LoadUpdate { file_path } => f
-                .debug_struct("LoadUpdate")
-                .field("file_path", file_path)
-                .finish(),
-            DeviceEvent::UploadStarted => write!(f, "UploadStarted"),
-            DeviceEvent::UploadProgress(progress) => f
-                .debug_tuple("UploadProgress")
-                .field(progress)
-                .finish(),
-            DeviceEvent::UploadCompleted(filename) => f
-                .debug_tuple("UploadCompleted")
-                .field(filename)
-                .finish(),
-            DeviceEvent::UploadFailed(error) => f
-                .debug_tuple("UploadFailed")
-                .field(error)
-                .finish(),
-            DeviceEvent::RunUpdate {
-                validate_iothub_connection,
-            } => f
-                .debug_struct("RunUpdate")
-                .field("validate_iothub_connection", validate_iothub_connection)
-                .finish(),
-            DeviceEvent::ReconnectionCheckTick => write!(f, "ReconnectionCheckTick"),
-            DeviceEvent::ReconnectionTimeout => write!(f, "ReconnectionTimeout"),
-            DeviceEvent::NewIpCheckTick => write!(f, "NewIpCheckTick"),
-            DeviceEvent::NewIpCheckTimeout => write!(f, "NewIpCheckTimeout"),
-            DeviceEvent::RebootResponse(r) => f.debug_tuple("RebootResponse").field(r).finish(),
-            DeviceEvent::FactoryResetResponse(r) => {
-                f.debug_tuple("FactoryResetResponse").field(r).finish()
-            }
-            DeviceEvent::ReloadNetworkResponse(r) => {
-                f.debug_tuple("ReloadNetworkResponse").field(r).finish()
-            }
-            DeviceEvent::SetNetworkConfigResponse(r) => f
-                .debug_tuple("SetNetworkConfigResponse")
-                .field(r)
-                .finish(),
-            DeviceEvent::LoadUpdateResponse(r) => {
-                f.debug_tuple("LoadUpdateResponse").field(r).finish()
-            }
-            DeviceEvent::RunUpdateResponse(r) => {
-                f.debug_tuple("RunUpdateResponse").field(r).finish()
-            }
-            DeviceEvent::HealthcheckResponse(r) => {
-                f.debug_tuple("HealthcheckResponse").field(r).finish()
-            }
-        }
-    }
-}
-
-/// Custom Debug implementation for WebSocketEvent
-impl fmt::Debug for WebSocketEvent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            WebSocketEvent::SubscribeToChannels => write!(f, "SubscribeToChannels"),
-            WebSocketEvent::UnsubscribeFromChannels => write!(f, "UnsubscribeFromChannels"),
-            WebSocketEvent::SystemInfoUpdated(d) => {
-                f.debug_tuple("SystemInfoUpdated").field(d).finish()
-            }
-            WebSocketEvent::NetworkStatusUpdated(d) => {
-                f.debug_tuple("NetworkStatusUpdated").field(d).finish()
-            }
-            WebSocketEvent::OnlineStatusUpdated(d) => {
-                f.debug_tuple("OnlineStatusUpdated").field(d).finish()
-            }
-            WebSocketEvent::FactoryResetUpdated(d) => {
-                f.debug_tuple("FactoryResetUpdated").field(d).finish()
-            }
-            WebSocketEvent::UpdateValidationStatusUpdated(d) => f
-                .debug_tuple("UpdateValidationStatusUpdated")
-                .field(d)
-                .finish(),
-            WebSocketEvent::TimeoutsUpdated(d) => {
-                f.debug_tuple("TimeoutsUpdated").field(d).finish()
-            }
-            WebSocketEvent::Connected => write!(f, "Connected"),
-            WebSocketEvent::Disconnected => write!(f, "Disconnected"),
-        }
-    }
-}
-
-/// Custom Debug implementation for UiEvent
-impl fmt::Debug for UiEvent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            UiEvent::ClearError => write!(f, "ClearError"),
-            UiEvent::ClearSuccess => write!(f, "ClearSuccess"),
         }
     }
 }

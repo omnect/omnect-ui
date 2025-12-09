@@ -58,8 +58,8 @@ pub fn handle_reconnection_timeout(model: &mut Model) -> Command<Effect, Event> 
     };
 
     // Update overlay spinner to show timeout
-    model.overlay_spinner.text = Some(timeout_msg.to_string());
-    model.overlay_spinner.timed_out = true;
+    model.overlay_spinner.set_text(timeout_msg);
+    model.overlay_spinner.set_timed_out();
 
     crux_core::render::render()
 }
@@ -112,7 +112,7 @@ pub fn handle_healthcheck_response(
                 model.auth_token = None;
 
                 // Clear overlay spinner
-                model.overlay_spinner = OverlaySpinnerState::default();
+                model.overlay_spinner.clear();
             }
             // else: healthcheck succeeded but device never went offline - keep checking
         }
@@ -169,12 +169,8 @@ pub fn handle_healthcheck_response(
                 new_ip: new_ip.clone(),
             };
             // Update overlay for redirect
-            model.overlay_spinner = OverlaySpinnerState {
-                overlay: true,
-                title: "Network settings applied".to_string(),
-                text: Some(format!("Redirecting to new IP: {new_ip}")),
-                timed_out: false,
-            };
+            model.overlay_spinner = OverlaySpinnerState::new("Network settings applied")
+                .with_text(format!("Redirecting to new IP: {new_ip}"));
         }
     }
 

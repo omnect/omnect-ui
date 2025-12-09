@@ -41,15 +41,14 @@ pub fn handle_device_operation_response(
         model.device_operation_state = operation;
         model.reconnection_attempt = 0;
         model.device_went_offline = false;
-        model.overlay_spinner = OverlaySpinnerState {
-            overlay: true,
-            title: overlay_title.to_string(),
-            text: overlay_text,
-            timed_out: false,
-        };
+        let mut spinner = OverlaySpinnerState::new(overlay_title);
+        if let Some(text) = overlay_text {
+            spinner = spinner.with_text(text);
+        }
+        model.overlay_spinner = spinner;
     } else if let Err(e) = result {
         model.error_message = Some(e);
-        model.overlay_spinner = OverlaySpinnerState::default();
+        model.overlay_spinner.clear();
     }
 
     crux_core::render::render()

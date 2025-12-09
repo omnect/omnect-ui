@@ -23,9 +23,15 @@ pub fn handle(event: WebSocketEvent, model: &mut Model) -> Command<Effect, Event
         }
 
         WebSocketEvent::SystemInfoUpdated(info) => update_field!(model.system_info, Some(info)),
-        WebSocketEvent::NetworkStatusUpdated(status) => update_field!(model.network_status, Some(status)),
-        WebSocketEvent::OnlineStatusUpdated(status) => update_field!(model.online_status, Some(status)),
-        WebSocketEvent::FactoryResetUpdated(reset) => update_field!(model.factory_reset, Some(reset)),
+        WebSocketEvent::NetworkStatusUpdated(status) => {
+            update_field!(model.network_status, Some(status))
+        }
+        WebSocketEvent::OnlineStatusUpdated(status) => {
+            update_field!(model.online_status, Some(status))
+        }
+        WebSocketEvent::FactoryResetUpdated(reset) => {
+            update_field!(model.factory_reset, Some(reset))
+        }
         WebSocketEvent::UpdateValidationStatusUpdated(status) => {
             update_field!(model.update_validation_status, Some(status))
         }

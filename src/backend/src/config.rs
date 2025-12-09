@@ -194,16 +194,12 @@ impl CentrifugoConfig {
 
 impl KeycloakConfig {
     fn load() -> Result<Self> {
-        let url = env::var("KEYCLOAK_URL").or_else(|_e| {
-            #[cfg(any(test, feature = "mock"))]
-            {
-                Ok::<String, std::env::VarError>("http://127.0.0.1:8080/realms/omnect".to_string())
-            }
-            #[cfg(not(any(test, feature = "mock")))]
-            {
-                Err(_e)
-            }
-        })?;
+        let url = if cfg!(any(test, feature = "mock")) {
+            env::var("KEYCLOAK_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:8080/realms/omnect".to_string())
+        } else {
+            env::var("KEYCLOAK_URL")?
+        };
 
         Ok(Self { url })
     }

@@ -50,13 +50,15 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
         }
 
         DeviceEvent::Reboot => {
-            model.overlay_spinner = OverlaySpinnerState {
-                overlay: true,
-                title: "Requesting device reboot...".to_string(),
-                text: None,
-                timed_out: false,
-            };
-            auth_post!(Device, DeviceEvent, model, "/reboot", RebootResponse, "Reboot")
+            model.overlay_spinner = OverlaySpinnerState::new("Requesting device reboot...");
+            auth_post!(
+                Device,
+                DeviceEvent,
+                model,
+                "/reboot",
+                RebootResponse,
+                "Reboot"
+            )
         }
 
         DeviceEvent::RebootResponse(result) => handle_device_operation_response(
@@ -81,12 +83,7 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
                 mode: parsed_mode,
                 preserve,
             };
-            model.overlay_spinner = OverlaySpinnerState {
-                overlay: true,
-                title: "Requesting factory reset...".to_string(),
-                text: None,
-                timed_out: false,
-            };
+            model.overlay_spinner = OverlaySpinnerState::new("Requesting factory reset...");
             auth_post!(Device, DeviceEvent, model, "/factory-reset", FactoryResetResponse, "Factory reset",
                 body_json: &request
             )
@@ -142,14 +139,13 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
             success_message: "Update loaded",
         }),
 
-        DeviceEvent::RunUpdate { validate_iothub_connection } => {
-            let request = RunUpdateRequest { validate_iothub_connection };
-            model.overlay_spinner = OverlaySpinnerState {
-                overlay: true,
-                title: "Requesting update...".to_string(),
-                text: None,
-                timed_out: false,
+        DeviceEvent::RunUpdate {
+            validate_iothub_connection,
+        } => {
+            let request = RunUpdateRequest {
+                validate_iothub_connection,
             };
+            model.overlay_spinner = OverlaySpinnerState::new("Requesting update...");
             auth_post!(Device, DeviceEvent, model, "/update/run", RunUpdateResponse, "Run update",
                 body_json: &request
             )
@@ -181,7 +177,11 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
         DeviceEvent::NetworkFormStartEdit { adapter_name } => {
             handle_network_form_start_edit(adapter_name, model)
         }
-        DeviceEvent::NetworkFormUpdate { form_data } => handle_network_form_update(form_data, model),
-        DeviceEvent::NetworkFormReset { adapter_name } => handle_network_form_start_edit(adapter_name, model),
+        DeviceEvent::NetworkFormUpdate { form_data } => {
+            handle_network_form_update(form_data, model)
+        }
+        DeviceEvent::NetworkFormReset { adapter_name } => {
+            handle_network_form_start_edit(adapter_name, model)
+        }
     }
 }
