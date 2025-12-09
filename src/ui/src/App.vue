@@ -95,7 +95,8 @@ onMounted(async () => {
         </template>
       </v-snackbar>
       <OverlaySpinner :overlay="overlaySpinnerState.overlay" :title="overlaySpinnerState.title"
-        :text="overlaySpinnerState.text" :timed-out="overlaySpinnerState.timedOut" />
+        :text="overlaySpinnerState.text || undefined" :timed-out="overlaySpinnerState.timed_out"
+        :progress="overlaySpinnerState.progress || undefined" />
     </v-main>
   </v-app>
 </template>

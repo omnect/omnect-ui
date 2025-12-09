@@ -180,6 +180,9 @@ export function updateViewModelFromCore(): void {
 			title: coreViewModel.overlay_spinner.title,
 			text: coreViewModel.overlay_spinner.text || null,
 			timed_out: coreViewModel.overlay_spinner.timed_out,
+			progress: coreViewModel.overlay_spinner.progress !== null && coreViewModel.overlay_spinner.progress !== undefined
+				? coreViewModel.overlay_spinner.progress
+				: null,
 		}
 
 		// Auto-subscribe logic based on authentication state transition

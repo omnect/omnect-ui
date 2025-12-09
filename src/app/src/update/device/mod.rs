@@ -27,24 +27,30 @@ use crate::Effect;
 pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
     match event {
         DeviceEvent::UploadStarted => {
-            model.firmware_upload_state = UploadState::Uploading(0);
+            model.firmware_upload_state = UploadState::Uploading;
+            model.overlay_spinner = OverlaySpinnerState::new("Uploading firmware...")
+                .with_text("Please do not close this window.")
+                .with_progress(0);
             crux_core::render::render()
         }
 
         DeviceEvent::UploadProgress(percentage) => {
-            model.firmware_upload_state = UploadState::Uploading(percentage);
+            model.firmware_upload_state = UploadState::Uploading;
+            model.overlay_spinner.set_progress(percentage);
             crux_core::render::render()
         }
 
         DeviceEvent::UploadCompleted(_) => {
             model.firmware_upload_state = UploadState::Completed;
             model.success_message = Some("Upload successful".to_string());
+            model.overlay_spinner.clear();
             crux_core::render::render()
         }
 
         DeviceEvent::UploadFailed(error) => {
             model.firmware_upload_state = UploadState::Failed(error.clone());
             model.set_error(format!("Upload failed: {error}"));
+            model.overlay_spinner.clear();
             crux_core::render::render()
         }
 

@@ -92,7 +92,7 @@ export type NetworkFormStateType =
 
 export type UploadStateType =
 	| { type: 'idle' }
-	| { type: 'uploading'; content: number }
+	| { type: 'uploading' }
 	| { type: 'completed' }
 	| { type: 'failed'; content: string }
 
@@ -110,6 +110,7 @@ export interface OverlaySpinnerStateType {
 	title: string
 	text: string | null
 	timed_out: boolean
+	progress: number | null
 }
 
 export type FactoryResetStatusString = 'unknown' | 'mode_supported' | 'mode_unsupported' | 'backup_restore_error' | 'configuration_error'
@@ -322,7 +323,7 @@ export function convertUploadState(state: UploadState): UploadStateType {
 		return { type: 'idle' }
 	}
 	if (state instanceof UploadStateVariantUploading) {
-		return { type: 'uploading', content: state.value }
+		return { type: 'uploading' }
 	}
 	if (state instanceof UploadStateVariantCompleted) {
 		return { type: 'completed' }

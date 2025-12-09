@@ -42,6 +42,7 @@ pub struct OverlaySpinnerState {
     title: String,
     text: Option<String>,
     timed_out: bool,
+    progress: Option<u8>,
 }
 
 impl OverlaySpinnerState {
@@ -52,6 +53,7 @@ impl OverlaySpinnerState {
             title: title.into(),
             text: None,
             timed_out: false,
+            progress: None,
         }
     }
 
@@ -61,9 +63,20 @@ impl OverlaySpinnerState {
         self
     }
 
+    /// Builder pattern: add optional progress to the spinner
+    pub fn with_progress(mut self, progress: u8) -> Self {
+        self.progress = Some(progress);
+        self
+    }
+
     /// Update the optional text message
     pub fn set_text(&mut self, text: impl Into<String>) {
         self.text = Some(text.into());
+    }
+
+    /// Update the optional progress
+    pub fn set_progress(&mut self, progress: u8) {
+        self.progress = Some(progress);
     }
 
     /// Mark the spinner as timed out
@@ -104,6 +117,11 @@ impl OverlaySpinnerState {
     /// Get the optional text
     pub fn text(&self) -> Option<&str> {
         self.text.as_deref()
+    }
+
+    /// Get the optional progress
+    pub fn progress(&self) -> Option<u8> {
+        self.progress
     }
 
     /// Check if the spinner has timed out

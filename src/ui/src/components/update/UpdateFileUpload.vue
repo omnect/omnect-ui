@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import axios, { AxiosError } from "axios"
-import { computed, onMounted, ref, watch } from "vue"
+import { computed, ref, watch } from "vue"
 import { useCore } from "../../composables/useCore"
 import { useSnackbar } from "../../composables/useSnackbar"
 import router from "../../plugins/router"
@@ -15,12 +15,6 @@ const updateFile = ref<File>()
 // Derived state from Core
 const uploadState = computed(() => viewModel.firmware_upload_state)
 const isUploading = computed(() => uploadState.value?.type === 'uploading')
-const uploadProgress = computed(() => {
-	if (uploadState.value?.type === 'uploading') {
-		return uploadState.value.content
-	}
-	return 0
-})
 
 watch(
 	() => viewModel.device_operation_state,
@@ -97,14 +91,7 @@ const uploadFile = async () => {
 					<template #title>
 						<div class="flex justify-between">
 							<div>{{ file.name }}</div>
-							<div v-if="isUploading || uploadProgress === 100">{{ uploadProgress }}%</div>
 						</div>
-					</template>
-					<template #subtitle>
-						<v-progress-linear v-if="isUploading || uploadProgress === 100" class="mt-1"
-							:model-value="uploadProgress" :striped="isUploading"
-							:color="uploadProgress === 100 ? 'success' : 'secondary'"
-							:height="10"></v-progress-linear>
 					</template>
 				</v-file-upload-item>
 			</template>

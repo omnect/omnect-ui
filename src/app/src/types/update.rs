@@ -67,7 +67,7 @@ pub struct UpdateManifest {
 pub enum UploadState {
     #[default]
     Idle,
-    Uploading(u8),
+    Uploading,
     Completed,
     Failed(String),
 }

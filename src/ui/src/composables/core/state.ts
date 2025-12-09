@@ -40,8 +40,10 @@ export const viewModel = reactive<ViewModel>({
 	network_change_state: { type: 'idle' },
 	// Network form state
 	network_form_state: { type: 'idle' },
+	// Firmware upload state
+	firmware_upload_state: { type: 'idle' },
 	// Overlay spinner state
-	overlay_spinner: { overlay: false, title: '', text: null, timed_out: false },
+	overlay_spinner: { overlay: false, title: '', text: null, timed_out: false, progress: null },
 })
 
 /**
