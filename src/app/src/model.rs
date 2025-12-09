@@ -49,3 +49,11 @@ pub struct Model {
     // Overlay spinner state (moved from Shell for single source of truth)
     pub overlay_spinner: OverlaySpinnerState,
 }
+
+impl Model {
+    /// Invalidate the current session (logout)
+    pub fn invalidate_session(&mut self) {
+        self.is_authenticated = false;
+        self.auth_token = None;
+    }
+}

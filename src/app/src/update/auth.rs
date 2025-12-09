@@ -34,8 +34,7 @@ pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
 
         AuthEvent::LogoutResponse(result) => handle_response!(model, result, {
             on_success: |model, _| {
-                model.auth_token = None;
-                model.is_authenticated = false;
+                model.invalidate_session();
             },
         }),
 
@@ -69,8 +68,7 @@ pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
 
         AuthEvent::UpdatePasswordResponse(result) => handle_response!(model, result, {
             on_success: |model, _| {
-                model.auth_token = None;
-                model.is_authenticated = false;
+                model.invalidate_session();
             },
             success_message: "Password updated successfully",
         }),

@@ -10,6 +10,9 @@ use crate::types::{
 };
 use crate::Effect;
 
+/// Success message for network configuration update
+const NETWORK_CONFIG_SUCCESS: &str = "Network configuration updated";
+
 /// Handle network configuration request
 pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<Effect, Event> {
     // Parse the JSON config to extract metadata
@@ -28,15 +31,8 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
             }
 
             // Transition network form to submitting state
-            if let NetworkFormState::Editing {
-                adapter_name,
-                form_data,
-            } = &model.network_form_state
-            {
-                model.network_form_state = NetworkFormState::Submitting {
-                    adapter_name: adapter_name.clone(),
-                    form_data: form_data.clone(),
-                };
+            if let Some(submitting) = model.network_form_state.to_submitting() {
+                model.network_form_state = submitting;
             }
 
             // Send the request to backend
@@ -75,7 +71,7 @@ pub fn handle_set_network_config_response(
                     new_ip: new_ip.clone(),
                     attempt: 0,
                 };
-                model.success_message = Some("Network configuration updated".to_string());
+                model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
 
                 // Set overlay spinner for IP change
                 model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
@@ -91,7 +87,7 @@ pub fn handle_set_network_config_response(
                 // Shell will see WaitingForNewIp state and start polling
                 crux_core::render::render()
             } else {
-                model.success_message = Some("Network configuration updated".to_string());
+                model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
                 // Reset form state after successful submission
                 model.network_form_state = NetworkFormState::Idle;
                 crux_core::render::render()
@@ -101,15 +97,8 @@ pub fn handle_set_network_config_response(
             model.error_message = Some(e);
             model.network_change_state = NetworkChangeState::Idle;
             // Reset form state back to editing on failure
-            if let NetworkFormState::Submitting {
-                adapter_name,
-                form_data,
-            } = &model.network_form_state
-            {
-                model.network_form_state = NetworkFormState::Editing {
-                    adapter_name: adapter_name.clone(),
-                    form_data: form_data.clone(),
-                };
+            if let Some(editing) = model.network_form_state.to_editing() {
+                model.network_form_state = editing;
             }
             crux_core::render::render()
         }

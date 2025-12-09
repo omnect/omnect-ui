@@ -35,13 +35,18 @@ pub fn handle_reconnection_check_tick(model: &mut Model) -> Command<Effect, Even
 
 /// Handle reconnection timeout - device didn't come back online
 pub fn handle_reconnection_timeout(model: &mut Model) -> Command<Effect, Event> {
-    let operation = match &model.device_operation_state {
-        DeviceOperationState::Rebooting => "Reboot".to_string(),
-        DeviceOperationState::FactoryResetting => "Factory Reset".to_string(),
-        DeviceOperationState::Updating => "Update".to_string(),
-        DeviceOperationState::WaitingReconnection { operation, .. } => operation.clone(),
-        _ => return crux_core::render::render(),
-    };
+    // Early return if not in a device operation state
+    if !matches!(
+        &model.device_operation_state,
+        DeviceOperationState::Rebooting
+            | DeviceOperationState::FactoryResetting
+            | DeviceOperationState::Updating
+            | DeviceOperationState::WaitingReconnection { .. }
+    ) {
+        return crux_core::render::render();
+    }
+
+    let operation = model.device_operation_state.operation_name();
 
     let timeout_msg = if matches!(
         model.device_operation_state,
@@ -108,8 +113,7 @@ pub fn handle_healthcheck_response(
                     DeviceOperationState::ReconnectionSuccessful { operation };
 
                 // Invalidate session as backend restart clears tokens
-                model.is_authenticated = false;
-                model.auth_token = None;
+                model.invalidate_session();
 
                 // Clear overlay spinner
                 model.overlay_spinner.clear();
@@ -130,12 +134,7 @@ pub fn handle_healthcheck_response(
             } else {
                 // Consider update done when status is Succeeded, Recovered, or NoUpdate
                 let update_done = if is_update {
-                    if let Ok(info) = &result {
-                        let status = &info.update_validation_status.status;
-                        status == "Succeeded" || status == "Recovered" || status == "NoUpdate"
-                    } else {
-                        false
-                    }
+                    result.as_ref().ok().is_some_and(is_update_complete)
                 } else {
                     true
                 };
@@ -147,11 +146,10 @@ pub fn handle_healthcheck_response(
                     };
 
                     // Invalidate session as backend restart clears tokens
-                    model.is_authenticated = false;
-                    model.auth_token = None;
+                    model.invalidate_session();
 
                     // Clear overlay spinner
-                    model.overlay_spinner = OverlaySpinnerState::default();
+                    model.overlay_spinner.clear();
                 }
                 // else: healthcheck succeeded but device never went offline - keep checking
             }

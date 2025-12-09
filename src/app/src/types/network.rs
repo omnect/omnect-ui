@@ -80,6 +80,40 @@ impl Default for NetworkFormState {
     }
 }
 
+impl NetworkFormState {
+    /// Transition from Editing to Submitting state
+    pub fn to_submitting(&self) -> Option<Self> {
+        if let Self::Editing {
+            adapter_name,
+            form_data,
+        } = self
+        {
+            Some(Self::Submitting {
+                adapter_name: adapter_name.clone(),
+                form_data: form_data.clone(),
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Transition from Submitting back to Editing state
+    pub fn to_editing(&self) -> Option<Self> {
+        if let Self::Submitting {
+            adapter_name,
+            form_data,
+        } = self
+        {
+            Some(Self::Editing {
+                adapter_name: adapter_name.clone(),
+                form_data: form_data.clone(),
+            })
+        } else {
+            None
+        }
+    }
+}
+
 /// State of network IP change after configuration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
