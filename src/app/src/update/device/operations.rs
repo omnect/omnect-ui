@@ -28,7 +28,7 @@ pub fn handle_device_operation_response(
     overlay_title: &str,
     overlay_text: Option<String>,
 ) -> Command<Effect, crate::Event> {
-    model.is_loading = false;
+    model.stop_loading();
 
     let is_network_err = result.as_ref().is_err_and(|e| is_network_error(e));
 
@@ -47,7 +47,7 @@ pub fn handle_device_operation_response(
         }
         model.overlay_spinner = spinner;
     } else if let Err(e) = result {
-        model.error_message = Some(e);
+        model.set_error(e);
         model.overlay_spinner.clear();
     }
 

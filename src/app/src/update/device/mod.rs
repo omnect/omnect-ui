@@ -28,7 +28,6 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
     match event {
         DeviceEvent::UploadStarted => {
             model.firmware_upload_state = UploadState::Uploading(0);
-            model.error_message = None; // Clear previous errors
             crux_core::render::render()
         }
 
@@ -45,7 +44,7 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
 
         DeviceEvent::UploadFailed(error) => {
             model.firmware_upload_state = UploadState::Failed(error.clone());
-            model.error_message = Some(format!("Upload failed: {error}"));
+            model.set_error(format!("Upload failed: {error}"));
             crux_core::render::render()
         }
 
@@ -75,7 +74,7 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
             let parsed_mode = match mode.parse::<u8>() {
                 Ok(m) => m,
                 Err(e) => {
-                    model.error_message = Some(format!("Invalid factory reset mode: {e}"));
+                    model.set_error(format!("Invalid factory reset mode: {e}"));
                     return crux_core::render::render();
                 }
             };

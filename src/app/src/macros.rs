@@ -59,7 +59,7 @@ pub use crate::http_helpers::{
 macro_rules! unauth_post {
     // Pattern 1: POST with JSON body expecting JSON response
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr, expect_json: $response_type:ty) => {{
-        $model.is_loading = true;
+        $model.start_loading();
         match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
             .header("Content-Type", "application/json")
             .body_json($body)
@@ -79,8 +79,7 @@ macro_rules! unauth_post {
                 }),
             ]),
             Err(e) => {
-                $model.is_loading = false;
-                $model.error_message = Some(format!("Failed to create {} request: {}", $action, e));
+                $model.set_error(format!("Failed to create {} request: {}", $action, e));
                 crux_core::render::render()
             }
         }
@@ -88,7 +87,7 @@ macro_rules! unauth_post {
 
     // Pattern 2: POST with JSON body expecting status only
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr) => {{
-        $model.is_loading = true;
+        $model.start_loading();
         match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
             .header("Content-Type", "application/json")
             .body_json($body)
@@ -108,8 +107,7 @@ macro_rules! unauth_post {
                 }),
             ]),
             Err(e) => {
-                $model.is_loading = false;
-                $model.error_message = Some(format!("Failed to create {} request: {}", $action, e));
+                $model.set_error(format!("Failed to create {} request: {}", $action, e));
                 crux_core::render::render()
             }
         }
@@ -117,7 +115,7 @@ macro_rules! unauth_post {
 
     // Pattern 3: GET expecting JSON response
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, method: get, expect_json: $response_type:ty) => {{
-        $model.is_loading = true;
+        $model.start_loading();
         crux_core::Command::all([
             crux_core::render::render(),
             $crate::HttpCmd::get(format!("http://omnect-device{}", $endpoint))
@@ -155,8 +153,7 @@ macro_rules! unauth_post {
 #[macro_export]
 macro_rules! auth_post_basic {
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, credentials: $credentials:expr, map: $mapper:expr) => {{
-        $model.is_loading = true;
-        $model.error_message = None;
+        $model.start_loading();
         crux_core::Command::all([
             crux_core::render::render(),
             $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
@@ -215,7 +212,7 @@ macro_rules! auth_post_basic {
 macro_rules! auth_post {
     // Pattern 1: Simple POST without body
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr) => {{
-        $model.is_loading = true;
+        $model.start_loading();
         if let Some(token) = &$model.auth_token {
             crux_core::Command::all([
                 crux_core::render::render(),
@@ -235,15 +232,14 @@ macro_rules! auth_post {
                     }),
             ])
         } else {
-            $model.is_loading = false;
-            $model.error_message = Some(format!("{} failed: Not authenticated", $action));
+            $model.set_error(format!("{} failed: Not authenticated", $action));
             crux_core::render::render()
         }
     }};
 
     // Pattern 2: POST with JSON body
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr) => {{
-        $model.is_loading = true;
+        $model.start_loading();
         if let Some(token) = &$model.auth_token {
             match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
                 .header("Authorization", format!("Bearer {token}"))
@@ -265,22 +261,19 @@ macro_rules! auth_post {
                     }),
                 ]),
                 Err(e) => {
-                    $model.is_loading = false;
-                    $model.error_message =
-                        Some(format!("Failed to create {} request: {}", $action, e));
+                    $model.set_error(format!("Failed to create {} request: {}", $action, e));
                     crux_core::render::render()
                 }
             }
         } else {
-            $model.is_loading = false;
-            $model.error_message = Some(format!("{} failed: Not authenticated", $action));
+            $model.set_error(format!("{} failed: Not authenticated", $action));
             crux_core::render::render()
         }
     }};
 
     // Pattern 3: POST with string body
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_string: $body:expr) => {{
-        $model.is_loading = true;
+        $model.start_loading();
         if let Some(token) = &$model.auth_token {
             crux_core::Command::all([
                 crux_core::render::render(),
@@ -302,15 +295,14 @@ macro_rules! auth_post {
                     }),
             ])
         } else {
-            $model.is_loading = false;
-            $model.error_message = Some(format!("{} failed: Not authenticated", $action));
+            $model.set_error(format!("{} failed: Not authenticated", $action));
             crux_core::render::render()
         }
     }};
 
     // Pattern 4: POST with JSON body expecting JSON response
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr, expect_json: $response_type:ty) => {{
-        $model.is_loading = true;
+        $model.start_loading();
         if let Some(token) = &$model.auth_token {
             match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
                 .header("Authorization", format!("Bearer {token}"))
@@ -332,15 +324,12 @@ macro_rules! auth_post {
                     }),
                 ]),
                 Err(e) => {
-                    $model.is_loading = false;
-                    $model.error_message =
-                        Some(format!("Failed to create {} request: {}", $action, e));
+                    $model.set_error(format!("Failed to create {} request: {}", $action, e));
                     crux_core::render::render()
                 }
             }
         } else {
-            $model.is_loading = false;
-            $model.error_message = Some(format!("{} failed: Not authenticated", $action));
+            $model.set_error(format!("{} failed: Not authenticated", $action));
             crux_core::render::render()
         }
     }};
@@ -441,13 +430,13 @@ macro_rules! handle_response {
     ($model:expr, $result:expr, {
         success_message: $msg:expr $(,)?
     }) => {{
-        $model.is_loading = false;
+        $model.stop_loading();
         match $result {
             Ok(()) => {
                 $model.success_message = Some($msg.to_string());
             }
             Err(e) => {
-                $model.error_message = Some(e);
+                $model.set_error(e);
             }
         }
         crux_core::render::render()
@@ -457,7 +446,7 @@ macro_rules! handle_response {
     ($model:expr, $result:expr, {
         on_success: |$success_model:ident, $value:tt| $success_body:block $(,)?
     }) => {{
-        $model.is_loading = false;
+        $model.stop_loading();
         match $result {
             Ok($value) => {
                 #[allow(clippy::redundant_locals)]
@@ -465,7 +454,7 @@ macro_rules! handle_response {
                 $success_body
             }
             Err(e) => {
-                $model.error_message = Some(e);
+                $model.set_error(e);
             }
         }
         crux_core::render::render()
@@ -476,7 +465,7 @@ macro_rules! handle_response {
         on_success: |$success_model:ident, $value:tt| $success_body:block,
         success_message: $msg:expr $(,)?
     }) => {{
-        $model.is_loading = false;
+        $model.stop_loading();
         match $result {
             Ok($value) => {
                 #[allow(clippy::redundant_locals)]
@@ -485,7 +474,7 @@ macro_rules! handle_response {
                 $model.success_message = Some($msg.to_string());
             }
             Err(e) => {
-                $model.error_message = Some(e);
+                $model.set_error(e);
             }
         }
         crux_core::render::render()
@@ -496,6 +485,7 @@ macro_rules! handle_response {
         on_success: |$success_model:ident, $value:tt| $success_body:block,
         no_loading: true $(,)?
     }) => {{
+        $model.clear_error();
         match $result {
             Ok($value) => {
                 #[allow(clippy::redundant_locals)]

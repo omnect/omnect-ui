@@ -47,8 +47,7 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
             )
         }
         Err(e) => {
-            model.is_loading = false;
-            model.error_message = Some(format!("Invalid network config: {e}"));
+            model.set_error(format!("Invalid network config: {e}"));
             crux_core::render::render()
         }
     }
@@ -59,7 +58,7 @@ pub fn handle_set_network_config_response(
     result: Result<(), String>,
     model: &mut Model,
 ) -> Command<Effect, Event> {
-    model.is_loading = false;
+    model.stop_loading();
 
     match result {
         Ok(()) => {
@@ -94,7 +93,7 @@ pub fn handle_set_network_config_response(
             }
         }
         Err(e) => {
-            model.error_message = Some(e);
+            model.set_error(e);
             model.network_change_state = NetworkChangeState::Idle;
             // Reset form state back to editing on failure
             if let Some(editing) = model.network_form_state.to_editing() {
@@ -206,7 +205,7 @@ pub fn handle_network_form_update(
             crux_core::render::render()
         }
         Err(e) => {
-            model.error_message = Some(format!("Invalid form data: {e}"));
+            model.set_error(format!("Invalid form data: {e}"));
             crux_core::render::render()
         }
     }

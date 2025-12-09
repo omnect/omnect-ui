@@ -24,7 +24,6 @@ pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
             on_success: |model, auth| {
                 model.auth_token = Some(auth.token);
                 model.is_authenticated = true;
-                model.error_message = None;
             },
         }),
 
@@ -48,7 +47,6 @@ pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
         AuthEvent::SetPasswordResponse(result) => handle_response!(model, result, {
             on_success: |model, _| {
                 model.requires_password_set = false;
-                model.error_message = None;
             },
             success_message: "Password set successfully",
         }),

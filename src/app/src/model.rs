@@ -56,4 +56,27 @@ impl Model {
         self.is_authenticated = false;
         self.auth_token = None;
     }
+
+    /// Start a loading operation (sets is_loading=true, clears error)
+    pub fn start_loading(&mut self) {
+        self.is_loading = true;
+        self.error_message = None;
+    }
+
+    /// Stop loading and clear error
+    pub fn stop_loading(&mut self) {
+        self.is_loading = false;
+        self.error_message = None;
+    }
+
+    /// Set an error message and stop loading
+    pub fn set_error(&mut self, error: String) {
+        self.is_loading = false;
+        self.error_message = Some(error);
+    }
+
+    /// Clear the error message without affecting the loading state.
+    pub fn clear_error(&mut self) {
+        self.error_message = None;
+    }
 }
