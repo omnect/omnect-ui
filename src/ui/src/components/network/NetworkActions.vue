@@ -1,37 +1,11 @@
 <script setup lang="ts">
-import { ref, watch } from "vue"
-import { useSnackbar } from "../../composables/useSnackbar"
 import { useCore } from "../../composables/useCore"
+import { useAsyncAction } from "../../composables/useAsyncAction"
 
-const { showSuccess, showError } = useSnackbar()
-const { viewModel, reloadNetwork } = useCore()
+const { reloadNetwork } = useCore()
+const { loading, execute } = useAsyncAction()
 
-const loading = ref(false)
-
-watch(
-	() => viewModel.success_message,
-	(newMessage) => {
-		if (newMessage) {
-			showSuccess(newMessage)
-			loading.value = false
-		}
-	}
-)
-
-watch(
-	() => viewModel.error_message,
-	(newMessage) => {
-		if (newMessage) {
-			showError(newMessage)
-			loading.value = false
-		}
-	}
-)
-
-const handleReloadNetwork = async () => {
-	loading.value = true
-	await reloadNetwork()
-}
+const handleReloadNetwork = () => execute(reloadNetwork)
 </script>
 
 <template>

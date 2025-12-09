@@ -8,14 +8,13 @@
  * - Components read from the reactive viewModel
  * - No local refs for data - all computed from Core state
  */
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useCore } from '../../composables/useCore'
+import { useCoreInitialization } from '../../composables/useCoreInitialization'
 
-const { viewModel, initialize } = useCore()
+const { viewModel } = useCore()
 
-onMounted(async () => {
-	await initialize()
-})
+useCoreInitialization()
 
 // All device info computed from the Core's viewModel
 const deviceInfo = computed(

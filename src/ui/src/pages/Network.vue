@@ -1,14 +1,9 @@
 <script setup lang="ts">
-import { onMounted } from "vue"
 import DeviceNetworks from "../components/network/DeviceNetworks.vue"
 import NetworkActions from "../components/network/NetworkActions.vue"
-import { useCore } from "../composables/useCore"
+import { useCoreInitialization } from "../composables/useCoreInitialization"
 
-const { initialize } = useCore()
-
-onMounted(async () => {
-	await initialize()
-})
+useCoreInitialization()
 </script>
 
 <template>

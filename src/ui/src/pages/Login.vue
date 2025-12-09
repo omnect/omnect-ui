@@ -1,45 +1,30 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue"
-import { useRouter } from "vue-router"
+import { computed, onMounted, ref } from "vue"
 import OmnectLogo from "../components/branding/OmnectLogo.vue"
 import { useCore } from "../composables/useCore"
+import { useAuthNavigation } from "../composables/useAuthNavigation"
 
 const { viewModel, login, checkRequiresPasswordSet, initialize } = useCore()
-const router = useRouter()
 
 const password = ref("")
 const visible = ref(false)
 const isCheckingPasswordSetNeeded = ref(false)
 
+useAuthNavigation()
+
 // Use viewModel error message instead of local state
 const errorMsg = computed(() => viewModel.error_message || "")
-
-// Watch for successful authentication
-watch(() => viewModel.is_authenticated, async (isAuthenticated) => {
-	if (isAuthenticated) {
-		await router.push("/")
-	}
-})
 
 const doLogin = async (e: Event) => {
 	e.preventDefault()
 	await login(password.value)
 }
 
-// Watch for requires_password_set state change
-watch(() => viewModel.requires_password_set, async (requiresPasswordSet) => {
-	if (requiresPasswordSet) {
-		await router.push("/set-password")
-	}
-})
-
 onMounted(async () => {
 	isCheckingPasswordSetNeeded.value = true
-
-	// Initialize Core and check if password needs to be set
+	// Initialize Core first, then check if password needs to be set
 	await initialize()
 	await checkRequiresPasswordSet()
-
 	isCheckingPasswordSetNeeded.value = false
 })
 </script>

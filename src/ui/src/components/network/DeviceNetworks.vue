@@ -1,17 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { computed, ref } from "vue"
 import NetworkSettings from "./NetworkSettings.vue"
 import { useCore } from "../../composables/useCore"
+import { useCoreInitialization } from "../../composables/useCoreInitialization"
 
-const { viewModel, initialize } = useCore()
+const { viewModel } = useCore()
+
+useCoreInitialization()
 
 const tab = ref(null)
 
 const networkStatus = computed(() => viewModel.network_status)
-
-onMounted(async () => {
-	await initialize()
-})
 </script>
 
 <template>

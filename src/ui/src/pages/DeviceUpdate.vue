@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from "vue"
+import { computed } from "vue"
 import UpdateFileUpload from "../components/update/UpdateFileUpload.vue"
 import UpdateInfo from "../components/update/UpdateInfo.vue"
 import { useCore } from "../composables/useCore"
-import { useSnackbar } from "../composables/useSnackbar"
+import { useCoreInitialization } from "../composables/useCoreInitialization"
+import { useMessageWatchers } from "../composables/useMessageWatchers"
 
-const { showError, showSuccess } = useSnackbar()
-const { viewModel, initialize, loadUpdate } = useCore()
+const { viewModel, loadUpdate } = useCore()
+
+useCoreInitialization()
+useMessageWatchers()
 
 const currentVersion = computed(() => viewModel.system_info?.os?.version)
 
@@ -14,33 +17,11 @@ const currentVersion = computed(() => viewModel.system_info?.os?.version)
 // The Core sets is_loading=true when LoadUpdate is dispatched and false when response is received
 const loadUpdateFetching = computed(() => viewModel.is_loading)
 
-watch(
-	() => viewModel.error_message,
-	(newMessage) => {
-		if (newMessage) {
-			showError(newMessage)
-		}
-	}
-)
-
-watch(
-	() => viewModel.success_message,
-	(newMessage) => {
-		if (newMessage) {
-			showSuccess(newMessage)
-		}
-	}
-)
-
 const loadUpdateData = (filename?: string) => {
 	// filename is passed from file upload, but not from reload button
 	// The backend uses a fixed path regardless of the filename
 	loadUpdate(filename ?? "")
 }
-
-onMounted(async () => {
-	await initialize()
-})
 </script>
 
 <template>

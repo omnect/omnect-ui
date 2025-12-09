@@ -2,10 +2,14 @@
 import { computed, ref, watch } from "vue"
 import { useSnackbar } from "../../composables/useSnackbar"
 import { useCore } from "../../composables/useCore"
+import { useClipboard } from "../../composables/useClipboard"
+import { useIPValidation } from "../../composables/useIPValidation"
 import type { DeviceNetwork } from "../../types"
 
-const { showSuccess, showError } = useSnackbar()
+const { showError } = useSnackbar()
 const { viewModel, setNetworkConfig } = useCore()
+const { copy } = useClipboard()
+const { isValidIp: validateIp, parseNetmask } = useIPValidation()
 
 const props = defineProps<{
     networkAdapter: DeviceNetwork
@@ -45,12 +49,6 @@ const isSubmitting = ref(false)
 const isServerAddr = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr === location.hostname)
 const ipChanged = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr !== ipAddress.value)
 
-const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-        showSuccess("Copied to clipboard")
-    })
-}
-
 const restoreSettings = () => {
     ipAddress.value = props.networkAdapter?.ipv4?.addrs[0]?.addr || ""
     addressAssignment.value = props.networkAdapter?.ipv4?.addrs[0]?.dhcp ? "dhcp" : "static"
@@ -59,15 +57,9 @@ const restoreSettings = () => {
     gateways.value = props.networkAdapter?.ipv4?.gateways?.join("\n") || ""
 }
 
-const isValidIp = (value: string) => {
-    if (!value) return true
-    const regex = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/
-    return regex.test(value) || "Invalid IPv4-Address"
-}
-
 const setNetMask = (mask: string) => {
-    const prefixLen = Number.parseInt(mask.replace("/", ""), 10)
-    if (isNaN(prefixLen) || prefixLen < 0 || prefixLen > 32) {
+    const prefixLen = parseNetmask(mask)
+    if (prefixLen === null) {
         return "Invalid netmask"
     }
     netmask.value = prefixLen
@@ -87,7 +79,6 @@ watch(
 	() => viewModel.success_message,
 	(newMessage) => {
 		if (newMessage) {
-            showSuccess(newMessage)
 			isSubmitting.value = false
 		}
 	}
@@ -125,8 +116,8 @@ const submit = async () => {
                 <v-radio label="DHCP" value="dhcp"></v-radio>
                 <v-radio label="Static" value="static"></v-radio>
             </v-radio-group>
-            <v-text-field :readonly="isDHCP" v-model="ipAddress" label="IP Address" :rules="[isValidIp]" outlined
-                append-inner-icon="mdi-content-copy" @click:append-inner="copyToClipboard(`${ipAddress}/${netmask}`)">
+            <v-text-field :readonly="isDHCP" v-model="ipAddress" label="IP Address" :rules="[validateIp]" outlined
+                append-inner-icon="mdi-content-copy" @click:append-inner="copy(`${ipAddress}/${netmask}`)">
                 <template #append-inner>
                     <v-btn :disabled="isDHCP" size="large" append-icon="mdi-menu-down" variant="text" density="compact"
                         slim class="m-0">
@@ -144,11 +135,11 @@ const submit = async () => {
             </v-text-field>
             <v-text-field label="MAC Address" variant="outlined" readonly v-model="props.networkAdapter.mac"
                 append-inner-icon="mdi-content-copy"
-                @click:append-inner="copyToClipboard(props.networkAdapter.mac)"></v-text-field>
+                @click:append-inner="copy(props.networkAdapter.mac)"></v-text-field>
             <v-textarea :readonly="isDHCP" v-model="gateways" label="Gateways" variant="outlined" rows="3" no-resize
-                append-inner-icon="mdi-content-copy" @click:append-inner="copyToClipboard(ipAddress)"></v-textarea>
+                append-inner-icon="mdi-content-copy" @click:append-inner="copy(ipAddress)"></v-textarea>
             <v-textarea v-model="dns" label="DNS" variant="outlined" rows="3" no-resize
-                append-inner-icon="mdi-content-copy" @click:append-inner="copyToClipboard(ipAddress)"></v-textarea>
+                append-inner-icon="mdi-content-copy" @click:append-inner="copy(ipAddress)"></v-textarea>
             <div class="flex flex-row gap-x-4">
                 <v-btn color="secondary" type="submit" variant="text" :loading="isSubmitting">
                     Save
