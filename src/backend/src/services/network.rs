@@ -93,6 +93,7 @@ struct Rollback {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SetNetworkConfigResponse {
     pub rollback_timeout_seconds: u64,
 }
