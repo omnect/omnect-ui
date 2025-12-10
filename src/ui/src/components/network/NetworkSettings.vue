@@ -7,7 +7,7 @@ import { useIPValidation } from "../../composables/useIPValidation"
 import type { DeviceNetwork } from "../../types"
 
 const { showError } = useSnackbar()
-const { viewModel, setNetworkConfig } = useCore()
+const { viewModel, setNetworkConfig, networkFormReset } = useCore()
 const { copy } = useClipboard()
 const { isValidIp: validateIp, parseNetmask } = useIPValidation()
 
@@ -50,6 +50,10 @@ const isServerAddr = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr =
 const ipChanged = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr !== ipAddress.value)
 
 const restoreSettings = () => {
+    // Reset Core state (clears dirty flag and NetworkFormState)
+    networkFormReset(props.networkAdapter.name)
+
+    // Reset local form state
     ipAddress.value = props.networkAdapter?.ipv4?.addrs[0]?.addr || ""
     addressAssignment.value = props.networkAdapter?.ipv4?.addrs[0]?.dhcp ? "dhcp" : "static"
     netmask.value = props.networkAdapter?.ipv4?.addrs[0]?.prefix_len || 24
