@@ -21,6 +21,9 @@ const gateways = ref(props.networkAdapter?.ipv4?.gateways?.join("\n") || "")
 const addressAssignment = ref(props.networkAdapter?.ipv4?.addrs[0]?.dhcp ? "dhcp" : "static")
 const netmask = ref(props.networkAdapter?.ipv4?.addrs[0]?.prefix_len || 24)
 
+// Track if this is the initial mount to skip the first form watcher trigger
+const isInitialMount = ref(true)
+
 // Initialize form editing state in Core when component mounts
 networkFormStartEdit(props.networkAdapter.name)
 
@@ -40,9 +43,21 @@ const sendFormUpdateToCore = () => {
 // Watch form fields and notify Core when they change
 // Use flush: 'post' to ensure watcher runs after all DOM updates
 watch([ipAddress, dns, gateways, addressAssignment, netmask], () => {
+    console.log('[NetworkSettings] Form watcher fired, isInitialMount:', isInitialMount.value, 'isSubmitting:', isSubmitting.value, 'isSyncing:', isSyncingFromWebSocket.value, 'dhcp:', addressAssignment.value)
+
+    // Skip on initial mount - the first WebSocket sync will set correct values
+    if (isInitialMount.value) {
+        console.log('[NetworkSettings] Skipping form update (initial mount)')
+        isInitialMount.value = false
+        return
+    }
+
     // Don't update dirty flag during submit or WebSocket sync
     if (!isSubmitting.value && !isSyncingFromWebSocket.value) {
+        console.log('[NetworkSettings] Sending form update to Core')
         sendFormUpdateToCore()
+    } else {
+        console.log('[NetworkSettings] Skipping form update (submitting or syncing)')
     }
 }, { flush: 'post' })
 
@@ -53,16 +68,23 @@ watch(() => props.networkAdapter, (newAdapter) => {
 
     // Don't overwrite user's unsaved changes
     if (isSubmitting.value) {
-        console.log('NetworkSettings: Skipping watcher sync during submit')
+        console.log('[NetworkSettings] WebSocket watcher: Skipping sync during submit')
         return
     }
 
-    console.log('NetworkSettings: Syncing form with WebSocket update:', {
+    // Don't overwrite user's unsaved changes (check dirty flag from Core)
+    if (viewModel.network_form_dirty === true) {
+        console.log('[NetworkSettings] WebSocket watcher: Skipping sync - user has unsaved changes')
+        return
+    }
+
+    console.log('[NetworkSettings] WebSocket watcher: Syncing form with WebSocket update:', {
         name: newAdapter.name,
         dhcp: newAdapter.ipv4?.addrs[0]?.dhcp
     })
 
     // Set flag to prevent form watchers from firing during sync
+    console.log('[NetworkSettings] WebSocket watcher: Setting isSyncingFromWebSocket = true')
     isSyncingFromWebSocket.value = true
 
     ipAddress.value = newAdapter.ipv4?.addrs[0]?.addr || ""
@@ -71,9 +93,13 @@ watch(() => props.networkAdapter, (newAdapter) => {
     addressAssignment.value = newAdapter.ipv4?.addrs[0]?.dhcp ? "dhcp" : "static"
     netmask.value = newAdapter.ipv4?.addrs[0]?.prefix_len || 24
 
-    // Clear flag after Vue finishes all reactive updates
+    // Clear flag after Vue finishes all reactive updates AND all post-flush watchers
+    // Need double nextTick: first for reactive updates, second for post-flush watchers
     nextTick(() => {
-        isSyncingFromWebSocket.value = false
+        nextTick(() => {
+            console.log('[NetworkSettings] WebSocket watcher: Clearing isSyncingFromWebSocket in double nextTick')
+            isSyncingFromWebSocket.value = false
+        })
     })
 }, { deep: true })
 
