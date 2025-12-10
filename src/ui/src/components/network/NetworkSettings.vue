@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue"
+import { computed, nextTick, ref, watch } from "vue"
 import { useSnackbar } from "../../composables/useSnackbar"
 import { useCore } from "../../composables/useCore"
 import { useClipboard } from "../../composables/useClipboard"
@@ -38,12 +38,13 @@ const sendFormUpdateToCore = () => {
 }
 
 // Watch form fields and notify Core when they change
+// Use flush: 'post' to ensure watcher runs after all DOM updates
 watch([ipAddress, dns, gateways, addressAssignment, netmask], () => {
     // Don't update dirty flag during submit or WebSocket sync
     if (!isSubmitting.value && !isSyncingFromWebSocket.value) {
         sendFormUpdateToCore()
     }
-})
+}, { flush: 'post' })
 
 // Watch for prop changes from WebSocket updates and sync local state
 // Only sync if user is not currently editing (no pending changes)
@@ -70,10 +71,10 @@ watch(() => props.networkAdapter, (newAdapter) => {
     addressAssignment.value = newAdapter.ipv4?.addrs[0]?.dhcp ? "dhcp" : "static"
     netmask.value = newAdapter.ipv4?.addrs[0]?.prefix_len || 24
 
-    // Clear flag after sync completes (in next tick to ensure watchers have run)
-    setTimeout(() => {
+    // Clear flag after Vue finishes all reactive updates
+    nextTick(() => {
         isSyncingFromWebSocket.value = false
-    }, 0)
+    })
 }, { deep: true })
 
 const isDHCP = computed(() => addressAssignment.value === "dhcp")
