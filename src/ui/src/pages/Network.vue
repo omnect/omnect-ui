@@ -14,7 +14,7 @@ let pendingNavigation: (() => void) | null = null
 // Navigation guard to prevent leaving page with unsaved changes
 onBeforeRouteLeave((_to, _from, next) => {
   console.log('[Network] onBeforeRouteLeave called, dirty flag:', viewModel.network_form_dirty)
-  if (viewModel.network_form_dirty) {
+  if (viewModel.network_form_dirty === true) {
     console.log('[Network] Blocking navigation, showing dialog')
     showNavigationDialog.value = true
     pendingNavigation = () => next() // Save the next callback to be called after confirmation
