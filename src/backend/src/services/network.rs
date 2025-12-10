@@ -41,6 +41,12 @@ macro_rules! network_rollback_file {
     };
 }
 
+macro_rules! network_rollback_occurred_file {
+    () => {
+        Path::new("/tmp/network_rollback_occurred")
+    };
+}
+
 macro_rules! clear_rollback {
     () => {
         let _ = fs::remove_file(network_rollback_file!());
@@ -178,6 +184,7 @@ impl NetworkConfigService {
             info!("rollback: {rollback:?}");
             Self::rollback_network_config(&rollback.network_config.name)?;
             service_client.reload_network().await?;
+            Self::mark_rollback_occurred()?;
             Self::trigger_server_restart()?;
 
             clear_rollback!();
@@ -201,6 +208,28 @@ impl NetworkConfigService {
     /// true if rollback file exists, false otherwise
     pub fn rollback_exists() -> bool {
         network_rollback_file!().exists()
+    }
+
+    /// Check if a rollback has occurred (and UI hasn't acknowledged it yet)
+    ///
+    /// # Returns
+    /// true if rollback occurred marker file exists, false otherwise
+    pub fn rollback_occurred() -> bool {
+        network_rollback_occurred_file!().exists()
+    }
+
+    /// Clear the rollback occurred marker (called when UI acknowledges it)
+    pub fn clear_rollback_occurred() {
+        let _ = fs::remove_file(network_rollback_occurred_file!());
+        info!("rollback occurred marker cleared");
+    }
+
+    /// Mark that a rollback has occurred (sets marker file)
+    fn mark_rollback_occurred() -> Result<()> {
+        fs::write(network_rollback_occurred_file!(), "")
+            .context("failed to write rollback occurred marker")?;
+        info!("rollback occurred marker set");
+        Ok(())
     }
 
     /// Rollback network configuration to the previous backup

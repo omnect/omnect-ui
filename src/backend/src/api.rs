@@ -244,6 +244,12 @@ where
         )
     }
 
+    pub async fn acknowledge_network_rollback() -> impl Responder {
+        debug!("acknowledge_network_rollback() called");
+        NetworkConfigService::clear_rollback_occurred();
+        HttpResponse::Ok().finish()
+    }
+
     fn session_token(session: Session, token_manager: web::Data<TokenManager>) -> HttpResponse {
         let token = match token_manager.create_token() {
             Ok(token) => token,

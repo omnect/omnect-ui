@@ -217,3 +217,21 @@ pub fn handle_network_form_update(
         Err(e) => model.set_error_and_render(format!("Invalid form data: {e}")),
     }
 }
+
+/// Handle acknowledge network rollback - clear the rollback occurred flag
+pub fn handle_acknowledge_network_rollback(model: &mut Model) -> Command<Effect, Event> {
+    // Clear the rollback status in the model
+    if let Some(healthcheck) = &mut model.healthcheck {
+        healthcheck.network_rollback_occurred = false;
+    }
+
+    // Send POST request to backend to clear the marker file
+    auth_post!(
+        Device,
+        DeviceEvent,
+        model,
+        "/acknowledge-network-rollback",
+        AcknowledgeNetworkRollbackResponse,
+        "Acknowledge network rollback"
+    )
+}

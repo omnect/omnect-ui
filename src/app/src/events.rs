@@ -64,6 +64,7 @@ pub enum DeviceEvent {
     ReconnectionTimeout,
     NewIpCheckTick,
     NewIpCheckTimeout,
+    AcknowledgeNetworkRollback,
     #[serde(skip)]
     RebootResponse(Result<(), String>),
     #[serde(skip)]
@@ -76,6 +77,8 @@ pub enum DeviceEvent {
     RunUpdateResponse(Result<(), String>),
     #[serde(skip)]
     HealthcheckResponse(Result<HealthcheckInfo, String>),
+    #[serde(skip)]
+    AcknowledgeNetworkRollbackResponse(Result<(), String>),
 }
 
 /// WebSocket/Centrifugo events

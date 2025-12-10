@@ -19,6 +19,8 @@ pub struct VersionInfo {
 pub struct HealthcheckInfo {
     pub version_info: VersionInfo,
     pub update_validation_status: UpdateValidationStatus,
+    #[serde(default)]
+    pub network_rollback_occurred: bool,
 }
 
 /// Request to load update manifest
