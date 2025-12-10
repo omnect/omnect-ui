@@ -67,7 +67,7 @@ import {
 	DeviceEventVariantNetworkFormStartEdit,
 	DeviceEventVariantNetworkFormUpdate,
 	DeviceEventVariantNetworkFormReset,
-	DeviceEventVariantAcknowledgeNetworkRollback,
+	DeviceEventVariantAckRollback,
 	WebSocketEventVariantSubscribeToChannels,
 	WebSocketEventVariantUnsubscribeFromChannels,
 	UiEventVariantClearError,
@@ -278,7 +278,7 @@ export function useCore() {
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantNetworkFormUpdate(formDataJson))),
 		networkFormReset: (adapterName: string) =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantNetworkFormReset(adapterName))),
-		acknowledgeNetworkRollback: () =>
-			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAcknowledgeNetworkRollback())),
+		ackRollback: () =>
+			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAckRollback())),
 	}
 }

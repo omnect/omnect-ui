@@ -3,9 +3,9 @@ mod operations;
 mod reconnection;
 
 pub use network::{
-    handle_acknowledge_network_rollback, handle_network_form_start_edit,
-    handle_network_form_update, handle_new_ip_check_tick, handle_new_ip_check_timeout,
-    handle_set_network_config, handle_set_network_config_response,
+    handle_ack_rollback, handle_network_form_start_edit, handle_network_form_update,
+    handle_new_ip_check_tick, handle_new_ip_check_timeout, handle_set_network_config,
+    handle_set_network_config_response,
 };
 pub use operations::handle_device_operation_response;
 pub use reconnection::{
@@ -114,7 +114,7 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
             handle_set_network_config_response(result, model)
         }
 
-        DeviceEvent::AcknowledgeNetworkRollbackResponse(result) => {
+        DeviceEvent::AckRollbackResponse(result) => {
             model.stop_loading();
             if let Err(e) = result {
                 model.set_error(e);
@@ -172,7 +172,7 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
         DeviceEvent::NewIpCheckTimeout => handle_new_ip_check_timeout(model),
 
         // Acknowledge network rollback
-        DeviceEvent::AcknowledgeNetworkRollback => handle_acknowledge_network_rollback(model),
+        DeviceEvent::AckRollback => handle_ack_rollback(model),
 
         // Network form events
         DeviceEvent::NetworkFormStartEdit { adapter_name } => {

@@ -263,7 +263,7 @@ pub fn handle_network_form_update(
 }
 
 /// Handle acknowledge network rollback - clear the rollback occurred flag
-pub fn handle_acknowledge_network_rollback(model: &mut Model) -> Command<Effect, Event> {
+pub fn handle_ack_rollback(model: &mut Model) -> Command<Effect, Event> {
     // Clear the rollback status in the model
     if let Some(healthcheck) = &mut model.healthcheck {
         healthcheck.network_rollback_occurred = false;
@@ -274,8 +274,8 @@ pub fn handle_acknowledge_network_rollback(model: &mut Model) -> Command<Effect,
         Device,
         DeviceEvent,
         model,
-        "/acknowledge-network-rollback",
-        AcknowledgeNetworkRollbackResponse,
-        "Acknowledge network rollback"
+        "/ack-rollback",
+        AckRollbackResponse,
+        "Acknowledge rollback"
     )
 }

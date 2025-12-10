@@ -244,8 +244,8 @@ where
         )
     }
 
-    pub async fn acknowledge_network_rollback() -> impl Responder {
-        debug!("acknowledge_network_rollback() called");
+    pub async fn ack_rollback() -> impl Responder {
+        debug!("ack_rollback() called");
         NetworkConfigService::clear_rollback_occurred();
         HttpResponse::Ok().finish()
     }
