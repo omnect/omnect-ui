@@ -7,7 +7,7 @@ import { useIPValidation } from "../../composables/useIPValidation"
 import type { DeviceNetwork } from "../../types"
 
 const { showError } = useSnackbar()
-const { viewModel, setNetworkConfig, networkFormReset } = useCore()
+const { viewModel, setNetworkConfig, networkFormReset, networkFormUpdate, networkFormStartEdit } = useCore()
 const { copy } = useClipboard()
 const { isValidIp: validateIp, parseNetmask } = useIPValidation()
 
@@ -20,6 +20,30 @@ const dns = ref(props.networkAdapter?.ipv4?.dns?.join("\n") || "")
 const gateways = ref(props.networkAdapter?.ipv4?.gateways?.join("\n") || "")
 const addressAssignment = ref(props.networkAdapter?.ipv4?.addrs[0]?.dhcp ? "dhcp" : "static")
 const netmask = ref(props.networkAdapter?.ipv4?.addrs[0]?.prefix_len || 24)
+
+// Initialize form editing state in Core when component mounts
+networkFormStartEdit(props.networkAdapter.name)
+
+// Helper to send current form data to Core for dirty flag tracking
+const sendFormUpdateToCore = () => {
+    const formData = {
+        name: props.networkAdapter.name,
+        ip_address: ipAddress.value,
+        dhcp: addressAssignment.value === "dhcp",
+        prefix_len: netmask.value,
+        dns: dns.value.split("\n").filter(d => d.trim()),
+        gateways: gateways.value.split("\n").filter(g => g.trim())
+    }
+    networkFormUpdate(JSON.stringify(formData))
+}
+
+// Watch form fields and notify Core when they change
+watch([ipAddress, dns, gateways, addressAssignment, netmask], () => {
+    // Don't update dirty flag during submit
+    if (!isSubmitting.value) {
+        sendFormUpdateToCore()
+    }
+})
 
 // Watch for prop changes from WebSocket updates and sync local state
 // Only sync if user is not currently editing (no pending changes)
