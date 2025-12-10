@@ -39,8 +39,8 @@ const sendFormUpdateToCore = () => {
 
 // Watch form fields and notify Core when they change
 watch([ipAddress, dns, gateways, addressAssignment, netmask], () => {
-    // Don't update dirty flag during submit
-    if (!isSubmitting.value) {
+    // Don't update dirty flag during submit or WebSocket sync
+    if (!isSubmitting.value && !isSyncingFromWebSocket.value) {
         sendFormUpdateToCore()
     }
 })
@@ -61,15 +61,24 @@ watch(() => props.networkAdapter, (newAdapter) => {
         dhcp: newAdapter.ipv4?.addrs[0]?.dhcp
     })
 
+    // Set flag to prevent form watchers from firing during sync
+    isSyncingFromWebSocket.value = true
+
     ipAddress.value = newAdapter.ipv4?.addrs[0]?.addr || ""
     dns.value = newAdapter.ipv4?.dns?.join("\n") || ""
     gateways.value = newAdapter.ipv4?.gateways?.join("\n") || ""
     addressAssignment.value = newAdapter.ipv4?.addrs[0]?.dhcp ? "dhcp" : "static"
     netmask.value = newAdapter.ipv4?.addrs[0]?.prefix_len || 24
+
+    // Clear flag after sync completes (in next tick to ensure watchers have run)
+    setTimeout(() => {
+        isSyncingFromWebSocket.value = false
+    }, 0)
 }, { deep: true })
 
 const isDHCP = computed(() => addressAssignment.value === "dhcp")
 const isSubmitting = ref(false)
+const isSyncingFromWebSocket = ref(false)
 const isServerAddr = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr === location.hostname)
 const ipChanged = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr !== ipAddress.value)
 
