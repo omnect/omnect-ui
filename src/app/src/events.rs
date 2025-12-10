@@ -38,7 +38,6 @@ pub enum DeviceEvent {
         mode: String,
         preserve: Vec<String>,
     },
-    ReloadNetwork,
     SetNetworkConfig {
         config: String,
     },
@@ -69,8 +68,6 @@ pub enum DeviceEvent {
     RebootResponse(Result<(), String>),
     #[serde(skip)]
     FactoryResetResponse(Result<(), String>),
-    #[serde(skip)]
-    ReloadNetworkResponse(Result<(), String>),
     #[serde(skip)]
     SetNetworkConfigResponse(Result<(), String>),
     #[serde(skip)]

@@ -61,7 +61,6 @@ import {
 	AuthEventVariantCheckRequiresPasswordSet,
 	DeviceEventVariantReboot,
 	DeviceEventVariantFactoryResetRequest,
-	DeviceEventVariantReloadNetwork,
 	DeviceEventVariantSetNetworkConfig,
 	DeviceEventVariantLoadUpdate,
 	DeviceEventVariantRunUpdate,
@@ -247,7 +246,6 @@ export function useCore() {
 		reboot: () => sendEventToCore(new EventVariantDevice(new DeviceEventVariantReboot())),
 		factoryReset: (mode: string, preserve: string[]) =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantFactoryResetRequest(mode, preserve))),
-		reloadNetwork: () => sendEventToCore(new EventVariantDevice(new DeviceEventVariantReloadNetwork())),
 		setNetworkConfig: (config: string) =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantSetNetworkConfig(config))),
 		loadUpdate: (filePath: string) =>

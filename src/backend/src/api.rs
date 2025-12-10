@@ -122,11 +122,6 @@ where
         handle_service_result(api.service_client.reboot().await, "reboot")
     }
 
-    pub async fn reload_network(api: web::Data<Self>) -> impl Responder {
-        debug!("reload_network() called");
-        handle_service_result(api.service_client.reload_network().await, "reload_network")
-    }
-
     pub async fn token(session: Session, token_manager: web::Data<TokenManager>) -> impl Responder {
         debug!("token() called");
 

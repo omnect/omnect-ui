@@ -272,12 +272,6 @@ async fn run_server(
                 web::post().to(UiApi::reboot).wrap(middleware::AuthMw),
             )
             .route(
-                "/reload-network",
-                web::post()
-                    .to(UiApi::reload_network)
-                    .wrap(middleware::AuthMw),
-            )
-            .route(
                 "/update/file",
                 web::post()
                     .to(UiApi::upload_firmware_file)

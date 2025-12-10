@@ -108,21 +108,6 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
             ),
         ),
 
-        DeviceEvent::ReloadNetwork => {
-            auth_post!(
-                Device,
-                DeviceEvent,
-                model,
-                "/reload-network",
-                ReloadNetworkResponse,
-                "Reload network"
-            )
-        }
-
-        DeviceEvent::ReloadNetworkResponse(result) => handle_response!(model, result, {
-            success_message: "Network reloaded",
-        }),
-
         DeviceEvent::SetNetworkConfig { config } => handle_set_network_config(config, model),
 
         DeviceEvent::SetNetworkConfigResponse(result) => {
