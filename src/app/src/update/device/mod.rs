@@ -49,9 +49,8 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
 
         DeviceEvent::UploadFailed(error) => {
             model.firmware_upload_state = UploadState::Failed(error.clone());
-            model.set_error(format!("Upload failed: {error}"));
             model.overlay_spinner.clear();
-            crux_core::render::render()
+            model.set_error_and_render(format!("Upload failed: {error}"))
         }
 
         DeviceEvent::Reboot => {

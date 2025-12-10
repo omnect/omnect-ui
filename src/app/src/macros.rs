@@ -34,8 +34,9 @@ macro_rules! update_field {
 
 // Re-export http_helpers functions for macro use
 pub use crate::http_helpers::{
-    check_response_status, extract_error_message, extract_string_response, is_response_success,
-    parse_json_response,
+    check_response_status, extract_error_message, extract_string_response, handle_auth_error,
+    handle_request_error, is_response_success, parse_json_response, process_json_response,
+    process_status_response,
 };
 
 /// Macro for unauthenticated POST requests with standard error handling.
@@ -79,8 +80,7 @@ macro_rules! unauth_post {
                 }),
             ]),
             Err(e) => {
-                $model.set_error(format!("Failed to create {} request: {}", $action, e));
-                crux_core::render::render()
+                $model.set_error_and_render(format!("Failed to create {} request: {}", $action, e))
             }
         }
     }};
@@ -107,8 +107,7 @@ macro_rules! unauth_post {
                 }),
             ]),
             Err(e) => {
-                $model.set_error(format!("Failed to create {} request: {}", $action, e));
-                crux_core::render::render()
+                $model.set_error_and_render(format!("Failed to create {} request: {}", $action, e))
             }
         }
     }};
@@ -220,24 +219,18 @@ macro_rules! auth_post {
                     .header("Authorization", format!("Bearer {token}"))
                     .build()
                     .then_send(|result| {
-                        let event_result = match result {
-                            Ok(mut response) => {
-                                $crate::macros::check_response_status($action, &mut response)
-                            }
-                            Err(e) => Err(e.to_string()),
-                        };
+                        let event_result = $crate::macros::process_status_response($action, result);
                         $crate::events::Event::$domain(
                             $crate::events::$domain_event::$response_event(event_result),
                         )
                     }),
             ])
         } else {
-            $model.set_error(format!("{} failed: Not authenticated", $action));
-            crux_core::render::render()
+            $crate::macros::handle_auth_error($model, $action)
         }
     }};
 
-    // Pattern 2: POST with JSON body
+    // Pattern 2: POST with JSON body (no JSON response expected)
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr) => {{
         $model.start_loading();
         if let Some(token) = &$model.auth_token {
@@ -249,29 +242,20 @@ macro_rules! auth_post {
                 Ok(builder) => crux_core::Command::all([
                     crux_core::render::render(),
                     builder.build().then_send(|result| {
-                        let event_result = match result {
-                            Ok(mut response) => {
-                                $crate::macros::check_response_status($action, &mut response)
-                            }
-                            Err(e) => Err(format!("CRUX_ERR: {e}")),
-                        };
+                        let event_result = $crate::macros::process_status_response($action, result);
                         $crate::events::Event::$domain(
                             $crate::events::$domain_event::$response_event(event_result),
                         )
                     }),
                 ]),
-                Err(e) => {
-                    $model.set_error(format!("Failed to create {} request: {}", $action, e));
-                    crux_core::render::render()
-                }
+                Err(e) => $crate::macros::handle_request_error($model, $action, e),
             }
         } else {
-            $model.set_error(format!("{} failed: Not authenticated", $action));
-            crux_core::render::render()
+            $crate::macros::handle_auth_error($model, $action)
         }
     }};
 
-    // Pattern 3: POST with string body
+    // Pattern 3: POST with string body (no JSON response expected)
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_string: $body:expr) => {{
         $model.start_loading();
         if let Some(token) = &$model.auth_token {
@@ -283,20 +267,14 @@ macro_rules! auth_post {
                     .body_string($body)
                     .build()
                     .then_send(|result| {
-                        let event_result = match result {
-                            Ok(mut response) => {
-                                $crate::macros::check_response_status($action, &mut response)
-                            }
-                            Err(e) => Err(e.to_string()),
-                        };
+                        let event_result = $crate::macros::process_status_response($action, result);
                         $crate::events::Event::$domain(
                             $crate::events::$domain_event::$response_event(event_result),
                         )
                     }),
             ])
         } else {
-            $model.set_error(format!("{} failed: Not authenticated", $action));
-            crux_core::render::render()
+            $crate::macros::handle_auth_error($model, $action)
         }
     }};
 
@@ -312,25 +290,41 @@ macro_rules! auth_post {
                 Ok(builder) => crux_core::Command::all([
                     crux_core::render::render(),
                     builder.build().then_send(|result| {
-                        let event_result: Result<$response_type, String> = match result {
-                            Ok(mut response) => {
-                                $crate::macros::parse_json_response($action, &mut response)
-                            }
-                            Err(e) => Err(e.to_string()),
-                        };
+                        let event_result: Result<$response_type, String> =
+                            $crate::macros::process_json_response($action, result);
                         $crate::events::Event::$domain(
                             $crate::events::$domain_event::$response_event(event_result),
                         )
                     }),
                 ]),
-                Err(e) => {
-                    $model.set_error(format!("Failed to create {} request: {}", $action, e));
-                    crux_core::render::render()
-                }
+                Err(e) => $crate::macros::handle_request_error($model, $action, e),
             }
         } else {
-            $model.set_error(format!("{} failed: Not authenticated", $action));
-            crux_core::render::render()
+            $crate::macros::handle_auth_error($model, $action)
+        }
+    }};
+
+    // Pattern 5: POST with string body expecting JSON response
+    ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_string: $body:expr, expect_json: $response_type:ty) => {{
+        $model.start_loading();
+        if let Some(token) = &$model.auth_token {
+            crux_core::Command::all([
+                crux_core::render::render(),
+                $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+                    .header("Authorization", format!("Bearer {token}"))
+                    .header("Content-Type", "application/json")
+                    .body_string($body)
+                    .build()
+                    .then_send(|result| {
+                        let event_result: Result<$response_type, String> =
+                            $crate::macros::process_json_response($action, result);
+                        $crate::events::Event::$domain(
+                            $crate::events::$domain_event::$response_event(event_result),
+                        )
+                    }),
+            ])
+        } else {
+            $crate::macros::handle_auth_error($model, $action)
         }
     }};
 }

@@ -128,6 +128,7 @@ pub enum NetworkChangeState {
     WaitingForNewIp {
         new_ip: String,
         attempt: u32,
+        rollback_timeout_seconds: u64,
     },
     NewIpReachable {
         new_ip: String,
@@ -141,4 +142,11 @@ impl Default for NetworkChangeState {
     fn default() -> Self {
         Self::Idle
     }
+}
+
+/// Response from backend when setting network configuration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SetNetworkConfigResponse {
+    pub rollback_timeout_seconds: u64,
 }

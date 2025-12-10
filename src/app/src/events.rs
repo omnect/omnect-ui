@@ -69,7 +69,7 @@ pub enum DeviceEvent {
     #[serde(skip)]
     FactoryResetResponse(Result<(), String>),
     #[serde(skip)]
-    SetNetworkConfigResponse(Result<(), String>),
+    SetNetworkConfigResponse(Result<crate::types::SetNetworkConfigResponse, String>),
     #[serde(skip)]
     LoadUpdateResponse(Result<UpdateManifest, String>),
     #[serde(skip)]

@@ -86,6 +86,11 @@ struct Rollback {
     deadline: SystemTime,
 }
 
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct SetNetworkConfigResponse {
+    pub rollback_timeout_seconds: u64,
+}
+
 // ============================================================================
 // Service
 // ============================================================================
@@ -113,8 +118,11 @@ impl NetworkConfigService {
     /// * `network` - Network configuration to apply
     ///
     /// # Returns
-    /// Result indicating success or failure
-    pub async fn set_network_config<T>(service_client: &T, network: &NetworkConfig) -> Result<()>
+    /// Result with the network config response including rollback timeout, or an error
+    pub async fn set_network_config<T>(
+        service_client: &T,
+        network: &NetworkConfig,
+    ) -> Result<SetNetworkConfigResponse>
     where
         T: DeviceServiceClient,
     {
@@ -129,7 +137,9 @@ impl NetworkConfigService {
             return Err(err1);
         }
 
-        Ok(())
+        Ok(SetNetworkConfigResponse {
+            rollback_timeout_seconds: ROLLBACK_TIMEOUT_SECS,
+        })
     }
 
     /// Process any pending network configuration rollback

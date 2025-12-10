@@ -2,6 +2,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::*;
 
+/// Trait for types that can handle error messages
+///
+/// This allows HTTP helper functions to work with Model without directly depending on it.
+pub trait ModelErrorHandler {
+    fn set_error(&mut self, error: String);
+}
+
 /// Application Model - the complete state
 /// Also serves as the ViewModel when serialized (auth_token is excluded)
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -75,8 +82,26 @@ impl Model {
         self.error_message = Some(error);
     }
 
+    /// Set an error message, stop loading, and return a render command
+    ///
+    /// This is a convenience method that combines `set_error()` with `render()`,
+    /// which is a very common pattern throughout the codebase.
+    pub fn set_error_and_render(
+        &mut self,
+        error: String,
+    ) -> crux_core::Command<crate::Effect, crate::events::Event> {
+        self.set_error(error);
+        crux_core::render::render()
+    }
+
     /// Clear the error message without affecting the loading state.
     pub fn clear_error(&mut self) {
         self.error_message = None;
+    }
+}
+
+impl ModelErrorHandler for Model {
+    fn set_error(&mut self, error: String) {
+        Model::set_error(self, error)
     }
 }

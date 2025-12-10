@@ -96,6 +96,57 @@ pub fn extract_string_response(
     }
 }
 
+/// Process HTTP response result and check status only (no JSON parsing)
+pub fn process_status_response(
+    action: &str,
+    result: crux_http::Result<Response<Vec<u8>>>,
+) -> Result<(), String> {
+    match result {
+        Ok(mut response) => check_response_status(action, &mut response),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Process HTTP response result and parse JSON
+pub fn process_json_response<T: serde::de::DeserializeOwned>(
+    action: &str,
+    result: crux_http::Result<Response<Vec<u8>>>,
+) -> Result<T, String> {
+    match result {
+        Ok(mut response) => parse_json_response(action, &mut response),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Handle authentication error - sets error message and returns render command
+///
+/// This is a common pattern used throughout the codebase when authentication is required
+/// but no token is available.
+pub fn handle_auth_error<M, E>(model: &mut M, action: &str) -> crux_core::Command<crate::Effect, E>
+where
+    M: crate::model::ModelErrorHandler,
+    E: Send + 'static,
+{
+    model.set_error(format!("{action} failed: Not authenticated"));
+    crux_core::render::render()
+}
+
+/// Handle request creation error - sets error message and returns render command
+///
+/// This is used when building an HTTP request fails (e.g., JSON serialization error).
+pub fn handle_request_error<M, E>(
+    model: &mut M,
+    action: &str,
+    error: impl std::fmt::Display,
+) -> crux_core::Command<crate::Effect, E>
+where
+    M: crate::model::ModelErrorHandler,
+    E: Send + 'static,
+{
+    model.set_error(format!("Failed to create {action} request: {error}"));
+    crux_core::render::render()
+}
+
 // Note: Unit tests for these helpers are not included because crux_http::Response
 // has a private constructor. These functions are integration-tested through the
 // macros that use them. If crux_http provides a test utility for constructing

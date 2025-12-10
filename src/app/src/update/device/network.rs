@@ -43,25 +43,23 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
                 "/network",
                 SetNetworkConfigResponse,
                 "Set network config",
-                body_string: config
+                body_string: config,
+                expect_json: crate::types::SetNetworkConfigResponse
             )
         }
-        Err(e) => {
-            model.set_error(format!("Invalid network config: {e}"));
-            crux_core::render::render()
-        }
+        Err(e) => model.set_error_and_render(format!("Invalid network config: {e}")),
     }
 }
 
 /// Handle network configuration response
 pub fn handle_set_network_config_response(
-    result: Result<(), String>,
+    result: Result<crate::types::SetNetworkConfigResponse, String>,
     model: &mut Model,
 ) -> Command<Effect, Event> {
     model.stop_loading();
 
     match result {
-        Ok(()) => {
+        Ok(response) => {
             // Check if we need to poll for new IP
             if let NetworkChangeState::ApplyingConfig { new_ip, .. } =
                 &model.network_change_state.clone()
@@ -69,15 +67,20 @@ pub fn handle_set_network_config_response(
                 model.network_change_state = NetworkChangeState::WaitingForNewIp {
                     new_ip: new_ip.clone(),
                     attempt: 0,
+                    rollback_timeout_seconds: response.rollback_timeout_seconds,
                 };
                 model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
 
                 // Set overlay spinner for IP change
                 model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
                     .with_text(
-                        "The network settings are applied. You will be forwarded to the new IP. \
-                         Log in to confirm the settings. If you do not log in within 90 seconds, \
-                         the IP will be reset.",
+                        format!(
+                            "The network settings are applied. You will be forwarded to the new IP. \
+                             Log in to confirm the settings. If you do not log in within {} seconds, \
+                             the IP will be reset.",
+                            response.rollback_timeout_seconds
+                        )
+                        .as_str(),
                     );
 
                 // Reset form state after successful submission
@@ -106,14 +109,21 @@ pub fn handle_set_network_config_response(
 
 /// Handle new IP check tick - polls new IP to see if it's reachable
 pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
-    if let NetworkChangeState::WaitingForNewIp { new_ip, attempt } = &model.network_change_state {
+    if let NetworkChangeState::WaitingForNewIp {
+        new_ip,
+        attempt,
+        rollback_timeout_seconds,
+    } = &model.network_change_state
+    {
         let new_ip = new_ip.clone();
         let new_attempt = *attempt + 1;
+        let timeout_secs = *rollback_timeout_seconds;
 
         // Update attempt counter
         model.network_change_state = NetworkChangeState::WaitingForNewIp {
             new_ip: new_ip.clone(),
             attempt: new_attempt,
+            rollback_timeout_seconds: timeout_secs,
         };
 
         // Try to reach the new IP (silent GET - no error shown on failure)
@@ -204,9 +214,6 @@ pub fn handle_network_form_update(
             }
             crux_core::render::render()
         }
-        Err(e) => {
-            model.set_error(format!("Invalid form data: {e}"));
-            crux_core::render::render()
-        }
+        Err(e) => model.set_error_and_render(format!("Invalid form data: {e}")),
     }
 }

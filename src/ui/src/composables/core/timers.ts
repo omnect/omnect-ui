@@ -36,7 +36,6 @@ const RECONNECTION_POLL_INTERVAL_MS = 5000 // 5 seconds
 const REBOOT_TIMEOUT_MS = 300000 // 5 minutes
 const FACTORY_RESET_TIMEOUT_MS = 600000 // 10 minutes
 const NEW_IP_POLL_INTERVAL_MS = 5000 // 5 seconds
-const NEW_IP_TIMEOUT_MS = 90000 // 90 seconds
 
 // ============================================================================
 // Timer IDs
@@ -98,12 +97,21 @@ export function stopReconnectionPolling(): void {
 
 /**
  * Start new IP polling after network config change
- * Sends NewIpCheckTick every 5 seconds and sets a 90-second timeout
+ * Sends NewIpCheckTick every 5 seconds and sets a timeout based on the backend's rollback timeout
  */
 export function startNewIpPolling(): void {
 	stopNewIpPolling() // Clear any existing timers
 
 	console.log('[useCore] Starting new IP polling')
+
+	// Get timeout from viewModel (provided by backend)
+	const state = viewModel.network_change_state
+	let timeoutMs = 90000 // Default fallback to 90 seconds
+
+	if (state && state.type === 'waiting_for_new_ip' && 'rollback_timeout_seconds' in state) {
+		timeoutMs = state.rollback_timeout_seconds * 1000 // Convert seconds to milliseconds
+		console.log(`[useCore] Using backend timeout: ${state.rollback_timeout_seconds}s`)
+	}
 
 	// Start polling interval
 	newIpIntervalId = setInterval(() => {
@@ -119,7 +127,7 @@ export function startNewIpPolling(): void {
 			sendEventCallback(new EventVariantDevice(new DeviceEventVariantNewIpCheckTimeout()))
 		}
 		stopNewIpPolling()
-	}, NEW_IP_TIMEOUT_MS)
+	}, timeoutMs)
 }
 
 /**
