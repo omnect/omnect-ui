@@ -11,6 +11,7 @@ useCoreInitialization()
 const tab = ref<string | null>(null)
 const showUnsavedChangesDialog = ref(false)
 const pendingTab = ref<string | null>(null)
+const isReverting = ref(false)
 
 const networkStatus = computed(() => viewModel.network_status)
 
@@ -25,12 +26,19 @@ const isCurrentConnection = (adapter: { readonly ipv4?: { readonly addrs?: reado
 watch(tab, (newTab, oldTab) => {
   if (newTab === oldTab) return
 
+  // Skip if this is a programmatic revert
+  if (isReverting.value) {
+    isReverting.value = false
+    return
+  }
+
   // Check if there are unsaved changes
   if (viewModel.network_form_dirty && oldTab !== null) {
     // Block the tab change and show confirmation dialog
     showUnsavedChangesDialog.value = true
     pendingTab.value = newTab as string
     // Revert tab back to old tab
+    isReverting.value = true
     tab.value = oldTab
   }
 })

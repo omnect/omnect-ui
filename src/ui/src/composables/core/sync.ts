@@ -169,6 +169,9 @@ export function updateViewModelFromCore(): void {
 		// Network form state
 		viewModel.network_form_state = convertNetworkFormState(coreViewModel.network_form_state)
 
+		// Network form dirty flag
+		viewModel.network_form_dirty = coreViewModel.network_form_dirty
+
 		// Firmware upload state
 		console.log('[sync] Raw upload state:', coreViewModel.firmware_upload_state, coreViewModel.firmware_upload_state.constructor.name)
 		viewModel.firmware_upload_state = convertUploadState(coreViewModel.firmware_upload_state)
