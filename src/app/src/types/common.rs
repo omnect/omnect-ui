@@ -43,6 +43,7 @@ pub struct OverlaySpinnerState {
     text: Option<String>,
     timed_out: bool,
     progress: Option<u8>,
+    countdown_seconds: Option<u32>,
 }
 
 impl OverlaySpinnerState {
@@ -54,6 +55,7 @@ impl OverlaySpinnerState {
             text: None,
             timed_out: false,
             progress: None,
+            countdown_seconds: None,
         }
     }
 
@@ -69,6 +71,12 @@ impl OverlaySpinnerState {
         self
     }
 
+    /// Builder pattern: add optional countdown to the spinner
+    pub fn with_countdown(mut self, seconds: u32) -> Self {
+        self.countdown_seconds = Some(seconds);
+        self
+    }
+
     /// Update the optional text message
     pub fn set_text(&mut self, text: impl Into<String>) {
         self.text = Some(text.into());
@@ -77,6 +85,11 @@ impl OverlaySpinnerState {
     /// Update the optional progress
     pub fn set_progress(&mut self, progress: u8) {
         self.progress = Some(progress);
+    }
+
+    /// Update the optional countdown
+    pub fn set_countdown(&mut self, seconds: u32) {
+        self.countdown_seconds = Some(seconds);
     }
 
     /// Mark the spinner as timed out
@@ -127,5 +140,10 @@ impl OverlaySpinnerState {
     /// Check if the spinner has timed out
     pub fn timed_out(&self) -> bool {
         self.timed_out
+    }
+
+    /// Get the optional countdown seconds
+    pub fn countdown_seconds(&self) -> Option<u32> {
+        self.countdown_seconds
     }
 }

@@ -1,15 +1,25 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 const props = defineProps<{
 	overlay: boolean
 	title: string
 	text?: string
 	timedOut: boolean
 	progress?: number
+	countdownSeconds?: number
 }>()
 
 const refresh = () => {
 	window.location.reload()
 }
+
+const formattedCountdown = computed(() => {
+	if (props.countdownSeconds === undefined) return null
+	const minutes = Math.floor(props.countdownSeconds / 60)
+	const seconds = props.countdownSeconds % 60
+	return `${minutes}:${seconds.toString().padStart(2, '0')}`
+})
 </script>
 
 <template>
@@ -25,6 +35,9 @@ const refresh = () => {
 					</template>
 				</v-progress-circular>
 				<p class="text-h6 m-t-4">{{ props.text }}</p>
+				<div v-if="formattedCountdown" class="text-h5 text-primary font-mono">
+					{{ formattedCountdown }}
+				</div>
 				<v-btn v-if="props.timedOut" text="Refresh" @click="refresh" />
 			</v-sheet>
 		</div>

@@ -74,17 +74,13 @@ pub fn handle_set_network_config_response(
                 };
                 model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
 
-                // Set overlay spinner for IP change
+                // Set overlay spinner for IP change with countdown
                 model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
                     .with_text(
-                        format!(
-                            "The network settings are applied. You will be forwarded to the new IP. \
-                             Log in to confirm the settings. If you do not log in within {} seconds, \
-                             the IP will be reset.",
-                            response.rollback_timeout_seconds
-                        )
-                        .as_str(),
-                    );
+                        "The network settings are being applied. You will be forwarded to the new IP. \
+                         Please log in to confirm the settings."
+                    )
+                    .with_countdown(response.rollback_timeout_seconds as u32);
 
                 // Reset form state after successful submission
                 model.network_form_state = NetworkFormState::Idle;
@@ -128,6 +124,12 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
             attempt: new_attempt,
             rollback_timeout_seconds: timeout_secs,
         };
+
+        // Update countdown in overlay spinner (polling every 5 seconds)
+        if let Some(current_countdown) = model.overlay_spinner.countdown_seconds() {
+            let new_countdown = current_countdown.saturating_sub(5);
+            model.overlay_spinner.set_countdown(new_countdown);
+        }
 
         // Try to reach the new IP (silent GET - no error shown on failure)
         let url = format!("http://{new_ip}/healthcheck");
