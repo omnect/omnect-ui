@@ -35,7 +35,7 @@ import {
 import { processEffects } from './effects'
 
 // Import timer management
-import { setEventSender as setTimerEventSender, initializeTimerWatchers } from './timers'
+import { setEventSender as setTimerEventSender, initializeTimerWatchers, checkPendingNetworkChange } from './timers'
 
 // Import Centrifugo
 import { setEventSender as setCentrifugoEventSender } from './centrifugo'
@@ -180,6 +180,9 @@ async function initializeCore(): Promise<void> {
 
 			// Only set initialized flag after WASM is fully loaded
 			isInitialized.value = true
+
+			// Check for pending network change from previous session
+			checkPendingNetworkChange()
 
 			// Send initial event
 			await sendEventToCore(new EventVariantInitialize())

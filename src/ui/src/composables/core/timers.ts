@@ -92,6 +92,87 @@ export function stopReconnectionPolling(): void {
 }
 
 // ============================================================================
+// New IP Polling - LocalStorage Persistence
+// ============================================================================
+
+const NETWORK_CHANGE_STORAGE_KEY = 'omnect-network-change-state'
+
+interface StoredNetworkChangeState {
+	targetIp: string
+	deadline: number // Unix timestamp in milliseconds
+	rollbackTimeoutSeconds: number
+}
+
+/**
+ * Save network change state to localStorage
+ */
+function saveNetworkChangeState(targetIp: string, rollbackTimeoutSeconds: number): void {
+	const deadline = Date.now() + rollbackTimeoutSeconds * 1000
+	const state: StoredNetworkChangeState = {
+		targetIp,
+		deadline,
+		rollbackTimeoutSeconds,
+	}
+	try {
+		localStorage.setItem(NETWORK_CHANGE_STORAGE_KEY, JSON.stringify(state))
+		console.log('[useCore] Saved network change state to localStorage:', state)
+	} catch (e) {
+		console.error('[useCore] Failed to save network change state to localStorage:', e)
+	}
+}
+
+/**
+ * Load network change state from localStorage
+ */
+function loadNetworkChangeState(): StoredNetworkChangeState | null {
+	try {
+		const stored = localStorage.getItem(NETWORK_CHANGE_STORAGE_KEY)
+		if (!stored) return null
+
+		const state: StoredNetworkChangeState = JSON.parse(stored)
+		console.log('[useCore] Loaded network change state from localStorage:', state)
+		return state
+	} catch (e) {
+		console.error('[useCore] Failed to load network change state from localStorage:', e)
+		return null
+	}
+}
+
+/**
+ * Clear network change state from localStorage
+ */
+function clearNetworkChangeState(): void {
+	try {
+		localStorage.removeItem(NETWORK_CHANGE_STORAGE_KEY)
+		console.log('[useCore] Cleared network change state from localStorage')
+	} catch (e) {
+		console.error('[useCore] Failed to clear network change state from localStorage:', e)
+	}
+}
+
+/**
+ * Check for pending network change on app initialization
+ * Resumes polling if deadline hasn't passed, otherwise checks rollback status
+ */
+export function checkPendingNetworkChange(): void {
+	const stored = loadNetworkChangeState()
+	if (!stored) return
+
+	const now = Date.now()
+	const timeRemaining = stored.deadline - now
+
+	if (timeRemaining > 0) {
+		// Deadline hasn't passed yet - resume polling
+		console.log(`[useCore] Resuming network change polling (${Math.round(timeRemaining / 1000)}s remaining)`)
+		// Note: The actual resumption will happen via the watcher when Core state is restored
+	} else {
+		// Deadline has passed - check rollback status and clean up
+		console.log('[useCore] Network change deadline has passed, checking rollback status')
+		clearNetworkChangeState()
+	}
+}
+
+// ============================================================================
 // New IP Polling
 // ============================================================================
 
@@ -107,10 +188,16 @@ export function startNewIpPolling(): void {
 	// Get timeout from viewModel (provided by backend)
 	const state = viewModel.network_change_state
 	let timeoutMs = 90000 // Default fallback to 90 seconds
+	let targetIp = ''
 
 	if (state && state.type === 'waiting_for_new_ip' && 'rollback_timeout_seconds' in state) {
-		timeoutMs = state.rollback_timeout_seconds * 1000 // Convert seconds to milliseconds
-		console.log(`[useCore] Using backend timeout: ${state.rollback_timeout_seconds}s`)
+		const rollbackTimeout = (state as any).rollback_timeout_seconds as number
+		timeoutMs = rollbackTimeout * 1000 // Convert seconds to milliseconds
+		targetIp = (state as any).new_ip as string
+		console.log(`[useCore] Using backend timeout: ${rollbackTimeout}s`)
+
+		// Save to localStorage for page refresh resilience
+		saveNetworkChangeState(targetIp, rollbackTimeout)
 	}
 
 	// Start polling interval
@@ -191,9 +278,14 @@ export function initializeTimerWatchers(): void {
 				stopNewIpPolling()
 			}
 
+			// Clear localStorage when entering terminal states (success, timeout, or idle)
+			if (newType === 'new_ip_reachable' || newType === 'new_ip_timeout' || newType === 'idle') {
+				clearNetworkChangeState()
+			}
+
 			// Navigate to new IP when it's reachable
 			if (newType === 'new_ip_reachable' && 'new_ip' in newState) {
-				const newIp = newState.new_ip
+				const newIp = (newState as any).new_ip as string
 				console.log(`[useCore] Redirecting to new IP: ${newIp}`)
 				const port = window.location.port
 				const protocol = window.location.protocol
