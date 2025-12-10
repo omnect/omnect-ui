@@ -35,6 +35,9 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
                 model.network_form_state = submitting;
             }
 
+            // Clear dirty flag when submitting
+            model.network_form_dirty = false;
+
             // Send the request to backend
             auth_post!(
                 Device,
@@ -190,6 +193,8 @@ pub fn handle_network_form_start_edit(
                 adapter_name: adapter_name.clone(),
                 form_data,
             };
+            // Clear dirty flag when starting a fresh edit
+            model.network_form_dirty = false;
         }
     }
 
@@ -211,6 +216,8 @@ pub fn handle_network_form_update(
                     adapter_name: adapter_name.clone(),
                     form_data,
                 };
+                // Mark form as dirty when user makes changes
+                model.network_form_dirty = true;
             }
             crux_core::render::render()
         }

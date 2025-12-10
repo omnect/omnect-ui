@@ -50,6 +50,9 @@ pub struct Model {
     // Network form state (editing without WebSocket interference)
     pub network_form_state: NetworkFormState,
 
+    // Network form dirty flag (tracks unsaved changes)
+    pub network_form_dirty: bool,
+
     // Firmware upload state
     pub firmware_upload_state: UploadState,
 

@@ -179,6 +179,9 @@ export interface ViewModel {
 	// Network form state (editing without WebSocket interference)
 	network_form_state: NetworkFormStateType
 
+	// Network form dirty flag (tracks unsaved changes)
+	network_form_dirty: boolean
+
 	// Firmware upload state
 	firmware_upload_state: UploadStateType
 
