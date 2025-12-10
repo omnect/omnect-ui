@@ -212,12 +212,49 @@ pub fn handle_network_form_update(
     match parsed {
         Ok(form_data) => {
             if let NetworkFormState::Editing { adapter_name, .. } = &model.network_form_state {
+                // Compare form data with original adapter data to determine if dirty
+                let is_dirty = if let Some(network_status) = &model.network_status {
+                    if let Some(adapter) = network_status
+                        .network_status
+                        .iter()
+                        .find(|n| n.name == *adapter_name)
+                    {
+                        // Build original form data from current network status
+                        let original_data = NetworkFormData {
+                            name: adapter.name.clone(),
+                            ip_address: adapter
+                                .ipv4
+                                .addrs
+                                .first()
+                                .map(|a| a.addr.clone())
+                                .unwrap_or_default(),
+                            dhcp: adapter.ipv4.addrs.first().map(|a| a.dhcp).unwrap_or(false),
+                            prefix_len: adapter
+                                .ipv4
+                                .addrs
+                                .first()
+                                .map(|a| a.prefix_len)
+                                .unwrap_or(24),
+                            dns: adapter.ipv4.dns.clone(),
+                            gateways: adapter.ipv4.gateways.clone(),
+                        };
+
+                        // Form is dirty if current data differs from original
+                        form_data != original_data
+                    } else {
+                        // If we can't find the adapter, assume dirty
+                        true
+                    }
+                } else {
+                    // If we don't have network status, assume dirty
+                    true
+                };
+
                 model.network_form_state = NetworkFormState::Editing {
                     adapter_name: adapter_name.clone(),
                     form_data,
                 };
-                // Mark form as dirty when user makes changes
-                model.network_form_dirty = true;
+                model.network_form_dirty = is_dirty;
             }
             crux_core::render::render()
         }
