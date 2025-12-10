@@ -13,6 +13,7 @@ const { isValidIp: validateIp, parseNetmask } = useIPValidation()
 
 const props = defineProps<{
     networkAdapter: DeviceNetwork
+    isCurrentConnection: boolean
 }>()
 
 const ipAddress = ref(props.networkAdapter?.ipv4?.addrs[0]?.addr || "")
@@ -160,7 +161,7 @@ const submit = async () => {
         <v-form @submit.prevent="submit" class="flex flex-col gap-y-4 ml-4">
             <v-chip size="large" class="ma-2" label
                 :color="props.networkAdapter.online ? 'light-green-darken-2' : 'red-darken-2'">
-                {{ props.networkAdapter.online ? "Online" : "Offline" }}
+                {{ props.networkAdapter.online ? "Online" : "Offline" }}{{ props.isCurrentConnection && props.networkAdapter.online ? " (current connection)" : "" }}
             </v-chip>
             <v-radio-group v-model="addressAssignment" inline>
                 <v-radio label="DHCP" value="dhcp"></v-radio>

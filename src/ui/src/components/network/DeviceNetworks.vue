@@ -16,10 +16,31 @@ const isReverting = ref(false)
 const networkStatus = computed(() => viewModel.network_status)
 
 // Determine if an adapter is the current connection by comparing browser hostname with adapter IPs
-const isCurrentConnection = (adapter: { readonly ipv4?: { readonly addrs?: readonly { readonly addr: string }[] } }) => {
+const isCurrentConnection = (adapter: any) => {
   const hostname = window.location.hostname
   if (!adapter.ipv4?.addrs) return false
-  return adapter.ipv4.addrs.some(ip => ip.addr === hostname)
+
+  // Check if any of the adapter's IPs match the browser's hostname
+  const directMatch = adapter.ipv4.addrs.some((ip: any) => ip.addr === hostname)
+
+  if (directMatch) {
+    return true
+  }
+
+  // If hostname is not an IP (e.g., "omnect-device"), we can't determine which adapter
+  // So mark the first online adapter with an IP as the current connection
+  const isHostnameAnIP = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname)
+  if (!isHostnameAnIP && adapter.online && adapter.ipv4.addrs.length > 0) {
+    // Check if this is the first online adapter
+    const allAdapters = networkStatus.value?.network_status || []
+    const firstOnlineAdapter = allAdapters.find((a: any) => a.online && a.ipv4?.addrs?.length > 0)
+
+    if (firstOnlineAdapter?.name === adapter.name) {
+      return true
+    }
+  }
+
+  return false
 }
 
 // Watch for tab changes and check for unsaved changes
@@ -76,8 +97,7 @@ const cancelTabChange = () => {
     <div class="d-flex flex-row">
       <v-tabs v-model="tab" color="primary" direction="vertical">
         <v-tab v-for="networkAdapter in networkStatus?.network_status" :text="networkAdapter.name"
-          :value="networkAdapter.name"
-          :class="{ 'current-connection': isCurrentConnection(networkAdapter) }"></v-tab>
+          :value="networkAdapter.name"></v-tab>
       </v-tabs>
       <v-window v-model="tab" class="w[20vw]" direction="vertical">
         <v-window-item v-for="networkAdapter in networkStatus?.network_status" :value="networkAdapter.name">
@@ -102,9 +122,3 @@ const cancelTabChange = () => {
     </v-dialog>
   </div>
 </template>
-
-<style scoped>
-.current-connection {
-  background-color: rgba(var(--color-primary-rgb), 0.15);
-}
-</style>
