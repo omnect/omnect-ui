@@ -66,10 +66,11 @@ const cancelTabChange = () => {
 onBeforeRouteLeave((_to, _from, next) => {
   if (viewModel.network_form_dirty) {
     showNavigationDialog.value = true
-    pendingNavigation = () => next() // Save the next callback
-    return false // Block navigation initially
+    pendingNavigation = () => next() // Save the next callback to be called after confirmation
+    next(false) // Block navigation
+  } else {
+    next() // Allow navigation
   }
-  next() // Allow navigation
 })
 
 const confirmNavigation = () => {
