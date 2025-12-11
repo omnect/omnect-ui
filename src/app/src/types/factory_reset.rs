@@ -1,20 +1,15 @@
 use serde::{Deserialize, Serialize};
 
 /// Factory reset operation status
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum FactoryResetStatus {
+    #[default]
     Unknown,
     ModeSupported,
     ModeUnsupported,
     BackupRestoreError,
     ConfigurationError,
-}
-
-impl Default for FactoryResetStatus {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 /// Result of factory reset operation

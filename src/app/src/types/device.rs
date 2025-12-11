@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 /// State of long-running device operations (reboot, factory reset, update)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum DeviceOperationState {
+    #[default]
     Idle,
     Rebooting,
     FactoryResetting,
@@ -11,12 +12,6 @@ pub enum DeviceOperationState {
     WaitingReconnection { operation: String, attempt: u32 },
     ReconnectionFailed { operation: String, reason: String },
     ReconnectionSuccessful { operation: String },
-}
-
-impl Default for DeviceOperationState {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 impl DeviceOperationState {

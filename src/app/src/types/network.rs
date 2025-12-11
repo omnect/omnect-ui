@@ -60,9 +60,10 @@ pub struct NetworkFormData {
 }
 
 /// State of network form (to prevent WebSocket interference)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum NetworkFormState {
+    #[default]
     Idle,
     Editing {
         adapter_name: String,
@@ -72,12 +73,6 @@ pub enum NetworkFormState {
         adapter_name: String,
         form_data: NetworkFormData,
     },
-}
-
-impl Default for NetworkFormState {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 impl NetworkFormState {
@@ -115,9 +110,10 @@ impl NetworkFormState {
 }
 
 /// State of network IP change after configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum NetworkChangeState {
+    #[default]
     Idle,
     ApplyingConfig {
         is_server_addr: bool,
@@ -136,12 +132,6 @@ pub enum NetworkChangeState {
     NewIpTimeout {
         new_ip: String,
     },
-}
-
-impl Default for NetworkChangeState {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 /// Response from backend when setting network configuration
