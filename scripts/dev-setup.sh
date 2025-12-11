@@ -9,6 +9,9 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
+# Unified build image with Rust, Node, pnpm, and bun
+BUILD_IMAGE="omnectshareddevacr.azurecr.io/rust:bookworm"
+
 echo "🔧 Running development setup..."
 
 # Check if omnect-device-service is running
@@ -28,24 +31,17 @@ echo -n "Stopping existing centrifugo processes... "
 killall centrifugo 2>/dev/null || true
 echo -e "${GREEN}✓${NC}"
 
-# Build WASM module
-echo -n "Building WASM module... "
-cd src/app
-wasm-pack build --target web --out-dir ../ui/src/core/pkg >/dev/null 2>&1
-cd ../..
-echo -e "${GREEN}✓${NC}"
-
-# Generate TypeScript types
-echo -n "Generating TypeScript types... "
-./scripts/generate-types.sh >/dev/null 2>&1
-echo -e "${GREEN}✓${NC}"
-
-# Build UI
-echo -n "Building UI... "
-cd src/ui
-pnpm run build >/dev/null 2>&1
-cd ../..
-echo -e "${GREEN}✓${NC}"
+# Build frontend in Docker
+echo "Building frontend using ${BUILD_IMAGE}..."
+docker run --rm \
+    -v "$(pwd):/work" \
+    -w /work \
+    -e CI=true \
+    "${BUILD_IMAGE}" \
+    /bin/bash -c "
+        ./scripts/build-frontend.sh
+        chown -R $(id -u):$(id -g) .
+    "
 
 echo -e "${GREEN}✅ Development setup complete!${NC}"
 echo ""
