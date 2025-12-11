@@ -19,7 +19,7 @@
       },
       "args": [],
       "cwd": "${workspaceFolder}",
-      "preLaunchTask": "run_dev_setup",
+      "preLaunchTask": "check_ods_and_centrifugo",
       "env": {
         "RUST_LOG": "omnect_ui=debug",
         "SOCKET_PATH": "/tmp/api.sock",

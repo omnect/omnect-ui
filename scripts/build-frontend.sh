@@ -18,7 +18,9 @@ echo -e "${GREEN}✓${NC}"
 
 # Generate TypeScript types
 echo -n "Generating TypeScript types... "
-./scripts/generate-types.sh >/dev/null 2>&1
+cargo build -p shared_types >/dev/null 2>&1
+# Remove .js files to force Vite to use .ts sources
+find src/shared_types/generated/typescript -name "*.js" -delete
 echo -e "${GREEN}✓${NC}"
 
 # Build UI
