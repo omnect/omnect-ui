@@ -96,6 +96,7 @@ struct Rollback {
 #[serde(rename_all = "camelCase")]
 pub struct SetNetworkConfigResponse {
     pub rollback_timeout_seconds: u64,
+    pub ui_port: u16,
 }
 
 // ============================================================================
@@ -146,6 +147,7 @@ impl NetworkConfigService {
 
         Ok(SetNetworkConfigResponse {
             rollback_timeout_seconds: ROLLBACK_TIMEOUT_SECS,
+            ui_port: crate::config::AppConfig::get().ui.port,
         })
     }
 

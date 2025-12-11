@@ -45,6 +45,7 @@ let reconnectionIntervalId: ReturnType<typeof setInterval> | null = null
 let reconnectionTimeoutId: ReturnType<typeof setTimeout> | null = null
 let newIpIntervalId: ReturnType<typeof setInterval> | null = null
 let newIpTimeoutId: ReturnType<typeof setTimeout> | null = null
+let newIpCountdownIntervalId: ReturnType<typeof setInterval> | null = null
 
 // ============================================================================
 // Reconnection Polling
@@ -200,12 +201,19 @@ export function startNewIpPolling(): void {
 		saveNetworkChangeState(targetIp, rollbackTimeout)
 	}
 
-	// Start polling interval
+	// Start polling interval (every 5 seconds)
 	newIpIntervalId = setInterval(() => {
 		if (isInitialized.value && wasmModule && sendEventCallback) {
 			sendEventCallback(new EventVariantDevice(new DeviceEventVariantNewIpCheckTick()))
 		}
 	}, NEW_IP_POLL_INTERVAL_MS)
+
+	// Start countdown interval (every 1 second for UI countdown)
+	newIpCountdownIntervalId = setInterval(() => {
+		if (viewModel.overlay_spinner.countdown_seconds !== null && viewModel.overlay_spinner.countdown_seconds > 0) {
+			viewModel.overlay_spinner.countdown_seconds -= 1
+		}
+	}, 1000)
 
 	// Set timeout
 	newIpTimeoutId = setTimeout(() => {
@@ -224,6 +232,10 @@ export function stopNewIpPolling(): void {
 	if (newIpIntervalId !== null) {
 		clearInterval(newIpIntervalId)
 		newIpIntervalId = null
+	}
+	if (newIpCountdownIntervalId !== null) {
+		clearInterval(newIpCountdownIntervalId)
+		newIpCountdownIntervalId = null
 	}
 	if (newIpTimeoutId !== null) {
 		clearTimeout(newIpTimeoutId)
@@ -284,12 +296,12 @@ export function initializeTimerWatchers(): void {
 			}
 
 			// Navigate to new IP when it's reachable
-			if (newType === 'new_ip_reachable' && 'new_ip' in newState) {
+			if (newType === 'new_ip_reachable' && 'new_ip' in newState && 'ui_port' in newState) {
 				const newIp = (newState as any).new_ip as string
-				console.log(`[useCore] Redirecting to new IP: ${newIp}`)
-				const port = window.location.port
-				const protocol = window.location.protocol
-				window.location.replace(`${protocol}//${newIp}${port ? `:${port}` : ''}`)
+				const uiPort = (newState as any).ui_port as number
+				console.log(`[useCore] Redirecting to new IP: ${newIp}:${uiPort}`)
+				// Use HTTPS (server only listens on HTTPS)
+				window.location.href = `https://${newIp}:${uiPort}`
 			}
 		},
 		{ deep: true }

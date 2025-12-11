@@ -111,6 +111,8 @@ export interface OverlaySpinnerStateType {
 	text: string | null
 	timed_out: boolean
 	progress: number | null
+	countdown_seconds: number | null
+	redirect_url: string | null
 }
 
 export type FactoryResetStatusString = 'unknown' | 'mode_supported' | 'mode_unsupported' | 'backup_restore_error' | 'configuration_error'

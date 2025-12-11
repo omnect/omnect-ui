@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 
 const props = defineProps<{
 	overlay: boolean
@@ -8,10 +8,27 @@ const props = defineProps<{
 	timedOut: boolean
 	progress?: number
 	countdownSeconds?: number
+	redirectUrl?: string
 }>()
 
 const refresh = () => {
 	window.location.reload()
+}
+
+const navigateToRedirectUrl = () => {
+	console.log('[OverlaySpinner] Navigate clicked, redirectUrl:', props.redirectUrl)
+	if (props.redirectUrl) {
+		console.log('[OverlaySpinner] Opening new tab to:', props.redirectUrl)
+		// Open in new tab - allows user to accept self-signed certificate
+		// Once accepted, user can close the tab with cert warning and click again to navigate in current window
+		const opened = window.open(props.redirectUrl, '_blank')
+		if (!opened) {
+			console.warn('[OverlaySpinner] Popup blocked, trying direct navigation')
+			window.location.href = props.redirectUrl
+		}
+	} else {
+		console.warn('[OverlaySpinner] No redirectUrl provided')
+	}
 }
 
 const formattedCountdown = computed(() => {
@@ -20,6 +37,11 @@ const formattedCountdown = computed(() => {
 	const seconds = props.countdownSeconds % 60
 	return `${minutes}:${seconds.toString().padStart(2, '0')}`
 })
+
+// Debug watcher
+watch(() => props.redirectUrl, (newUrl) => {
+	console.log('[OverlaySpinner] redirectUrl changed to:', newUrl)
+}, { immediate: true })
 </script>
 
 <template>
@@ -38,6 +60,9 @@ const formattedCountdown = computed(() => {
 				<div v-if="formattedCountdown" class="text-h5 text-primary font-mono">
 					{{ formattedCountdown }}
 				</div>
+				<v-btn v-if="props.redirectUrl && !props.timedOut" color="primary" @click="navigateToRedirectUrl">
+					Open new address in new tab
+				</v-btn>
 				<v-btn v-if="props.timedOut" text="Refresh" @click="refresh" />
 			</v-sheet>
 		</div>

@@ -158,17 +158,19 @@ pub fn handle_healthcheck_response(
     }
 
     // Handle network change state machine for IP change polling
-    if let NetworkChangeState::WaitingForNewIp { new_ip, .. } = &model.network_change_state {
+    if let NetworkChangeState::WaitingForNewIp { new_ip, ui_port, .. } = &model.network_change_state {
         if result.is_ok() {
-            // Clone new_ip before reassigning state to avoid borrow conflict
+            // Clone values before reassigning state to avoid borrow conflict
             let new_ip = new_ip.clone();
+            let port = *ui_port;
             // New IP is reachable
             model.network_change_state = NetworkChangeState::NewIpReachable {
                 new_ip: new_ip.clone(),
+                ui_port: port,
             };
             // Update overlay for redirect
             model.overlay_spinner = OverlaySpinnerState::new("Network settings applied")
-                .with_text(format!("Redirecting to new IP: {new_ip}"));
+                .with_text(format!("Redirecting to new IP: {new_ip}:{port}"));
         }
     }
 

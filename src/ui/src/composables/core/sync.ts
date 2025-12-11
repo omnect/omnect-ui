@@ -186,6 +186,10 @@ export function updateViewModelFromCore(): void {
 			progress: coreViewModel.overlay_spinner.progress !== null && coreViewModel.overlay_spinner.progress !== undefined
 				? coreViewModel.overlay_spinner.progress
 				: null,
+			countdown_seconds: coreViewModel.overlay_spinner.countdown_seconds !== null && coreViewModel.overlay_spinner.countdown_seconds !== undefined
+				? coreViewModel.overlay_spinner.countdown_seconds
+				: null,
+			redirect_url: coreViewModel.overlay_spinner.redirect_url || null,
 		}
 
 		// Auto-subscribe logic based on authentication state transition

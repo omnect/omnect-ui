@@ -67,20 +67,23 @@ pub fn handle_set_network_config_response(
             if let NetworkChangeState::ApplyingConfig { new_ip, .. } =
                 &model.network_change_state.clone()
             {
+                let new_ip_url = format!("https://{new_ip}:{}", response.ui_port);
                 model.network_change_state = NetworkChangeState::WaitingForNewIp {
                     new_ip: new_ip.clone(),
                     attempt: 0,
                     rollback_timeout_seconds: response.rollback_timeout_seconds,
+                    ui_port: response.ui_port,
                 };
                 model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
 
-                // Set overlay spinner for IP change with countdown
+                // Set overlay spinner for IP change with countdown and redirect URL
                 model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
                     .with_text(
-                        "The network settings are being applied. You will be forwarded to the new IP. \
-                         Please log in to confirm the settings."
+                        "Network configuration is being applied. Click the button below to open the new address in a new tab. \
+                         You must access the new address to cancel the automatic rollback."
                     )
-                    .with_countdown(response.rollback_timeout_seconds as u32);
+                    .with_countdown(response.rollback_timeout_seconds as u32)
+                    .with_redirect_url(new_ip_url);
 
                 // Reset form state after successful submission
                 model.network_form_state = NetworkFormState::Idle;
@@ -112,27 +115,25 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
         new_ip,
         attempt,
         rollback_timeout_seconds,
+        ui_port,
     } = &model.network_change_state
     {
         let new_ip = new_ip.clone();
         let new_attempt = *attempt + 1;
         let timeout_secs = *rollback_timeout_seconds;
+        let port = *ui_port;
 
         // Update attempt counter
         model.network_change_state = NetworkChangeState::WaitingForNewIp {
             new_ip: new_ip.clone(),
             attempt: new_attempt,
             rollback_timeout_seconds: timeout_secs,
+            ui_port: port,
         };
 
-        // Update countdown in overlay spinner (polling every 5 seconds)
-        if let Some(current_countdown) = model.overlay_spinner.countdown_seconds() {
-            let new_countdown = current_countdown.saturating_sub(5);
-            model.overlay_spinner.set_countdown(new_countdown);
-        }
-
         // Try to reach the new IP (silent GET - no error shown on failure)
-        let url = format!("http://{new_ip}/healthcheck");
+        // Use HTTPS since the server only listens on HTTPS
+        let url = format!("https://{new_ip}:{port}/healthcheck");
         http_get_silent!(
             url,
             on_success: Event::Device(DeviceEvent::HealthcheckResponse(Ok(HealthcheckInfo::default()))),
@@ -145,15 +146,21 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
 
 /// Handle new IP check timeout - new IP didn't become reachable in time
 pub fn handle_new_ip_check_timeout(model: &mut Model) -> Command<Effect, Event> {
-    if let NetworkChangeState::WaitingForNewIp { new_ip, .. } = &model.network_change_state {
+    if let NetworkChangeState::WaitingForNewIp { new_ip, ui_port, .. } = &model.network_change_state {
+        let new_ip_url = format!("https://{new_ip}:{ui_port}");
         model.network_change_state = NetworkChangeState::NewIpTimeout {
             new_ip: new_ip.clone(),
+            ui_port: *ui_port,
         };
 
-        // Update overlay spinner to show timeout
-        model
-            .overlay_spinner
-            .set_text("New IP not reachable within 90 seconds. Settings may have been reverted.");
+        // Update overlay spinner to show timeout with manual link
+        model.overlay_spinner.set_text(
+            format!(
+                "Automatic rollback will occur soon. The network settings were not confirmed at the new address. \
+                 Please navigate to: {new_ip_url}"
+            )
+            .as_str(),
+        );
         model.overlay_spinner.set_timed_out();
     }
 

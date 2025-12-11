@@ -97,7 +97,8 @@ onMounted(async () => {
       <OverlaySpinner :overlay="overlaySpinnerState.overlay" :title="overlaySpinnerState.title"
         :text="overlaySpinnerState.text || undefined" :timed-out="overlaySpinnerState.timed_out"
         :progress="overlaySpinnerState.progress || undefined"
-        :countdown-seconds="overlaySpinnerState.countdown_seconds || undefined" />
+        :countdown-seconds="overlaySpinnerState.countdown_seconds || undefined"
+        :redirect-url="overlaySpinnerState.redirect_url || undefined" />
     </v-main>
   </v-app>
 </template>

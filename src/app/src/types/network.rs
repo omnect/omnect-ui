@@ -125,12 +125,15 @@ pub enum NetworkChangeState {
         new_ip: String,
         attempt: u32,
         rollback_timeout_seconds: u64,
+        ui_port: u16,
     },
     NewIpReachable {
         new_ip: String,
+        ui_port: u16,
     },
     NewIpTimeout {
         new_ip: String,
+        ui_port: u16,
     },
 }
 
@@ -139,4 +142,5 @@ pub enum NetworkChangeState {
 #[serde(rename_all = "camelCase")]
 pub struct SetNetworkConfigResponse {
     pub rollback_timeout_seconds: u64,
+    pub ui_port: u16,
 }

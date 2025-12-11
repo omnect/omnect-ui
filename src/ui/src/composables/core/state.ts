@@ -45,7 +45,7 @@ export const viewModel = reactive<ViewModel>({
 	// Firmware upload state
 	firmware_upload_state: { type: 'idle' },
 	// Overlay spinner state
-	overlay_spinner: { overlay: false, title: '', text: null, timed_out: false, progress: null },
+	overlay_spinner: { overlay: false, title: '', text: null, timed_out: false, progress: null, countdown_seconds: null, redirect_url: null },
 })
 
 /**
