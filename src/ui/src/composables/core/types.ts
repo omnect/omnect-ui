@@ -81,9 +81,9 @@ export type DeviceOperationStateType =
 export type NetworkChangeStateType =
 	| { type: 'idle' }
 	| { type: 'applying_config'; is_server_addr: boolean; ip_changed: boolean; new_ip: string; old_ip: string }
-	| { type: 'waiting_for_new_ip'; new_ip: string; attempt: number }
-	| { type: 'new_ip_reachable'; new_ip: string }
-	| { type: 'new_ip_timeout'; new_ip: string }
+	| { type: 'waiting_for_new_ip'; new_ip: string; attempt: number; ui_port: number; rollback_timeout_seconds: number }
+	| { type: 'new_ip_reachable'; new_ip: string; ui_port: number }
+	| { type: 'new_ip_timeout'; new_ip: string; ui_port: number }
 
 export type NetworkFormStateType =
 	| { type: 'idle' }
@@ -112,7 +112,6 @@ export interface OverlaySpinnerStateType {
 	timed_out: boolean
 	progress: number | null
 	countdown_seconds: number | null
-	redirect_url: string | null
 }
 
 export type FactoryResetStatusString = 'unknown' | 'mode_supported' | 'mode_unsupported' | 'backup_restore_error' | 'configuration_error'
@@ -271,13 +270,13 @@ export function convertNetworkChangeState(state: NetworkChangeState): NetworkCha
 		}
 	}
 	if (state instanceof NetworkChangeStateVariantwaiting_for_new_ip) {
-		return { type: 'waiting_for_new_ip', new_ip: state.new_ip, attempt: state.attempt }
+		return { type: 'waiting_for_new_ip', new_ip: state.new_ip, attempt: state.attempt, ui_port: state.ui_port, rollback_timeout_seconds: Number(state.rollback_timeout_seconds) }
 	}
 	if (state instanceof NetworkChangeStateVariantnew_ip_reachable) {
-		return { type: 'new_ip_reachable', new_ip: state.new_ip }
+		return { type: 'new_ip_reachable', new_ip: state.new_ip, ui_port: state.ui_port }
 	}
 	if (state instanceof NetworkChangeStateVariantnew_ip_timeout) {
-		return { type: 'new_ip_timeout', new_ip: state.new_ip }
+		return { type: 'new_ip_timeout', new_ip: state.new_ip, ui_port: state.ui_port }
 	}
 	return { type: 'idle' }
 }

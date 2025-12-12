@@ -47,6 +47,9 @@ let newIpIntervalId: ReturnType<typeof setInterval> | null = null
 let newIpTimeoutId: ReturnType<typeof setTimeout> | null = null
 let newIpCountdownIntervalId: ReturnType<typeof setInterval> | null = null
 
+// Countdown deadline (Unix timestamp in milliseconds)
+let countdownDeadline: number | null = null
+
 // ============================================================================
 // Reconnection Polling
 // ============================================================================
@@ -188,18 +191,20 @@ export function startNewIpPolling(): void {
 
 	// Get timeout from viewModel (provided by backend)
 	const state = viewModel.network_change_state
-	let timeoutMs = 90000 // Default fallback to 90 seconds
-	let targetIp = ''
-
-	if (state && state.type === 'waiting_for_new_ip' && 'rollback_timeout_seconds' in state) {
-		const rollbackTimeout = (state as any).rollback_timeout_seconds as number
-		timeoutMs = rollbackTimeout * 1000 // Convert seconds to milliseconds
-		targetIp = (state as any).new_ip as string
-		console.log(`[useCore] Using backend timeout: ${rollbackTimeout}s`)
-
-		// Save to localStorage for page refresh resilience
-		saveNetworkChangeState(targetIp, rollbackTimeout)
+	if (state?.type !== 'waiting_for_new_ip') {
+		console.warn('[useCore] startNewIpPolling called but state is not waiting_for_new_ip:', state)
+		return
 	}
+
+	const rollbackTimeout = state.rollback_timeout_seconds
+	const timeoutMs = rollbackTimeout * 1000 // Convert seconds to milliseconds
+	const targetIp = state.new_ip
+
+	// Save to localStorage for page refresh resilience
+	saveNetworkChangeState(targetIp, rollbackTimeout)
+
+	// Set countdown deadline
+	countdownDeadline = Date.now() + timeoutMs
 
 	// Start polling interval (every 5 seconds)
 	newIpIntervalId = setInterval(() => {
@@ -209,9 +214,12 @@ export function startNewIpPolling(): void {
 	}, NEW_IP_POLL_INTERVAL_MS)
 
 	// Start countdown interval (every 1 second for UI countdown)
+	// Calculate remaining seconds from deadline instead of decrementing
 	newIpCountdownIntervalId = setInterval(() => {
-		if (viewModel.overlay_spinner.countdown_seconds !== null && viewModel.overlay_spinner.countdown_seconds > 0) {
-			viewModel.overlay_spinner.countdown_seconds -= 1
+		if (countdownDeadline !== null) {
+			const remainingMs = Math.max(0, countdownDeadline - Date.now())
+			const remainingSeconds = Math.ceil(remainingMs / 1000)
+			viewModel.overlay_spinner.countdown_seconds = remainingSeconds
 		}
 	}, 1000)
 
@@ -241,6 +249,8 @@ export function stopNewIpPolling(): void {
 		clearTimeout(newIpTimeoutId)
 		newIpTimeoutId = null
 	}
+	// Clear countdown deadline
+	countdownDeadline = null
 }
 
 // ============================================================================
@@ -281,12 +291,12 @@ export function initializeTimerWatchers(): void {
 			const newType = newState?.type
 			const oldType = oldState?.type
 
-			// Start polling when entering waiting_for_new_ip state
-			if (newType === 'waiting_for_new_ip') {
+			// Start polling ONLY when transitioning into waiting_for_new_ip state
+			if (newType === 'waiting_for_new_ip' && oldType !== 'waiting_for_new_ip') {
 				startNewIpPolling()
 			}
 			// Stop polling when leaving waiting_for_new_ip state
-			else if (oldType === 'waiting_for_new_ip') {
+			else if (oldType === 'waiting_for_new_ip' && newType !== 'waiting_for_new_ip') {
 				stopNewIpPolling()
 			}
 
@@ -296,12 +306,10 @@ export function initializeTimerWatchers(): void {
 			}
 
 			// Navigate to new IP when it's reachable
-			if (newType === 'new_ip_reachable' && 'new_ip' in newState && 'ui_port' in newState) {
-				const newIp = (newState as any).new_ip as string
-				const uiPort = (newState as any).ui_port as number
-				console.log(`[useCore] Redirecting to new IP: ${newIp}:${uiPort}`)
+			if (newState?.type === 'new_ip_reachable') {
+				console.log(`[useCore] Redirecting to new IP: ${newState.new_ip}:${newState.ui_port}`)
 				// Use HTTPS (server only listens on HTTPS)
-				window.location.href = `https://${newIp}:${uiPort}`
+				window.location.href = `https://${newState.new_ip}:${newState.ui_port}`
 			}
 		},
 		{ deep: true }

@@ -173,11 +173,13 @@ export function updateViewModelFromCore(): void {
 		viewModel.network_form_dirty = coreViewModel.network_form_dirty
 
 		// Firmware upload state
-		console.log('[sync] Raw upload state:', coreViewModel.firmware_upload_state, coreViewModel.firmware_upload_state.constructor.name)
 		viewModel.firmware_upload_state = convertUploadState(coreViewModel.firmware_upload_state)
-		console.log('[sync] Converted upload state:', viewModel.firmware_upload_state)
 
 		// Overlay spinner state
+		// Preserve countdown_seconds if it's being actively managed by the Shell (network change polling)
+		const isNetworkChangeActive = viewModel.network_change_state.type === 'waiting_for_new_ip'
+		const preserveCountdown = isNetworkChangeActive && viewModel.overlay_spinner.countdown_seconds !== null
+
 		viewModel.overlay_spinner = {
 			overlay: coreViewModel.overlay_spinner.overlay,
 			title: coreViewModel.overlay_spinner.title,
@@ -186,10 +188,11 @@ export function updateViewModelFromCore(): void {
 			progress: coreViewModel.overlay_spinner.progress !== null && coreViewModel.overlay_spinner.progress !== undefined
 				? coreViewModel.overlay_spinner.progress
 				: null,
-			countdown_seconds: coreViewModel.overlay_spinner.countdown_seconds !== null && coreViewModel.overlay_spinner.countdown_seconds !== undefined
-				? coreViewModel.overlay_spinner.countdown_seconds
-				: null,
-			redirect_url: coreViewModel.overlay_spinner.redirect_url || null,
+			countdown_seconds: preserveCountdown
+				? viewModel.overlay_spinner.countdown_seconds // Keep Shell's calculated value
+				: (coreViewModel.overlay_spinner.countdown_seconds !== null && coreViewModel.overlay_spinner.countdown_seconds !== undefined
+					? coreViewModel.overlay_spinner.countdown_seconds
+					: null),
 		}
 
 		// Auto-subscribe logic based on authentication state transition

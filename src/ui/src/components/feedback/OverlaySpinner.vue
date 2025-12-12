@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed } from 'vue'
 
 const props = defineProps<{
 	overlay: boolean
@@ -16,18 +16,14 @@ const refresh = () => {
 }
 
 const navigateToRedirectUrl = () => {
-	console.log('[OverlaySpinner] Navigate clicked, redirectUrl:', props.redirectUrl)
 	if (props.redirectUrl) {
-		console.log('[OverlaySpinner] Opening new tab to:', props.redirectUrl)
 		// Open in new tab - allows user to accept self-signed certificate
 		// Once accepted, user can close the tab with cert warning and click again to navigate in current window
 		const opened = window.open(props.redirectUrl, '_blank')
 		if (!opened) {
-			console.warn('[OverlaySpinner] Popup blocked, trying direct navigation')
+			// Fallback if popup blocked
 			window.location.href = props.redirectUrl
 		}
-	} else {
-		console.warn('[OverlaySpinner] No redirectUrl provided')
 	}
 }
 
@@ -37,11 +33,6 @@ const formattedCountdown = computed(() => {
 	const seconds = props.countdownSeconds % 60
 	return `${minutes}:${seconds.toString().padStart(2, '0')}`
 })
-
-// Debug watcher
-watch(() => props.redirectUrl, (newUrl) => {
-	console.log('[OverlaySpinner] redirectUrl changed to:', newUrl)
-}, { immediate: true })
 </script>
 
 <template>
