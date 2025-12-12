@@ -44,7 +44,6 @@ pub struct OverlaySpinnerState {
     timed_out: bool,
     progress: Option<u8>,
     countdown_seconds: Option<u32>,
-    redirect_url: Option<String>,
 }
 
 impl OverlaySpinnerState {
@@ -57,7 +56,6 @@ impl OverlaySpinnerState {
             timed_out: false,
             progress: None,
             countdown_seconds: None,
-            redirect_url: None,
         }
     }
 
@@ -79,20 +77,9 @@ impl OverlaySpinnerState {
         self
     }
 
-    /// Builder pattern: add optional redirect URL to the spinner
-    pub fn with_redirect_url(mut self, url: impl Into<String>) -> Self {
-        self.redirect_url = Some(url.into());
-        self
-    }
-
     /// Update the optional text message
     pub fn set_text(&mut self, text: impl Into<String>) {
         self.text = Some(text.into());
-    }
-
-    /// Update the optional redirect URL
-    pub fn set_redirect_url(&mut self, url: impl Into<String>) {
-        self.redirect_url = Some(url.into());
     }
 
     /// Update the optional progress
@@ -158,10 +145,5 @@ impl OverlaySpinnerState {
     /// Get the optional countdown seconds
     pub fn countdown_seconds(&self) -> Option<u32> {
         self.countdown_seconds
-    }
-
-    /// Get the optional redirect URL
-    pub fn redirect_url(&self) -> Option<&str> {
-        self.redirect_url.as_deref()
     }
 }

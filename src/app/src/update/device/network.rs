@@ -67,7 +67,6 @@ pub fn handle_set_network_config_response(
             if let NetworkChangeState::ApplyingConfig { new_ip, .. } =
                 &model.network_change_state.clone()
             {
-                let new_ip_url = format!("https://{new_ip}:{}", response.ui_port);
                 model.network_change_state = NetworkChangeState::WaitingForNewIp {
                     new_ip: new_ip.clone(),
                     attempt: 0,
@@ -76,14 +75,14 @@ pub fn handle_set_network_config_response(
                 };
                 model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
 
-                // Set overlay spinner for IP change with countdown and redirect URL
+                // Set overlay spinner for IP change with countdown
+                // Shell will build redirect URL from network_change_state
                 model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
                     .with_text(
                         "Network configuration is being applied. Click the button below to open the new address in a new tab. \
                          You must access the new address to cancel the automatic rollback."
                     )
-                    .with_countdown(response.rollback_timeout_seconds as u32)
-                    .with_redirect_url(new_ip_url);
+                    .with_countdown(response.rollback_timeout_seconds as u32);
 
                 // Reset form state after successful submission
                 model.network_form_state = NetworkFormState::Idle;

@@ -27,6 +27,15 @@ const errorMsg = ref("")
 
 const overlaySpinnerState = computed(() => viewModel.overlay_spinner)
 
+// Build redirect URL from network_change_state when waiting for new IP
+const redirectUrl = computed(() => {
+	const state = viewModel.network_change_state
+	if (state.type === 'waiting_for_new_ip' && 'new_ip' in state && 'ui_port' in state) {
+		return `https://${(state as any).new_ip}:${(state as any).ui_port}`
+	}
+	return undefined
+})
+
 const toggleSideBar = () => {
 	showSideBar.value = !showSideBar.value
 }
@@ -98,7 +107,7 @@ onMounted(async () => {
         :text="overlaySpinnerState.text || undefined" :timed-out="overlaySpinnerState.timed_out"
         :progress="overlaySpinnerState.progress || undefined"
         :countdown-seconds="overlaySpinnerState.countdown_seconds || undefined"
-        :redirect-url="overlaySpinnerState.redirect_url || undefined" />
+        :redirect-url="redirectUrl" />
     </v-main>
   </v-app>
 </template>
