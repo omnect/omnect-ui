@@ -34,6 +34,48 @@ Reset device and choose options to keep<br>
 Update your device<br>
 ![update](docu/update.png)
 
+## Features
+
+### Network Configuration
+
+omnect UI allows you to configure network settings for your device's network adapters. This feature is particularly useful when you need to change IP addresses or switch between DHCP and static IP configuration.
+
+#### Configuring Network Adapters
+
+1. Navigate to the Network section in the UI
+2. Select the network adapter you want to configure
+3. Choose between DHCP or Static IP assignment
+4. For static IP, configure:
+   - IP address and subnet mask
+   - Gateway addresses
+   - DNS servers
+5. Click "Save" to apply the configuration
+
+#### Automatic Rollback Protection
+
+When changing the IP address of the network adapter you're currently connected to, omnect UI provides an optional automatic rollback feature to prevent losing access to your device:
+
+**How it works:**
+
+1. When you attempt to change the IP address of the adapter you're connected to, a confirmation dialog appears
+2. You can choose to enable automatic rollback protection (enabled by default and recommended)
+3. If enabled:
+   - You have 90 seconds to access the device at the new IP address
+   - An overlay with a countdown timer will guide you to the new address
+   - You must log in at the new IP address to confirm the change works
+   - If you don't access the new address within 90 seconds, the device automatically restores the previous network configuration
+4. If disabled:
+   - Changes are applied immediately without automatic rollback protection
+   - An overlay appears with a button to navigate to the new IP address
+   - You're responsible for manually accessing the new IP address
+   - If the new configuration doesn't work, you may lose network access to the device
+
+**Important notes:**
+
+- Automatic rollback only applies when changing the IP address of the adapter you're currently connected through
+- Changes to other network adapters don't trigger the rollback mechanism
+- The rollback feature requires physical or console access to recover if network access is lost
+
 ## Development
 
 ### Prerequisites

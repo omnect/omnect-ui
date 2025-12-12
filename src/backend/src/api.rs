@@ -6,7 +6,7 @@ use crate::{
     services::{
         auth::{AuthorizationService, PasswordService, TokenManager},
         firmware::FirmwareService,
-        network::{NetworkConfig, NetworkConfigService},
+        network::{NetworkConfigService, SetNetworkConfigRequest},
     },
 };
 use actix_files::NamedFile;
@@ -233,7 +233,7 @@ where
     }
 
     pub async fn set_network_config(
-        network_config: web::Json<NetworkConfig>,
+        network_config: web::Json<SetNetworkConfigRequest>,
         api: web::Data<Self>,
     ) -> impl Responder {
         debug!("set_network_config() called");

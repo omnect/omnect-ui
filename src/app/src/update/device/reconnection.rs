@@ -158,7 +158,10 @@ pub fn handle_healthcheck_response(
     }
 
     // Handle network change state machine for IP change polling
-    if let NetworkChangeState::WaitingForNewIp { new_ip, ui_port, .. } = &model.network_change_state {
+    if let NetworkChangeState::WaitingForNewIp {
+        new_ip, ui_port, ..
+    } = &model.network_change_state
+    {
         if result.is_ok() {
             // Clone values before reassigning state to avoid borrow conflict
             let new_ip = new_ip.clone();

@@ -9,9 +9,17 @@ pub enum DeviceOperationState {
     Rebooting,
     FactoryResetting,
     Updating,
-    WaitingReconnection { operation: String, attempt: u32 },
-    ReconnectionFailed { operation: String, reason: String },
-    ReconnectionSuccessful { operation: String },
+    WaitingReconnection {
+        operation: String,
+        attempt: u32,
+    },
+    ReconnectionFailed {
+        operation: String,
+        reason: String,
+    },
+    ReconnectionSuccessful {
+        operation: String,
+    },
 }
 
 impl DeviceOperationState {

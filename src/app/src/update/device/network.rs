@@ -63,37 +63,71 @@ pub fn handle_set_network_config_response(
 
     match result {
         Ok(response) => {
-            // Check if we need to poll for new IP
-            if let NetworkChangeState::ApplyingConfig { new_ip, .. } =
-                &model.network_change_state.clone()
-            {
-                model.network_change_state = NetworkChangeState::WaitingForNewIp {
-                    new_ip: new_ip.clone(),
-                    attempt: 0,
-                    rollback_timeout_seconds: response.rollback_timeout_seconds,
-                    ui_port: response.ui_port,
-                };
-                model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
+            // Check if rollback was enabled and we need to poll for new IP
+            if response.rollback_enabled {
+                if let NetworkChangeState::ApplyingConfig { new_ip, .. } =
+                    &model.network_change_state.clone()
+                {
+                    model.network_change_state = NetworkChangeState::WaitingForNewIp {
+                        new_ip: new_ip.clone(),
+                        attempt: 0,
+                        rollback_timeout_seconds: response.rollback_timeout_seconds,
+                        ui_port: response.ui_port,
+                    };
+                    model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
 
-                // Set overlay spinner for IP change with countdown
-                // Shell will build redirect URL from network_change_state
-                model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
-                    .with_text(
-                        "Network configuration is being applied. Click the button below to open the new address in a new tab. \
-                         You must access the new address to cancel the automatic rollback."
-                    )
-                    .with_countdown(response.rollback_timeout_seconds as u32);
+                    // Set overlay spinner for IP change with countdown
+                    // Shell will build redirect URL from network_change_state
+                    model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
+                        .with_text(
+                            "Network configuration is being applied. Click the button below to open the new address in a new tab. \
+                             You must access the new address to cancel the automatic rollback."
+                        )
+                        .with_countdown(response.rollback_timeout_seconds as u32);
 
-                // Reset form state after successful submission
-                model.network_form_state = NetworkFormState::Idle;
+                    // Reset form state after successful submission
+                    model.network_form_state = NetworkFormState::Idle;
 
-                // Shell will see WaitingForNewIp state and start polling
-                crux_core::render::render()
+                    // Shell will see WaitingForNewIp state and start polling
+                    crux_core::render::render()
+                } else {
+                    model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
+                    model.network_form_state = NetworkFormState::Idle;
+                    crux_core::render::render()
+                }
             } else {
-                model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
-                // Reset form state after successful submission
-                model.network_form_state = NetworkFormState::Idle;
-                crux_core::render::render()
+                // No rollback enabled - check if IP changed for current connection
+                if let NetworkChangeState::ApplyingConfig { new_ip, .. } =
+                    &model.network_change_state.clone()
+                {
+                    // Show overlay without countdown for manual navigation
+                    model.network_change_state = NetworkChangeState::WaitingForNewIp {
+                        new_ip: new_ip.clone(),
+                        attempt: 0,
+                        rollback_timeout_seconds: 0, // No countdown
+                        ui_port: response.ui_port,
+                    };
+                    model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
+
+                    // Set overlay spinner without countdown - just redirect button
+                    model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
+                        .with_text(
+                            "Network configuration has been applied. Your connection will be interrupted. \
+                             Click the button below to navigate to the new address."
+                        );
+
+                    // Reset form state after successful submission
+                    model.network_form_state = NetworkFormState::Idle;
+
+                    crux_core::render::render()
+                } else {
+                    // Not changing current connection's IP - just show success message
+                    model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
+                    model.network_change_state = NetworkChangeState::Idle;
+                    model.network_form_state = NetworkFormState::Idle;
+                    model.overlay_spinner.clear();
+                    crux_core::render::render()
+                }
             }
         }
         Err(e) => {
@@ -145,7 +179,10 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
 
 /// Handle new IP check timeout - new IP didn't become reachable in time
 pub fn handle_new_ip_check_timeout(model: &mut Model) -> Command<Effect, Event> {
-    if let NetworkChangeState::WaitingForNewIp { new_ip, ui_port, .. } = &model.network_change_state {
+    if let NetworkChangeState::WaitingForNewIp {
+        new_ip, ui_port, ..
+    } = &model.network_change_state
+    {
         let new_ip_url = format!("https://{new_ip}:{ui_port}");
         model.network_change_state = NetworkChangeState::NewIpTimeout {
             new_ip: new_ip.clone(),

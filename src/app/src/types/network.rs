@@ -46,6 +46,10 @@ pub struct NetworkConfigRequest {
     pub netmask: Option<u32>,
     pub gateway: Vec<String>,
     pub dns: Vec<String>,
+    /// Whether to enable automatic rollback protection.
+    /// Only applicable when is_server_addr=true AND ip_changed=true.
+    #[serde(default)]
+    pub enable_rollback: Option<bool>,
 }
 
 /// Form data for network configuration
@@ -143,4 +147,5 @@ pub enum NetworkChangeState {
 pub struct SetNetworkConfigResponse {
     pub rollback_timeout_seconds: u64,
     pub ui_port: u16,
+    pub rollback_enabled: bool,
 }

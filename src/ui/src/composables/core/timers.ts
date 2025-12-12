@@ -213,24 +213,27 @@ export function startNewIpPolling(): void {
 		}
 	}, NEW_IP_POLL_INTERVAL_MS)
 
-	// Start countdown interval (every 1 second for UI countdown)
-	// Calculate remaining seconds from deadline instead of decrementing
-	newIpCountdownIntervalId = setInterval(() => {
-		if (countdownDeadline !== null) {
-			const remainingMs = Math.max(0, countdownDeadline - Date.now())
-			const remainingSeconds = Math.ceil(remainingMs / 1000)
-			viewModel.overlay_spinner.countdown_seconds = remainingSeconds
-		}
-	}, 1000)
+	// Only start countdown and timeout if rollback is enabled (timeout > 0)
+	if (rollbackTimeout > 0) {
+		// Start countdown interval (every 1 second for UI countdown)
+		// Calculate remaining seconds from deadline instead of decrementing
+		newIpCountdownIntervalId = setInterval(() => {
+			if (countdownDeadline !== null) {
+				const remainingMs = Math.max(0, countdownDeadline - Date.now())
+				const remainingSeconds = Math.ceil(remainingMs / 1000)
+				viewModel.overlay_spinner.countdown_seconds = remainingSeconds
+			}
+		}, 1000)
 
-	// Set timeout
-	newIpTimeoutId = setTimeout(() => {
-		console.log('[useCore] New IP polling timeout reached')
-		if (isInitialized.value && wasmModule && sendEventCallback) {
-			sendEventCallback(new EventVariantDevice(new DeviceEventVariantNewIpCheckTimeout()))
-		}
-		stopNewIpPolling()
-	}, timeoutMs)
+		// Set timeout
+		newIpTimeoutId = setTimeout(() => {
+			console.log('[useCore] New IP polling timeout reached')
+			if (isInitialized.value && wasmModule && sendEventCallback) {
+				sendEventCallback(new EventVariantDevice(new DeviceEventVariantNewIpCheckTimeout()))
+			}
+			stopNewIpPolling()
+		}, timeoutMs)
+	}
 }
 
 /**

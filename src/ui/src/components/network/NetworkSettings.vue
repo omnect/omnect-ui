@@ -102,6 +102,10 @@ const isSyncingFromWebSocket = ref(false)
 const isServerAddr = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr === location.hostname)
 const ipChanged = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr !== ipAddress.value)
 
+// Modal state for rollback confirmation
+const showRollbackModal = ref(false)
+const enableRollback = ref(true) // Default to checked (enabled)
+
 const restoreSettings = () => {
     // Reset Core state (clears dirty flag and NetworkFormState)
     networkFormReset(props.networkAdapter.name)
@@ -138,7 +142,19 @@ watch(
 )
 
 const submit = async () => {
+    // Check if we need to show the rollback confirmation modal
+    if (isServerAddr.value && ipChanged.value) {
+        showRollbackModal.value = true
+        return
+    }
+
+    // If not changing server IP, submit directly without rollback
+    await submitNetworkConfig(false)
+}
+
+const submitNetworkConfig = async (includeRollback: boolean) => {
     isSubmitting.value = true
+    showRollbackModal.value = false
 
     const config = JSON.stringify({
         isServerAddr: isServerAddr.value,
@@ -149,15 +165,62 @@ const submit = async () => {
         previousIp: props.networkAdapter.ipv4?.addrs[0]?.addr,
         netmask: netmask.value ?? null,
         gateway: gateways.value.split("\n").filter(g => g.trim()) ?? [],
-        dns: dns.value.split("\n").filter(d => d.trim()) ?? []
+        dns: dns.value.split("\n").filter(d => d.trim()) ?? [],
+        enableRollback: includeRollback ? enableRollback.value : null
     })
 
     await setNetworkConfig(config)
+}
+
+const cancelRollbackModal = () => {
+    showRollbackModal.value = false
 }
 </script>
 
 <template>
     <div>
+        <!-- Rollback Confirmation Modal -->
+        <v-dialog v-model="showRollbackModal" max-width="600">
+            <v-card>
+                <v-card-title class="text-h5">
+                    Confirm IP Address Change
+                </v-card-title>
+                <v-card-text>
+                    <v-alert type="warning" variant="tonal" class="mb-4">
+                        Changing this IP will disconnect your current session.
+                    </v-alert>
+                    <p class="mb-4">
+                        You are about to change the IP address of the network adapter you're currently connected to.
+                        This will interrupt your connection.
+                    </p>
+                    <v-checkbox
+                        v-model="enableRollback"
+                        label="Enable automatic rollback (recommended)"
+                        hide-details
+                    >
+                        <template #label>
+                            <div>
+                                <strong>Enable automatic rollback (recommended)</strong>
+                                <div class="text-caption text-medium-emphasis">
+                                    If you can't reach the new IP within 90 seconds, the device will automatically
+                                    restore the previous configuration.
+                                </div>
+                            </div>
+                        </template>
+                    </v-checkbox>
+                </v-card-text>
+                <v-card-actions>
+                    <v-spacer></v-spacer>
+                    <v-btn color="secondary" variant="text" @click="cancelRollbackModal">
+                        Cancel
+                    </v-btn>
+                    <v-btn color="primary" variant="text" @click="submitNetworkConfig(true)">
+                        Apply Changes
+                    </v-btn>
+                </v-card-actions>
+            </v-card>
+        </v-dialog>
+
         <v-form @submit.prevent="submit" class="flex flex-col gap-y-4 ml-4">
             <v-chip size="large" class="ma-2" label
                 :color="props.networkAdapter.online ? 'light-green-darken-2' : 'red-darken-2'">

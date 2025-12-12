@@ -86,6 +86,19 @@ pub struct NetworkConfig {
     dns: Option<Vec<Ipv4Addr>>,
 }
 
+#[derive(Deserialize, Serialize, Clone, Validate, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SetNetworkConfigRequest {
+    #[serde(flatten)]
+    #[validate]
+    pub network: NetworkConfig,
+    /// Whether to enable automatic rollback protection.
+    /// Only applicable when is_server_addr=true AND ip_changed=true.
+    /// If false/None, no rollback is created even for server IP changes.
+    #[serde(default)]
+    pub enable_rollback: Option<bool>,
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug)]
 struct Rollback {
     network_config: NetworkConfig,
@@ -97,6 +110,7 @@ struct Rollback {
 pub struct SetNetworkConfigResponse {
     pub rollback_timeout_seconds: u64,
     pub ui_port: u16,
+    pub rollback_enabled: bool,
 }
 
 // ============================================================================
@@ -123,23 +137,27 @@ impl NetworkConfigService {
     ///
     /// # Arguments
     /// * `service_client` - Device service client for network reload
-    /// * `network` - Network configuration to apply
+    /// * `request` - Network configuration request with optional rollback settings
     ///
     /// # Returns
     /// Result with the network config response including rollback timeout, or an error
     pub async fn set_network_config<T>(
         service_client: &T,
-        network: &NetworkConfig,
+        request: &SetNetworkConfigRequest,
     ) -> Result<SetNetworkConfigResponse>
     where
         T: DeviceServiceClient,
     {
-        info!("set network config: {network:?}");
+        info!("set network config: {request:?}");
 
-        network.validate().context("network validation failed")?;
+        request.validate().context("network validation failed")?;
 
-        if let Err(err1) = Self::apply_network_config(service_client, network).await {
-            if let Err(err2) = Self::rollback_network_config(&network.name) {
+        let enable_rollback = request.enable_rollback.unwrap_or(false);
+
+        if let Err(err1) =
+            Self::apply_network_config(service_client, &request.network, enable_rollback).await
+        {
+            if let Err(err2) = Self::rollback_network_config(&request.network.name) {
                 error!("failed to rollback network config: {err2:#}");
             }
             return Err(err1);
@@ -148,6 +166,9 @@ impl NetworkConfigService {
         Ok(SetNetworkConfigResponse {
             rollback_timeout_seconds: ROLLBACK_TIMEOUT_SECS,
             ui_port: crate::config::AppConfig::get().ui.port,
+            rollback_enabled: enable_rollback
+                && request.network.is_server_addr
+                && request.network.ip_changed,
         })
     }
 
@@ -304,10 +325,15 @@ impl NetworkConfigService {
     /// # Arguments
     /// * `service_client` - Device service client for network reload
     /// * `network` - Network configuration to apply
+    /// * `enable_rollback` - Whether to enable automatic rollback for IP changes
     ///
     /// # Returns
     /// Result indicating success or failure
-    async fn apply_network_config<T>(service_client: &T, network: &NetworkConfig) -> Result<()>
+    async fn apply_network_config<T>(
+        service_client: &T,
+        network: &NetworkConfig,
+        enable_rollback: bool,
+    ) -> Result<()>
     where
         T: DeviceServiceClient,
     {
@@ -318,7 +344,11 @@ impl NetworkConfigService {
         service_client.reload_network().await?;
 
         if network.is_server_addr && network.ip_changed {
-            Self::create_rollback(network)?;
+            // Only create rollback if user explicitly requested it
+            if enable_rollback {
+                Self::create_rollback(network)?;
+            }
+            // Always restart server when server IP changes (regardless of rollback)
             Self::trigger_server_restart()?;
         }
 
