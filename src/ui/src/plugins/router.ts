@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router"
 import { getUser, login } from "../auth/auth-service"
+import { useCore } from "../composables/useCore"
 import Callback from "../pages/Callback.vue"
 import DeviceOverview from "../pages/DeviceOverview.vue"
 import DeviceUpdate from "../pages/DeviceUpdate.vue"
@@ -31,9 +32,11 @@ router.beforeEach(async (to, _, next) => {
 		}
 	}
 	if (to.meta.requiresAuth) {
-		const res = await fetch("token/refresh")
-		if (!res.ok) {
+		const { viewModel } = useCore()
+		// Rely on the Core's authentication state as the single source of truth
+		if (!viewModel.is_authenticated) {
 			next("/login")
+			return
 		}
 	}
 	next()

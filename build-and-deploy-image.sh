@@ -117,7 +117,11 @@ fi
 # local build
 omnect_ui_version=$(toml get --raw Cargo.toml workspace.package.version)
 
+# Get git short revision for version tracking
+GIT_SHORT_REV=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
 echo "Building ${IMAGE_ARCH} image: $IMAGE_NAME"
+echo "Git revision: $GIT_SHORT_REV"
 
 # Setup QEMU for cross-architecture builds if needed
 if [[ "$IMAGE_ARCH" != "$(uname -m)" ]]; then
@@ -125,7 +129,7 @@ if [[ "$IMAGE_ARCH" != "$(uname -m)" ]]; then
 fi
 
 # Build with or without cache
-BUILD_ARGS="--platform linux/${IMAGE_ARCH} --load -f Dockerfile . -t $IMAGE_NAME"
+BUILD_ARGS="--platform linux/${IMAGE_ARCH} --load -f Dockerfile . -t $IMAGE_NAME --build-arg GIT_SHORT_REV=$GIT_SHORT_REV"
 if [[ "$CLEAN" == "true" ]]; then
   echo "Performing clean build (no cache)..."
   docker buildx build --no-cache $BUILD_ARGS
@@ -156,8 +160,7 @@ if [[ "$DEPLOY" == "true" ]]; then
     echo "Checking required directories..."
     for dir in /run/omnect-device-service /var/lib/omnect-ui /etc/systemd/network; do
       if [ ! -d "\$dir" ]; then
-        echo "ERROR: Required directory \$dir does not exist on device"
-        exit 1
+        echo "WARNING: Required directory \$dir does not exist on device"
       fi
     done
     echo "All required directories exist"

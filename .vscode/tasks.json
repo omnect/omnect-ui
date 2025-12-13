@@ -2,10 +2,14 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "run_dev_setup",
+            "label": "check_ods_and_centrifugo",
             "type": "shell",
-            "command": "${workspaceFolder}/scripts/dev-setup.sh",
-            "problemMatcher": []
+            "command": "bash -c 'RED=\"\\033[0;31m\"; GREEN=\"\\033[0;32m\"; NC=\"\\033[0m\"; echo -n \"Checking omnect-device-service... \"; if [ ! -S /tmp/api.sock ]; then echo -e \"${RED}❌ ERROR${NC}\"; echo \"omnect-device-service is not running!\"; echo \"Please start it first from your omnect-device-service directory\"; echo \"See: https://github.com/omnect/omnect-device-service\"; exit 1; else echo -e \"${GREEN}✓${NC}\"; fi; echo -n \"Stopping existing centrifugo processes... \"; killall centrifugo 2>/dev/null || true; echo -e \"${GREEN}✓${NC}\"'",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            }
         }
     ]
 }

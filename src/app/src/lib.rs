@@ -1,5 +1,6 @@
 pub mod capabilities;
 pub mod events;
+pub mod http_helpers;
 pub mod macros;
 pub mod model;
 pub mod types;
@@ -23,8 +24,6 @@ pub use crate::events::Event;
 pub use crate::model::Model;
 pub use crate::types::*;
 pub use crux_http::Result as HttpResult;
-
-pub const API_BASE_URL: &str = "http://localhost:8000";
 
 /// Capabilities - side effects the app can perform
 ///
