@@ -66,6 +66,29 @@ pub struct NetworkFormData {
     pub gateways: Vec<String>,
 }
 
+impl From<&DeviceNetwork> for NetworkFormData {
+    fn from(adapter: &DeviceNetwork) -> Self {
+        Self {
+            name: adapter.name.clone(),
+            ip_address: adapter
+                .ipv4
+                .addrs
+                .first()
+                .map(|a| a.addr.clone())
+                .unwrap_or_default(),
+            dhcp: adapter.ipv4.addrs.first().map(|a| a.dhcp).unwrap_or(false),
+            prefix_len: adapter
+                .ipv4
+                .addrs
+                .first()
+                .map(|a| a.prefix_len)
+                .unwrap_or(24),
+            dns: adapter.ipv4.dns.clone(),
+            gateways: adapter.ipv4.gateways.clone(),
+        }
+    }
+}
+
 /// State of network form (to prevent WebSocket interference)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -75,10 +98,12 @@ pub enum NetworkFormState {
     Editing {
         adapter_name: String,
         form_data: NetworkFormData,
+        original_data: NetworkFormData,
     },
     Submitting {
         adapter_name: String,
         form_data: NetworkFormData,
+        original_data: NetworkFormData,
     },
 }
 
@@ -88,11 +113,13 @@ impl NetworkFormState {
         if let Self::Editing {
             adapter_name,
             form_data,
+            original_data,
         } = self
         {
             Some(Self::Submitting {
                 adapter_name: adapter_name.clone(),
                 form_data: form_data.clone(),
+                original_data: original_data.clone(),
             })
         } else {
             None
@@ -104,11 +131,13 @@ impl NetworkFormState {
         if let Self::Submitting {
             adapter_name,
             form_data,
+            original_data,
         } = self
         {
             Some(Self::Editing {
                 adapter_name: adapter_name.clone(),
                 form_data: form_data.clone(),
+                original_data: original_data.clone(),
             })
         } else {
             None

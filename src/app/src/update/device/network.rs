@@ -57,6 +57,63 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
     }
 }
 
+/// Helper to update network state and spinner based on configuration response
+fn update_network_state_and_spinner(
+    model: &mut Model,
+    new_ip: String,
+    ui_port: u16,
+    rollback_timeout_seconds: u64,
+    switching_to_dhcp: bool,
+    rollback_enabled: bool,
+) {
+    // Determine target state
+    // If switching to DHCP without rollback, we go to Idle
+    if !rollback_enabled && switching_to_dhcp {
+        model.network_change_state = NetworkChangeState::Idle;
+    } else {
+        model.network_change_state = NetworkChangeState::WaitingForNewIp {
+            new_ip,
+            attempt: 0,
+            rollback_timeout_seconds: if rollback_enabled {
+                rollback_timeout_seconds
+            } else {
+                0
+            },
+            ui_port,
+            switching_to_dhcp,
+        };
+    }
+
+    // Determine overlay text
+    let overlay_text = if switching_to_dhcp {
+        if rollback_enabled {
+            "Network configuration is being applied. Your connection will be interrupted. \
+             Use your DHCP server or device console to find the new IP address. \
+             You must access the new address to cancel the automatic rollback."
+        } else {
+            "Network configuration has been applied. Your connection will be interrupted. \
+             Use your DHCP server or device console to find the new IP address."
+        }
+    } else if rollback_enabled {
+        "Network configuration is being applied. Click the button below to open the new address in a new tab. \
+         You must access the new address to cancel the automatic rollback."
+    } else {
+        "Network configuration has been applied. Your connection will be interrupted. \
+         Click the button below to navigate to the new address."
+    };
+
+    let spinner = OverlaySpinnerState::new("Applying network settings").with_text(overlay_text);
+
+    model.overlay_spinner = if rollback_enabled && !switching_to_dhcp {
+        spinner.with_countdown(rollback_timeout_seconds as u32)
+    } else if rollback_enabled && switching_to_dhcp {
+        // Show countdown even for DHCP if rollback is enabled
+        spinner.with_countdown(rollback_timeout_seconds as u32)
+    } else {
+        spinner
+    };
+}
+
 /// Handle network configuration response
 pub fn handle_set_network_config_response(
     result: Result<crate::types::SetNetworkConfigResponse, String>,
@@ -66,97 +123,43 @@ pub fn handle_set_network_config_response(
 
     match result {
         Ok(response) => {
-            // Check if rollback was enabled and we need to poll for new IP
-            if response.rollback_enabled {
-                if let NetworkChangeState::ApplyingConfig {
-                    new_ip,
-                    switching_to_dhcp,
-                    ..
-                } = &model.network_change_state.clone()
-                {
-                    model.network_change_state = NetworkChangeState::WaitingForNewIp {
-                        new_ip: new_ip.clone(),
-                        attempt: 0,
-                        rollback_timeout_seconds: response.rollback_timeout_seconds,
-                        ui_port: response.ui_port,
-                        switching_to_dhcp: *switching_to_dhcp,
-                    };
-                    model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
-
-                    // Set overlay spinner for IP change with countdown
-                    // Different message for DHCP vs static IP changes
-                    let overlay_text = if *switching_to_dhcp {
-                        "Network configuration is being applied. Your connection will be interrupted. \
-                         Use your DHCP server or device console to find the new IP address. \
-                         You must access the new address to cancel the automatic rollback."
-                    } else {
-                        "Network configuration is being applied. Click the button below to open the new address in a new tab. \
-                         You must access the new address to cancel the automatic rollback."
-                    };
-
-                    model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
-                        .with_text(overlay_text)
-                        .with_countdown(response.rollback_timeout_seconds as u32);
-
-                    // Reset form state after successful submission
-                    model.network_form_state = NetworkFormState::Idle;
-
-                    // Shell will see WaitingForNewIp state and start polling
-                    crux_core::render::render()
+            // Check if we are applying a config that changes IP/DHCP
+            if let NetworkChangeState::ApplyingConfig {
+                new_ip,
+                switching_to_dhcp,
+                ..
+            } = &model.network_change_state.clone()
+            {
+                if response.rollback_enabled {
+                    update_network_state_and_spinner(
+                        model,
+                        new_ip.clone(),
+                        response.ui_port,
+                        response.rollback_timeout_seconds,
+                        *switching_to_dhcp,
+                        true,
+                    );
                 } else {
-                    model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
-                    model.network_form_state = NetworkFormState::Idle;
-                    crux_core::render::render()
+                    update_network_state_and_spinner(
+                        model,
+                        new_ip.clone(),
+                        response.ui_port,
+                        0,
+                        *switching_to_dhcp,
+                        false,
+                    );
                 }
+
+                model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
+                model.network_form_state = NetworkFormState::Idle;
+                crux_core::render::render()
             } else {
-                // No rollback enabled - check if IP changed for current connection
-                if let NetworkChangeState::ApplyingConfig {
-                    new_ip,
-                    switching_to_dhcp,
-                    ..
-                } = &model.network_change_state.clone()
-                {
-                    // If switching to DHCP without rollback, we can't do anything meaningful
-                    // just show success and return to idle
-                    if *switching_to_dhcp {
-                         model.network_change_state = NetworkChangeState::Idle;
-                    } else {
-                        // Show overlay without countdown for manual navigation
-                        model.network_change_state = NetworkChangeState::WaitingForNewIp {
-                            new_ip: new_ip.clone(),
-                            attempt: 0,
-                            rollback_timeout_seconds: 0, // No countdown
-                            ui_port: response.ui_port,
-                            switching_to_dhcp: *switching_to_dhcp,
-                        };
-                    }
-                    model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
-
-                    // Set overlay spinner without countdown
-                    // Different message for DHCP vs static IP changes
-                    let overlay_text = if *switching_to_dhcp {
-                        "Network configuration has been applied. Your connection will be interrupted. \
-                         Use your DHCP server or device console to find the new IP address."
-                    } else {
-                        "Network configuration has been applied. Your connection will be interrupted. \
-                         Click the button below to navigate to the new address."
-                    };
-
-                    model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
-                        .with_text(overlay_text);
-
-                    // Reset form state after successful submission
-                    model.network_form_state = NetworkFormState::Idle;
-
-                    crux_core::render::render()
-                } else {
-                    // Not changing current connection's IP - just show success message
-                    model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
-                    model.network_change_state = NetworkChangeState::Idle;
-                    model.network_form_state = NetworkFormState::Idle;
-                    model.overlay_spinner.clear();
-                    crux_core::render::render()
-                }
+                // Not changing current connection's IP - just show success message
+                model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
+                model.network_change_state = NetworkChangeState::Idle;
+                model.network_form_state = NetworkFormState::Idle;
+                model.overlay_spinner.clear();
+                crux_core::render::render()
             }
         }
         Err(e) => {
@@ -176,32 +179,19 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
     if let NetworkChangeState::WaitingForNewIp {
         new_ip,
         attempt,
-        rollback_timeout_seconds,
         ui_port,
         switching_to_dhcp,
-    } = &model.network_change_state
+        ..
+    } = &mut model.network_change_state
     {
-        let new_ip = new_ip.clone();
-        let new_attempt = *attempt + 1;
-        let timeout_secs = *rollback_timeout_seconds;
-        let port = *ui_port;
-        let switching_to_dhcp = *switching_to_dhcp;
-
-        // Update attempt counter
-        model.network_change_state = NetworkChangeState::WaitingForNewIp {
-            new_ip: new_ip.clone(),
-            attempt: new_attempt,
-            rollback_timeout_seconds: timeout_secs,
-            ui_port: port,
-            switching_to_dhcp,
-        };
+        *attempt += 1;
 
         // If switching to DHCP, we don't know the new IP, so we can't poll it.
         // We just wait for the timeout (rollback) or for the user to manually navigate.
-        if !switching_to_dhcp {
+        if !*switching_to_dhcp {
             // Try to reach the new IP (silent GET - no error shown on failure)
             // Use HTTPS since the server only listens on HTTPS
-            let url = format!("https://{new_ip}:{port}/healthcheck");
+            let url = format!("https://{new_ip}:{ui_port}/healthcheck");
             http_get_silent!(
                 url,
                 on_success: Event::Device(DeviceEvent::HealthcheckResponse(Ok(
@@ -255,28 +245,12 @@ pub fn handle_network_form_start_edit(
             .iter()
             .find(|n| n.name == adapter_name)
         {
-            let form_data = NetworkFormData {
-                name: adapter.name.clone(),
-                ip_address: adapter
-                    .ipv4
-                    .addrs
-                    .first()
-                    .map(|a| a.addr.clone())
-                    .unwrap_or_default(),
-                dhcp: adapter.ipv4.addrs.first().map(|a| a.dhcp).unwrap_or(false),
-                prefix_len: adapter
-                    .ipv4
-                    .addrs
-                    .first()
-                    .map(|a| a.prefix_len)
-                    .unwrap_or(24),
-                dns: adapter.ipv4.dns.clone(),
-                gateways: adapter.ipv4.gateways.clone(),
-            };
+            let form_data = NetworkFormData::from(adapter);
 
             model.network_form_state = NetworkFormState::Editing {
                 adapter_name: adapter_name.clone(),
-                form_data,
+                form_data: form_data.clone(),
+                original_data: form_data,
             };
             // Clear dirty flag when starting a fresh edit
             model.network_form_dirty = false;
@@ -296,48 +270,18 @@ pub fn handle_network_form_update(
 
     match parsed {
         Ok(form_data) => {
-            if let NetworkFormState::Editing { adapter_name, .. } = &model.network_form_state {
-                // Compare form data with original adapter data to determine if dirty
-                let is_dirty = if let Some(network_status) = &model.network_status {
-                    if let Some(adapter) = network_status
-                        .network_status
-                        .iter()
-                        .find(|n| n.name == *adapter_name)
-                    {
-                        // Build original form data from current network status
-                        let original_data = NetworkFormData {
-                            name: adapter.name.clone(),
-                            ip_address: adapter
-                                .ipv4
-                                .addrs
-                                .first()
-                                .map(|a| a.addr.clone())
-                                .unwrap_or_default(),
-                            dhcp: adapter.ipv4.addrs.first().map(|a| a.dhcp).unwrap_or(false),
-                            prefix_len: adapter
-                                .ipv4
-                                .addrs
-                                .first()
-                                .map(|a| a.prefix_len)
-                                .unwrap_or(24),
-                            dns: adapter.ipv4.dns.clone(),
-                            gateways: adapter.ipv4.gateways.clone(),
-                        };
-
-                        // Form is dirty if current data differs from original
-                        form_data != original_data
-                    } else {
-                        // If we can't find the adapter, assume dirty
-                        true
-                    }
-                } else {
-                    // If we don't have network status, assume dirty
-                    true
-                };
+            if let NetworkFormState::Editing {
+                adapter_name,
+                original_data,
+                ..
+            } = &model.network_form_state
+            {
+                let is_dirty = form_data != *original_data;
 
                 model.network_form_state = NetworkFormState::Editing {
                     adapter_name: adapter_name.clone(),
                     form_data,
+                    original_data: original_data.clone(),
                 };
                 model.network_form_dirty = is_dirty;
             }
