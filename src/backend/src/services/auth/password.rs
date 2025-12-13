@@ -70,10 +70,42 @@ impl PasswordService {
 
         let password_file = &AppConfig::get().paths.password_file;
         let hash = Self::hash_password(password)?;
-        let mut file = File::create(password_file).context("failed to create password file")?;
 
-        file.write_all(hash.as_bytes())
-            .context("failed to write password file")
+        // Atomic write pattern: write to temp file, sync, then rename
+        // Retry strategy to handle potential transient filesystem issues OR verification failure
+        let max_retries = 3;
+        let mut last_error = anyhow!("Unknown error");
+
+        for i in 0..max_retries {
+            let temp_file_path = password_file.with_extension("tmp");
+
+            let result = (|| -> Result<()> {
+                let mut file = File::create(&temp_file_path)
+                    .context("failed to create temp password file")?;
+
+                file.write_all(hash.as_bytes())
+                    .context("failed to write password file")?;
+
+                file.sync_all().context("failed to sync password file")?;
+
+                std::fs::rename(&temp_file_path, password_file)
+                    .context("failed to replace password file")?;
+
+                // Verify that the password can be read back and validated
+                Self::validate_password(password).context("failed to verify stored password")
+            })();
+
+            match result {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    log::warn!("store_or_update_password attempt {} failed: {:#}", i + 1, e);
+                    last_error = e;
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+            }
+        }
+
+        Err(last_error).context("store_or_update_password failed after retries")
     }
 
     /// Check if a password has been set
