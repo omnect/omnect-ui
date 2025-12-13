@@ -88,7 +88,7 @@ pub fn handle_set_network_config_response(
                     let overlay_text = if *switching_to_dhcp {
                         "Network configuration is being applied. Your connection will be interrupted. \
                          Use your DHCP server or device console to find the new IP address. \
-                         If the new configuration doesn't work, it will automatically rollback."
+                         You must access the new address to cancel the automatic rollback."
                     } else {
                         "Network configuration is being applied. Click the button below to open the new address in a new tab. \
                          You must access the new address to cancel the automatic rollback."
@@ -116,14 +116,20 @@ pub fn handle_set_network_config_response(
                     ..
                 } = &model.network_change_state.clone()
                 {
-                    // Show overlay without countdown for manual navigation
-                    model.network_change_state = NetworkChangeState::WaitingForNewIp {
-                        new_ip: new_ip.clone(),
-                        attempt: 0,
-                        rollback_timeout_seconds: 0, // No countdown
-                        ui_port: response.ui_port,
-                        switching_to_dhcp: *switching_to_dhcp,
-                    };
+                    // If switching to DHCP without rollback, we can't do anything meaningful
+                    // just show success and return to idle
+                    if *switching_to_dhcp {
+                         model.network_change_state = NetworkChangeState::Idle;
+                    } else {
+                        // Show overlay without countdown for manual navigation
+                        model.network_change_state = NetworkChangeState::WaitingForNewIp {
+                            new_ip: new_ip.clone(),
+                            attempt: 0,
+                            rollback_timeout_seconds: 0, // No countdown
+                            ui_port: response.ui_port,
+                            switching_to_dhcp: *switching_to_dhcp,
+                        };
+                    }
                     model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
 
                     // Set overlay spinner without countdown
@@ -190,14 +196,22 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
             switching_to_dhcp,
         };
 
-        // Try to reach the new IP (silent GET - no error shown on failure)
-        // Use HTTPS since the server only listens on HTTPS
-        let url = format!("https://{new_ip}:{port}/healthcheck");
-        http_get_silent!(
-            url,
-            on_success: Event::Device(DeviceEvent::HealthcheckResponse(Ok(HealthcheckInfo::default()))),
-            on_error: Event::Ui(UiEvent::ClearSuccess)
-        )
+        // If switching to DHCP, we don't know the new IP, so we can't poll it.
+        // We just wait for the timeout (rollback) or for the user to manually navigate.
+        if !switching_to_dhcp {
+            // Try to reach the new IP (silent GET - no error shown on failure)
+            // Use HTTPS since the server only listens on HTTPS
+            let url = format!("https://{new_ip}:{port}/healthcheck");
+            http_get_silent!(
+                url,
+                on_success: Event::Device(DeviceEvent::HealthcheckResponse(Ok(
+                    HealthcheckInfo::default()
+                ))),
+                on_error: Event::Ui(UiEvent::ClearSuccess)
+            )
+        } else {
+            crux_core::render::render()
+        }
     } else {
         crux_core::render::render()
     }

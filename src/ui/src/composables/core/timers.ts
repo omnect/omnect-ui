@@ -199,6 +199,8 @@ export function startNewIpPolling(): void {
 	const rollbackTimeout = state.rollback_timeout_seconds
 	const timeoutMs = rollbackTimeout * 1000 // Convert seconds to milliseconds
 	const targetIp = state.new_ip
+	// Access the switching_to_dhcp property which is available on the variant
+	const switchingToDhcp = (state as any).switching_to_dhcp
 
 	// Save to localStorage for page refresh resilience
 	saveNetworkChangeState(targetIp, rollbackTimeout)
@@ -206,12 +208,17 @@ export function startNewIpPolling(): void {
 	// Set countdown deadline
 	countdownDeadline = Date.now() + timeoutMs
 
-	// Start polling interval (every 5 seconds)
-	newIpIntervalId = setInterval(() => {
-		if (isInitialized.value && wasmModule && sendEventCallback) {
-			sendEventCallback(new EventVariantDevice(new DeviceEventVariantNewIpCheckTick()))
-		}
-	}, NEW_IP_POLL_INTERVAL_MS)
+	// Start polling interval (every 5 seconds) ONLY if we are not switching to DHCP
+	// If switching to DHCP, we don't know the IP so polling is useless
+	if (!switchingToDhcp) {
+		newIpIntervalId = setInterval(() => {
+			if (isInitialized.value && wasmModule && sendEventCallback) {
+				sendEventCallback(new EventVariantDevice(new DeviceEventVariantNewIpCheckTick()))
+			}
+		}, NEW_IP_POLL_INTERVAL_MS)
+	} else {
+		console.log('[useCore] Skipping polling because switching to DHCP (IP unknown)')
+	}
 
 	// Only start countdown and timeout if rollback is enabled (timeout > 0)
 	if (rollbackTimeout > 0) {
