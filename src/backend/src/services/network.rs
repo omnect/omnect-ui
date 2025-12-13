@@ -97,6 +97,9 @@ pub struct SetNetworkConfigRequest {
     /// If false/None, no rollback is created even for server IP changes.
     #[serde(default)]
     pub enable_rollback: Option<bool>,
+    /// Whether this change is switching to DHCP (for rollback logic)
+    #[serde(default)]
+    pub switching_to_dhcp: bool,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -153,9 +156,15 @@ impl NetworkConfigService {
         request.validate().context("network validation failed")?;
 
         let enable_rollback = request.enable_rollback.unwrap_or(false);
+        let switching_to_dhcp = request.switching_to_dhcp;
 
-        if let Err(err1) =
-            Self::apply_network_config(service_client, &request.network, enable_rollback).await
+        if let Err(err1) = Self::apply_network_config(
+            service_client,
+            &request.network,
+            enable_rollback,
+            switching_to_dhcp,
+        )
+        .await
         {
             if let Err(err2) = Self::rollback_network_config(&request.network.name) {
                 error!("failed to rollback network config: {err2:#}");
@@ -168,7 +177,7 @@ impl NetworkConfigService {
             ui_port: crate::config::AppConfig::get().ui.port,
             rollback_enabled: enable_rollback
                 && request.network.is_server_addr
-                && request.network.ip_changed,
+                && (request.network.ip_changed || switching_to_dhcp),
         })
     }
 
@@ -333,6 +342,7 @@ impl NetworkConfigService {
         service_client: &T,
         network: &NetworkConfig,
         enable_rollback: bool,
+        switching_to_dhcp: bool,
     ) -> Result<()>
     where
         T: DeviceServiceClient,
@@ -343,7 +353,7 @@ impl NetworkConfigService {
         Self::write_network_config(network)?;
         service_client.reload_network().await?;
 
-        if network.is_server_addr && network.ip_changed {
+        if network.is_server_addr && (network.ip_changed || switching_to_dhcp) {
             // Only create rollback if user explicitly requested it
             if enable_rollback {
                 Self::create_rollback(network)?;

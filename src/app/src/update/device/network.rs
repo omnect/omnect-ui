@@ -21,12 +21,15 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
     match parsed_config {
         Ok(config_req) => {
             // Store network change state for later use
-            if config_req.is_server_addr && config_req.ip_changed {
+            // Show modal for: IP changed OR switching to DHCP on current adapter
+            if config_req.is_server_addr && (config_req.ip_changed || config_req.switching_to_dhcp)
+            {
                 model.network_change_state = NetworkChangeState::ApplyingConfig {
                     is_server_addr: true,
-                    ip_changed: true,
+                    ip_changed: config_req.ip_changed || config_req.switching_to_dhcp,
                     new_ip: config_req.ip.clone().unwrap_or_default(),
                     old_ip: config_req.previous_ip.clone().unwrap_or_default(),
+                    switching_to_dhcp: config_req.switching_to_dhcp,
                 };
             }
 
@@ -65,24 +68,34 @@ pub fn handle_set_network_config_response(
         Ok(response) => {
             // Check if rollback was enabled and we need to poll for new IP
             if response.rollback_enabled {
-                if let NetworkChangeState::ApplyingConfig { new_ip, .. } =
-                    &model.network_change_state.clone()
+                if let NetworkChangeState::ApplyingConfig {
+                    new_ip,
+                    switching_to_dhcp,
+                    ..
+                } = &model.network_change_state.clone()
                 {
                     model.network_change_state = NetworkChangeState::WaitingForNewIp {
                         new_ip: new_ip.clone(),
                         attempt: 0,
                         rollback_timeout_seconds: response.rollback_timeout_seconds,
                         ui_port: response.ui_port,
+                        switching_to_dhcp: *switching_to_dhcp,
                     };
                     model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
 
                     // Set overlay spinner for IP change with countdown
-                    // Shell will build redirect URL from network_change_state
+                    // Different message for DHCP vs static IP changes
+                    let overlay_text = if *switching_to_dhcp {
+                        "Network configuration is being applied. Your connection will be interrupted. \
+                         Use your DHCP server or device console to find the new IP address. \
+                         If the new configuration doesn't work, it will automatically rollback."
+                    } else {
+                        "Network configuration is being applied. Click the button below to open the new address in a new tab. \
+                         You must access the new address to cancel the automatic rollback."
+                    };
+
                     model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
-                        .with_text(
-                            "Network configuration is being applied. Click the button below to open the new address in a new tab. \
-                             You must access the new address to cancel the automatic rollback."
-                        )
+                        .with_text(overlay_text)
                         .with_countdown(response.rollback_timeout_seconds as u32);
 
                     // Reset form state after successful submission
@@ -97,8 +110,11 @@ pub fn handle_set_network_config_response(
                 }
             } else {
                 // No rollback enabled - check if IP changed for current connection
-                if let NetworkChangeState::ApplyingConfig { new_ip, .. } =
-                    &model.network_change_state.clone()
+                if let NetworkChangeState::ApplyingConfig {
+                    new_ip,
+                    switching_to_dhcp,
+                    ..
+                } = &model.network_change_state.clone()
                 {
                     // Show overlay without countdown for manual navigation
                     model.network_change_state = NetworkChangeState::WaitingForNewIp {
@@ -106,15 +122,22 @@ pub fn handle_set_network_config_response(
                         attempt: 0,
                         rollback_timeout_seconds: 0, // No countdown
                         ui_port: response.ui_port,
+                        switching_to_dhcp: *switching_to_dhcp,
                     };
                     model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
 
-                    // Set overlay spinner without countdown - just redirect button
+                    // Set overlay spinner without countdown
+                    // Different message for DHCP vs static IP changes
+                    let overlay_text = if *switching_to_dhcp {
+                        "Network configuration has been applied. Your connection will be interrupted. \
+                         Use your DHCP server or device console to find the new IP address."
+                    } else {
+                        "Network configuration has been applied. Your connection will be interrupted. \
+                         Click the button below to navigate to the new address."
+                    };
+
                     model.overlay_spinner = OverlaySpinnerState::new("Applying network settings")
-                        .with_text(
-                            "Network configuration has been applied. Your connection will be interrupted. \
-                             Click the button below to navigate to the new address."
-                        );
+                        .with_text(overlay_text);
 
                     // Reset form state after successful submission
                     model.network_form_state = NetworkFormState::Idle;
@@ -149,12 +172,14 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
         attempt,
         rollback_timeout_seconds,
         ui_port,
+        switching_to_dhcp,
     } = &model.network_change_state
     {
         let new_ip = new_ip.clone();
         let new_attempt = *attempt + 1;
         let timeout_secs = *rollback_timeout_seconds;
         let port = *ui_port;
+        let switching_to_dhcp = *switching_to_dhcp;
 
         // Update attempt counter
         model.network_change_state = NetworkChangeState::WaitingForNewIp {
@@ -162,6 +187,7 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
             attempt: new_attempt,
             rollback_timeout_seconds: timeout_secs,
             ui_port: port,
+            switching_to_dhcp,
         };
 
         // Try to reach the new IP (silent GET - no error shown on failure)

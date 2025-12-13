@@ -50,6 +50,9 @@ pub struct NetworkConfigRequest {
     /// Only applicable when is_server_addr=true AND ip_changed=true.
     #[serde(default)]
     pub enable_rollback: Option<bool>,
+    /// Whether this change is switching to DHCP (for UI messaging)
+    #[serde(default)]
+    pub switching_to_dhcp: bool,
 }
 
 /// Form data for network configuration
@@ -124,12 +127,14 @@ pub enum NetworkChangeState {
         ip_changed: bool,
         new_ip: String,
         old_ip: String,
+        switching_to_dhcp: bool,
     },
     WaitingForNewIp {
         new_ip: String,
         attempt: u32,
         rollback_timeout_seconds: u64,
         ui_port: u16,
+        switching_to_dhcp: bool,
     },
     NewIpReachable {
         new_ip: String,

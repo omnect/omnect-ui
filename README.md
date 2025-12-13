@@ -53,28 +53,35 @@ omnect UI allows you to configure network settings for your device's network ada
 
 #### Automatic Rollback Protection
 
-When changing the IP address of the network adapter you're currently connected to, omnect UI provides an optional automatic rollback feature to prevent losing access to your device:
+When changing network settings that affect your current connection, omnect UI provides an optional automatic rollback feature to prevent losing access to your device:
+
+**When does this apply:**
+
+The confirmation dialog appears when you:
+- Change the static IP address of the adapter you're currently connected to, OR
+- Switch from static IP to DHCP on the adapter you're currently connected to
 
 **How it works:**
 
-1. When you attempt to change the IP address of the adapter you're connected to, a confirmation dialog appears
+1. When you attempt a change that affects your connection, a confirmation dialog appears
 2. You can choose to enable automatic rollback protection (enabled by default and recommended)
 3. If enabled:
-   - You have 90 seconds to access the device at the new IP address
-   - An overlay with a countdown timer will guide you to the new address
-   - You must log in at the new IP address to confirm the change works
+   - **For static IP changes**: You have 90 seconds to access the device at the new IP address. An overlay with a countdown timer will guide you to the new address. You must log in at the new IP address to confirm the change works.
+   - **For DHCP changes**: You have 90 seconds to find and access the new DHCP-assigned IP (check your DHCP server or device console). The overlay will show a countdown.
    - If you don't access the new address within 90 seconds, the device automatically restores the previous network configuration
 4. If disabled:
    - Changes are applied immediately without automatic rollback protection
-   - An overlay appears with a button to navigate to the new IP address
-   - You're responsible for manually accessing the new IP address
+   - **For static IP changes**: An overlay appears with a button to navigate to the new IP address
+   - **For DHCP changes**: An overlay informs you to use your DHCP server or console to find the new IP
+   - You're responsible for manually accessing the new address
    - If the new configuration doesn't work, you may lose network access to the device
 
 **Important notes:**
 
-- Automatic rollback only applies when changing the IP address of the adapter you're currently connected through
+- Automatic rollback only applies when changing settings on the adapter you're currently connected through
 - Changes to other network adapters don't trigger the rollback mechanism
-- The rollback feature requires physical or console access to recover if network access is lost
+- When switching to DHCP, the new IP address cannot be known in advance - you must check your DHCP server or device console
+- The rollback feature requires physical or console access to recover if network access is lost and rollback fails
 
 ## Development
 

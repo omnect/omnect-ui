@@ -101,10 +101,13 @@ const isSubmitting = ref(false)
 const isSyncingFromWebSocket = ref(false)
 const isServerAddr = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr === location.hostname)
 const ipChanged = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr !== ipAddress.value)
+const dhcpChanged = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.dhcp !== isDHCP.value)
+const switchingToDhcp = computed(() => !props.networkAdapter?.ipv4?.addrs[0]?.dhcp && isDHCP.value)
 
 // Modal state for rollback confirmation
 const showRollbackModal = ref(false)
 const enableRollback = ref(true) // Default to checked (enabled)
+const isDhcpChange = ref(false) // Track if this is a DHCP change
 
 const restoreSettings = () => {
     // Reset Core state (clears dirty flag and NetworkFormState)
@@ -143,7 +146,11 @@ watch(
 
 const submit = async () => {
     // Check if we need to show the rollback confirmation modal
-    if (isServerAddr.value && ipChanged.value) {
+    // Show modal when:
+    // 1. Static IP changed on current adapter, OR
+    // 2. Switching to DHCP on current adapter (IP will likely change)
+    if (isServerAddr.value && (ipChanged.value || switchingToDhcp.value)) {
+        isDhcpChange.value = switchingToDhcp.value
         showRollbackModal.value = true
         return
     }
@@ -166,7 +173,8 @@ const submitNetworkConfig = async (includeRollback: boolean) => {
         netmask: netmask.value ?? null,
         gateway: gateways.value.split("\n").filter(g => g.trim()) ?? [],
         dns: dns.value.split("\n").filter(d => d.trim()) ?? [],
-        enableRollback: includeRollback ? enableRollback.value : null
+        enableRollback: includeRollback ? enableRollback.value : null,
+        switchingToDhcp: switchingToDhcp.value
     })
 
     await setNetworkConfig(config)
@@ -183,15 +191,21 @@ const cancelRollbackModal = () => {
         <v-dialog v-model="showRollbackModal" max-width="600">
             <v-card>
                 <v-card-title class="text-h5">
-                    Confirm IP Address Change
+                    Confirm Network Configuration Change
                 </v-card-title>
                 <v-card-text>
                     <v-alert type="warning" variant="tonal" class="mb-4">
-                        Changing this IP will disconnect your current session.
+                        This change will disconnect your current session.
                     </v-alert>
                     <p class="mb-4">
-                        You are about to change the IP address of the network adapter you're currently connected to.
-                        This will interrupt your connection.
+                        <template v-if="isDhcpChange">
+                            You are about to switch to DHCP on the network adapter you're currently connected to.
+                            This will likely assign a new IP address and interrupt your connection.
+                        </template>
+                        <template v-else>
+                            You are about to change the IP address of the network adapter you're currently connected to.
+                            This will interrupt your connection.
+                        </template>
                     </p>
                     <v-checkbox
                         v-model="enableRollback"
