@@ -15,13 +15,14 @@ import type { HealthcheckResponse } from "./types"
 axios.defaults.validateStatus = (_) => true
 
 const { snackbarState } = useSnackbar()
-const { viewModel } = useCore()
+const { viewModel, ackRollback } = useCore()
 
 const { lgAndUp } = useDisplay()
 const router = useRouter()
 const route = useRoute()
 const showSideBar: Ref<boolean> = ref(lgAndUp.value)
 const overlay: Ref<boolean> = ref(false)
+const showRollbackNotification: Ref<boolean> = ref(false)
 const errorTitle = ref("")
 const errorMsg = ref("")
 
@@ -44,6 +45,11 @@ const updateSidebarVisibility = (visible: boolean) => {
 	showSideBar.value = visible
 }
 
+const acknowledgeRollback = () => {
+	ackRollback()
+	showRollbackNotification.value = false
+}
+
 // Watch authentication state to redirect to login if session is lost
 // This handles the case where the backend restarts (reboot/factory reset) and the session becomes invalid
 watch(
@@ -64,6 +70,10 @@ onMounted(async () => {
 		}
 	})
 	const data = (await res.json()) as HealthcheckResponse
+	if (data.network_rollback_occurred) {
+		showRollbackNotification.value = true
+	}
+
 	if (!res.ok) {
 		overlay.value = true
 		errorTitle.value = "omnect-device-service version mismatch"
@@ -78,6 +88,18 @@ onMounted(async () => {
       <DialogContent :title="errorTitle" dialog-type="Error" :show-close="false">
         <div class="flex flex-col gap-2 mb-8">
           {{ errorMsg }}
+        </div>
+      </DialogContent>
+    </v-dialog>
+    <v-dialog v-model="showRollbackNotification" max-width="500" persistent>
+      <DialogContent title="Network Settings Rolled Back" dialog-type="Warning" :show-close="false">
+        <div class="flex flex-col gap-4 mb-4">
+          <p>
+            The network settings were rolled back to the previous configuration because the new settings could not be confirmed.
+          </p>
+          <div class="flex justify-end">
+            <v-btn color="primary" @click="acknowledgeRollback">OK</v-btn>
+          </div>
         </div>
       </DialogContent>
     </v-dialog>

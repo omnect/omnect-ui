@@ -160,6 +160,7 @@ export interface ViewModel {
 	healthcheck: {
 		version_info: { version: string; git_sha: string }
 		update_validation_status: { status: string }
+		network_rollback_occurred: boolean
 	} | null
 	is_authenticated: boolean
 	requires_password_set: boolean
