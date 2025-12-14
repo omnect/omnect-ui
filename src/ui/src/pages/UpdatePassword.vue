@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref } from "vue"
+import { useRouter } from "vue-router"
 import PasswordField from "../components/common/PasswordField.vue"
 import { useCore } from "../composables/useCore"
 import { useMessageWatchers } from "../composables/useMessageWatchers"
 import { usePasswordForm } from "../composables/usePasswordForm"
 import { useAuthNavigation } from "../composables/useAuthNavigation"
 
+const router = useRouter()
 const { updatePassword, login } = useCore()
 const currentPassword = ref<string>("")
 const { password, repeatPassword, errorMsg, validatePasswords } = usePasswordForm()
@@ -16,6 +18,7 @@ useMessageWatchers({
 	onSuccess: async () => {
 		// Automatically log in with the new password
 		await login(password.value)
+		await router.push("/")
 	},
 	onError: (message) => {
 		errorMsg.value = message
