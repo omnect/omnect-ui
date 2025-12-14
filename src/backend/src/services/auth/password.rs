@@ -23,6 +23,7 @@ impl PasswordService {
     /// # Returns
     /// Result indicating success or failure
     pub fn validate_password(password: &str) -> Result<()> {
+        debug!("validate_password() called");
         ensure!(!password.is_empty(), "failed to validate password: empty");
 
         let password_file = &AppConfig::get().paths.password_file;
@@ -80,8 +81,8 @@ impl PasswordService {
             let temp_file_path = password_file.with_extension("tmp");
 
             let result = (|| -> Result<()> {
-                let mut file = File::create(&temp_file_path)
-                    .context("failed to create temp password file")?;
+                let mut file =
+                    File::create(&temp_file_path).context("failed to create temp password file")?;
 
                 file.write_all(hash.as_bytes())
                     .context("failed to write password file")?;

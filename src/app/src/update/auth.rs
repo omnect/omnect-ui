@@ -65,9 +65,7 @@ pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
         }
 
         AuthEvent::UpdatePasswordResponse(result) => handle_response!(model, result, {
-            on_success: |model, _| {
-                model.invalidate_session();
-            },
+            on_success: |model, _| {},
             success_message: "Password updated successfully",
         }),
 
