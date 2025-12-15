@@ -136,6 +136,9 @@ if [[ "$IMAGE_ARCH" != "$(uname -m)" ]]; then
   docker run --rm --privileged omnectweucopsacr.azurecr.io/mlilien/qemu-user-static:8.1.2 --reset -p yes
 fi
 
+# Ensure access to registry
+az acr login --name omnectweucopsacr
+
 # Build with or without cache
 BUILD_ARGS="--platform linux/${IMAGE_ARCH} --load -f Dockerfile . -t $IMAGE_NAME --build-arg GIT_SHORT_REV=$GIT_SHORT_REV"
 if [[ "$CLEAN" == "true" ]]; then
@@ -165,7 +168,7 @@ if [[ "$DEPLOY" == "true" ]]; then
   fi
 
   echo "Loading image on device and restarting container..."
-  
+
   CMD="set -e
 
     # Check required directories exist
