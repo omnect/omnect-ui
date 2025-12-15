@@ -13,7 +13,7 @@ const routes = [
 	{ path: "/", component: DeviceOverview, meta: { text: "Device", requiresAuth: true, showMenu: true } },
 	{ path: "/network", component: Network, meta: { text: "Network", requiresAuth: true, showMenu: true } },
 	{ path: "/update", component: DeviceUpdate, meta: { text: "Update", requiresAuth: true, showMenu: true } },
-	{ path: "/login", component: Login, meta: { showMenu: false } },
+	{ path: "/login", component: Login, meta: { showMenu: false, guestOnly: true } },
 	{ path: "/set-password", component: SetPassword, meta: { requiresPortalAuth: true, showMenu: false } },
 	{ path: "/update-password", component: UpdatePassword, meta: { requiresAuth: true, showMenu: true } },
 	{ path: "/auth-callback", component: Callback, meta: { showMenu: false } }
@@ -25,6 +25,13 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, _, next) => {
+	const { viewModel } = useCore()
+
+	if (to.meta.guestOnly && viewModel.is_authenticated) {
+		next("/")
+		return
+	}
+
 	if (to.meta.requiresPortalAuth) {
 		const user = await getUser()
 		if (!user || user.expired) {
@@ -32,7 +39,6 @@ router.beforeEach(async (to, _, next) => {
 		}
 	}
 	if (to.meta.requiresAuth) {
-		const { viewModel } = useCore()
 		// Rely on the Core's authentication state as the single source of truth
 		if (!viewModel.is_authenticated) {
 			next("/login")

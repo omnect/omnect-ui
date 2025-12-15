@@ -12,7 +12,7 @@ const menu = ref(false)
 const logOut = async () => {
 	await logout()
 	unsubscribeFromChannels()
-	router.push("/login")
+	await router.push("/login") // Ensure navigation also awaits the push operation
 }
 </script>
 
