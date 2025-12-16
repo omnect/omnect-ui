@@ -395,7 +395,10 @@ pub mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn middleware_correct_user_credentials_should_succeed_and_return_valid_token() {
+        let _lock = PasswordService::lock_for_test();
+
         let password = "some-password";
         setup_password_file(password);
 
@@ -407,14 +410,16 @@ pub mod tests {
             .insert_header(ContentType::plaintext())
             .insert_header(("Authorization", format!("Basic {encoded_password}")))
             .to_request();
-        println!("req: {req:#?}");
         let resp = test::call_service(&app, req).await;
 
         assert!(resp.status().is_success());
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn middleware_invalid_user_credentials_should_return_unauthorized_error() {
+        let _lock = PasswordService::lock_for_test();
+
         let password = "some-password";
         setup_password_file(password);
 

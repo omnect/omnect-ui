@@ -11,10 +11,26 @@ use argon2::{
 use log::debug;
 use std::{fs::File, io::Write};
 
+#[cfg(any(test, feature = "mock"))]
+use std::sync::{LazyLock, Mutex, MutexGuard};
+
+#[cfg(any(test, feature = "mock"))]
+#[allow(dead_code)]
+static PASSWORD_FILE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
 /// Service for password management operations
 pub struct PasswordService;
 
 impl PasswordService {
+    /// Acquire a lock for password file operations (test-only)
+    ///
+    /// This ensures that tests modifying the password file don't interfere with each other
+    #[cfg(any(test, feature = "mock"))]
+    #[allow(dead_code)]
+    pub fn lock_for_test() -> MutexGuard<'static, ()> {
+        PASSWORD_FILE_LOCK.lock().unwrap()
+    }
+
     /// Validate a password against the stored hash
     ///
     /// # Arguments
@@ -135,6 +151,8 @@ mod tests {
 
     #[test]
     fn test_store_and_check_password() {
+        let _lock = PasswordService::lock_for_test();
+
         // This test relies on AppConfig which is initialized in test mode with temp directories
         // Clean up any existing password file first
         let password_file = &AppConfig::get().paths.password_file;
