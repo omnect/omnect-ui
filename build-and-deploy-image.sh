@@ -14,6 +14,7 @@ DEVICE_PASS="${DEVICE_PASS:-}"
 DEVICE_PORT="${DEVICE_PORT:-1977}"
 IMAGE_TAG="${IMAGE_TAG:-$(whoami)}"
 IMAGE_ARCH="${IMAGE_ARCH:-arm64}"
+DOCKER_NAMESPACE="${DOCKER_NAMESPACE:-omnectweucopsacr.azurecr.io}"
 IMAGE_NAME="omnectshareddevacr.azurecr.io/omnect-ui:${IMAGE_TAG}"
 IMAGE_TAR="/tmp/omnect-ui-${IMAGE_ARCH}.tar"
 
@@ -33,6 +34,7 @@ OPTIONS:
   --password <password> SSH password for target device (default: $DEVICE_PASS)
   --port <port>         UI port on target device (default: $DEVICE_PORT)
   --tag <tag>           Docker image tag (default: \$(whoami))
+  --namespace <ns>      Docker registry namespace (default: omnectweucopsacr.azurecr.io)
   --help                Show this help message
 
 ENVIRONMENT VARIABLES:
@@ -42,6 +44,7 @@ ENVIRONMENT VARIABLES:
   DEVICE_PORT           UI port on target device (default: 1977)
   IMAGE_TAG             Docker image tag (default: \$(whoami))
   IMAGE_ARCH            Target architecture (default: arm64)
+  DOCKER_NAMESPACE      Docker registry namespace (default: omnectweucopsacr.azurecr.io)
 
 EXAMPLES:
   $0                                    # Build only (arm64)
@@ -101,6 +104,10 @@ while [[ $# -gt 0 ]]; do
       IMAGE_NAME="omnectshareddevacr.azurecr.io/omnect-ui:${IMAGE_TAG}"
       shift 2
       ;;
+    --namespace)
+      DOCKER_NAMESPACE="$2"
+      shift 2
+      ;;
     --help)
       usage
       exit 0
@@ -131,16 +138,16 @@ GIT_SHORT_REV=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 echo "Building ${IMAGE_ARCH} image: $IMAGE_NAME"
 echo "Git revision: $GIT_SHORT_REV"
 
+# Ensure access to registry
+az acr login --name ${DOCKER_NAMESPACE}
+
 # Setup QEMU for cross-architecture builds if needed
 if [[ "$IMAGE_ARCH" != "$(uname -m)" ]]; then
-  docker run --rm --privileged omnectweucopsacr.azurecr.io/mlilien/qemu-user-static:8.1.2 --reset -p yes
+  docker run --rm --privileged ${DOCKER_NAMESPACE}/mlilien/qemu-user-static:8.1.2 --reset -p yes
 fi
 
-# Ensure access to registry
-az acr login --name omnectweucopsacr
-
 # Build with or without cache
-BUILD_ARGS="--platform linux/${IMAGE_ARCH} --load -f Dockerfile . -t $IMAGE_NAME --build-arg GIT_SHORT_REV=$GIT_SHORT_REV"
+BUILD_ARGS="--platform linux/${IMAGE_ARCH} --load -f Dockerfile . -t $IMAGE_NAME --build-arg GIT_SHORT_REV=$GIT_SHORT_REV --build-arg DOCKER_NAMESPACE=${DOCKER_NAMESPACE}"
 if [[ "$CLEAN" == "true" ]]; then
   echo "Performing clean build (no cache)..."
   docker buildx build --no-cache $BUILD_ARGS
