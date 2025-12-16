@@ -34,9 +34,9 @@ macro_rules! update_field {
 
 // Re-export http_helpers functions for macro use
 pub use crate::http_helpers::{
-    check_response_status, extract_error_message, extract_string_response, handle_auth_error,
-    handle_request_error, is_response_success, parse_json_response, process_json_response,
-    process_status_response,
+    build_url, check_response_status, extract_error_message, extract_string_response,
+    handle_auth_error, handle_request_error, is_response_success, parse_json_response,
+    process_json_response, process_status_response, BASE_URL,
 };
 
 /// Macro for unauthenticated POST requests with standard error handling.
@@ -61,7 +61,7 @@ macro_rules! unauth_post {
     // Pattern 1: POST with JSON body expecting JSON response
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr, expect_json: $response_type:ty) => {{
         $model.start_loading();
-        match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+        match $crate::HttpCmd::post($crate::build_url($endpoint))
             .header("Content-Type", "application/json")
             .body_json($body)
         {
@@ -69,9 +69,7 @@ macro_rules! unauth_post {
                 crux_core::render::render(),
                 builder.build().then_send(|result| {
                     let event_result: Result<$response_type, String> = match result {
-                        Ok(mut response) => {
-                            $crate::macros::parse_json_response($action, &mut response)
-                        }
+                        Ok(mut response) => $crate::parse_json_response($action, &mut response),
                         Err(e) => Err(e.to_string()),
                     };
                     $crate::events::Event::$domain($crate::events::$domain_event::$response_event(
@@ -88,7 +86,7 @@ macro_rules! unauth_post {
     // Pattern 2: POST with JSON body expecting status only
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr) => {{
         $model.start_loading();
-        match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+        match $crate::HttpCmd::post($crate::build_url($endpoint))
             .header("Content-Type", "application/json")
             .body_json($body)
         {
@@ -96,9 +94,7 @@ macro_rules! unauth_post {
                 crux_core::render::render(),
                 builder.build().then_send(|result| {
                     let event_result = match result {
-                        Ok(mut response) => {
-                            $crate::macros::check_response_status($action, &mut response)
-                        }
+                        Ok(mut response) => $crate::check_response_status($action, &mut response),
                         Err(e) => Err(e.to_string()),
                     };
                     $crate::events::Event::$domain($crate::events::$domain_event::$response_event(
@@ -117,13 +113,11 @@ macro_rules! unauth_post {
         $model.start_loading();
         crux_core::Command::all([
             crux_core::render::render(),
-            $crate::HttpCmd::get(format!("http://omnect-device{}", $endpoint))
+            $crate::HttpCmd::get($crate::build_url($endpoint))
                 .build()
                 .then_send(|result| {
                     let event_result: Result<$response_type, String> = match result {
-                        Ok(mut response) => {
-                            $crate::macros::parse_json_response($action, &mut response)
-                        }
+                        Ok(mut response) => $crate::parse_json_response($action, &mut response),
                         Err(e) => Err(e.to_string()),
                     };
                     $crate::events::Event::$domain($crate::events::$domain_event::$response_event(
@@ -155,14 +149,13 @@ macro_rules! auth_post_basic {
         $model.start_loading();
         crux_core::Command::all([
             crux_core::render::render(),
-            $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+            $crate::HttpCmd::post($crate::build_url($endpoint))
                 .header("Authorization", format!("Basic {}", $credentials))
                 .build()
                 .then_send(|result| {
                     let event_result = match result {
                         Ok(mut response) => {
-                            $crate::macros::extract_string_response($action, &mut response)
-                                .map($mapper)
+                            $crate::extract_string_response($action, &mut response).map($mapper)
                         }
                         Err(e) => Err(e.to_string()),
                     };
@@ -215,18 +208,18 @@ macro_rules! auth_post {
         if let Some(token) = &$model.auth_token {
             crux_core::Command::all([
                 crux_core::render::render(),
-                $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+                $crate::HttpCmd::post($crate::build_url($endpoint))
                     .header("Authorization", format!("Bearer {token}"))
                     .build()
                     .then_send(|result| {
-                        let event_result = $crate::macros::process_status_response($action, result);
+                        let event_result = $crate::process_status_response($action, result);
                         $crate::events::Event::$domain(
                             $crate::events::$domain_event::$response_event(event_result),
                         )
                     }),
             ])
         } else {
-            $crate::macros::handle_auth_error($model, $action)
+            $crate::handle_auth_error($model, $action)
         }
     }};
 
@@ -234,7 +227,7 @@ macro_rules! auth_post {
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr) => {{
         $model.start_loading();
         if let Some(token) = &$model.auth_token {
-            match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+            match $crate::HttpCmd::post($crate::build_url($endpoint))
                 .header("Authorization", format!("Bearer {token}"))
                 .header("Content-Type", "application/json")
                 .body_json($body)
@@ -242,16 +235,16 @@ macro_rules! auth_post {
                 Ok(builder) => crux_core::Command::all([
                     crux_core::render::render(),
                     builder.build().then_send(|result| {
-                        let event_result = $crate::macros::process_status_response($action, result);
+                        let event_result = $crate::process_status_response($action, result);
                         $crate::events::Event::$domain(
                             $crate::events::$domain_event::$response_event(event_result),
                         )
                     }),
                 ]),
-                Err(e) => $crate::macros::handle_request_error($model, $action, e),
+                Err(e) => $crate::handle_request_error($model, $action, e),
             }
         } else {
-            $crate::macros::handle_auth_error($model, $action)
+            $crate::handle_auth_error($model, $action)
         }
     }};
 
@@ -261,20 +254,20 @@ macro_rules! auth_post {
         if let Some(token) = &$model.auth_token {
             crux_core::Command::all([
                 crux_core::render::render(),
-                $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+                $crate::HttpCmd::post($crate::build_url($endpoint))
                     .header("Authorization", format!("Bearer {token}"))
                     .header("Content-Type", "application/json")
                     .body_string($body)
                     .build()
                     .then_send(|result| {
-                        let event_result = $crate::macros::process_status_response($action, result);
+                        let event_result = $crate::process_status_response($action, result);
                         $crate::events::Event::$domain(
                             $crate::events::$domain_event::$response_event(event_result),
                         )
                     }),
             ])
         } else {
-            $crate::macros::handle_auth_error($model, $action)
+            $crate::handle_auth_error($model, $action)
         }
     }};
 
@@ -282,7 +275,7 @@ macro_rules! auth_post {
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr, expect_json: $response_type:ty) => {{
         $model.start_loading();
         if let Some(token) = &$model.auth_token {
-            match $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+            match $crate::HttpCmd::post($crate::build_url($endpoint))
                 .header("Authorization", format!("Bearer {token}"))
                 .header("Content-Type", "application/json")
                 .body_json($body)
@@ -291,16 +284,16 @@ macro_rules! auth_post {
                     crux_core::render::render(),
                     builder.build().then_send(|result| {
                         let event_result: Result<$response_type, String> =
-                            $crate::macros::process_json_response($action, result);
+                            $crate::process_json_response($action, result);
                         $crate::events::Event::$domain(
                             $crate::events::$domain_event::$response_event(event_result),
                         )
                     }),
                 ]),
-                Err(e) => $crate::macros::handle_request_error($model, $action, e),
+                Err(e) => $crate::handle_request_error($model, $action, e),
             }
         } else {
-            $crate::macros::handle_auth_error($model, $action)
+            $crate::handle_auth_error($model, $action)
         }
     }};
 
@@ -310,21 +303,21 @@ macro_rules! auth_post {
         if let Some(token) = &$model.auth_token {
             crux_core::Command::all([
                 crux_core::render::render(),
-                $crate::HttpCmd::post(format!("http://omnect-device{}", $endpoint))
+                $crate::HttpCmd::post($crate::build_url($endpoint))
                     .header("Authorization", format!("Bearer {token}"))
                     .header("Content-Type", "application/json")
                     .body_string($body)
                     .build()
                     .then_send(|result| {
                         let event_result: Result<$response_type, String> =
-                            $crate::macros::process_json_response($action, result);
+                            $crate::process_json_response($action, result);
                         $crate::events::Event::$domain(
                             $crate::events::$domain_event::$response_event(event_result),
                         )
                     }),
             ])
         } else {
-            $crate::macros::handle_auth_error($model, $action)
+            $crate::handle_auth_error($model, $action)
         }
     }};
 }
@@ -343,7 +336,7 @@ macro_rules! http_get {
         $crate::HttpCmd::get($url).build().then_send(|result| {
             let event_result: Result<$response_type, String> = match result {
                 Ok(mut response) => {
-                    $crate::macros::parse_json_response(stringify!($response_event), &mut response)
+                    $crate::parse_json_response(stringify!($response_event), &mut response)
                 }
                 Err(e) => Err(e.to_string()),
             };

@@ -21,6 +21,11 @@ use crux_http::Http;
 // Re-export core types
 pub use crate::capabilities::centrifugo::{CentrifugoOperation, CentrifugoOutput};
 pub use crate::events::Event;
+pub use crate::http_helpers::{
+    build_url, check_response_status, extract_error_message, extract_string_response,
+    handle_auth_error, handle_request_error, is_response_success, parse_json_response,
+    process_json_response, process_status_response, BASE_URL,
+};
 pub use crate::model::Model;
 pub use crate::types::*;
 pub use crux_http::Result as HttpResult;
