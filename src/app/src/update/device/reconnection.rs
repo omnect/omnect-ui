@@ -108,7 +108,7 @@ pub fn handle_healthcheck_response(
                     attempt: model.reconnection_attempt,
                 };
             } else if (update_done || !is_updating) && model.device_went_offline {
-                // Success AND device went offline previously - reconnection successful
+                // Device came back online after going offline - reconnection successful
                 let operation = model.device_operation_state.operation_name();
                 model.device_operation_state =
                     DeviceOperationState::ReconnectionSuccessful { operation };

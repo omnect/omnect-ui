@@ -24,8 +24,7 @@ pub struct Model {
     pub healthcheck: Option<HealthcheckInfo>,
 
     // Authentication state
-    /// Internal auth token. Currently serialized to the view model as a workaround
-    /// for a `shared_types` deserialization misalignment. See TODO in README.md.
+    /// Auth token for API requests
     pub auth_token: Option<String>,
     pub is_authenticated: bool,
     pub requires_password_set: bool,
@@ -56,7 +55,7 @@ pub struct Model {
     // Firmware upload state
     pub firmware_upload_state: UploadState,
 
-    // Overlay spinner state (moved from Shell for single source of truth)
+    // Overlay spinner state
     pub overlay_spinner: OverlaySpinnerState,
 }
 
