@@ -95,7 +95,7 @@ echo "🧪 Running Playwright Tests..."
 export BASE_URL="http://localhost:5173"
 
 # Run tests
-npx playwright test
+npx playwright test "$@"
 
 TEST_EXIT_CODE=$?
 
