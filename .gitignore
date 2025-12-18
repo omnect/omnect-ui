@@ -15,4 +15,6 @@ src/ui/src/core/pkg/
 
 # Research and documentation files (generated, not part of source)
 *.md
-!README.md
+!README.mdsrc/ui/playwright-report/
+src/ui/test-results/
+temp/
