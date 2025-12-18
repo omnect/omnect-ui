@@ -81,25 +81,25 @@ After implementing Phase 1, we've determined that effect emission testing provid
 
 **Environment:** `omnectshareddevacr.azurecr.io/rust:bookworm` (includes Rust, Node, Playwright, Centrifugo).
 
-#### PR 3.1: E2E Infrastructure & Docker Integration
-- [ ] **Dependencies:** Add `@playwright/test` to `src/ui/package.json`
-- [ ] **Config:** Add `src/ui/playwright.config.ts` (Base URL, artifacts, projects)
-- [ ] **Script 1 (`scripts/run-e2e-tests.sh`):** Internal script to run tests inside the container
-- [ ] **Script 2 (`scripts/test-e2e-in-container.sh`):** Host script to:
+#### PR 3.1: E2E Infrastructure & Docker Integration ✅
+- [x] **Dependencies:** Add `@playwright/test` to `src/ui/package.json`
+- [x] **Config:** Add `src/ui/playwright.config.ts` (Base URL, artifacts, projects)
+- [x] **Script 1 (`scripts/run-e2e-tests.sh`):** Internal script to run tests inside the container
+- [x] **Script 2 (`scripts/test-e2e-in-container.sh`):** Host script to:
     - Launch the Docker container
     - Build frontend (`scripts/build-frontend.sh`) if needed
     - Execute `scripts/run-e2e-tests.sh`
-- [ ] **Centrifugo Setup:** Ensure tests interact with the real Centrifugo instance (e.g., via `curl` to publish) rather than mocking
+- [x] **Centrifugo Setup:** Ensure tests interact with the real Centrifugo instance (e.g., via `curl` to publish) rather than mocking
 
-#### PR 3.2: Critical Path Tests
-- [ ] **Auth Flow:**
+#### PR 3.2: Critical Path Tests ✅
+- [x] **Auth Flow:**
     - Mock HTTP responses for Login/Logout
     - Verify Login form → Dashboard transition
     - Verify Logout action → Login form
-- [ ] **Device Read-Only:**
+- [x] **Device Read-Only:**
     - Inject System Info via real Centrifugo instance (publish via `curl`)
     - Assert values appear on the Dashboard
-- [ ] **Network Safety UI:**
+- [x] **Network Safety UI:**
     - Simulate network change action
     - Assert "Rollback Timer" overlay appears
 
