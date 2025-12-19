@@ -103,29 +103,177 @@ mod tests {
     use std::fs::File;
     use std::io::Write as _;
 
-    #[test]
-    fn test_clear_data_folder() {
-        let data_path = &AppConfig::get().paths.data_dir;
+    #[cfg(feature = "mock")]
+    use mockall_double::double;
 
-        // Create some test files
-        File::create(data_path.join("file1.txt"))
-            .expect("should create file1")
-            .write_all(b"test")
-            .expect("should write");
-        File::create(data_path.join("file2.txt"))
-            .expect("should create file2")
-            .write_all(b"test")
-            .expect("should write");
+    #[cfg(feature = "mock")]
+    #[double]
+    use crate::omnect_device_service_client::DeviceServiceClient;
 
-        // Verify files exist
-        assert!(data_path.join("file1.txt").exists());
-        assert!(data_path.join("file2.txt").exists());
+    // NOTE: clear_data_folder tests share the same temp directory (from AppConfig)
+    // and may race if run in parallel. Run with --test-threads=1 if flaky.
 
-        // Clear folder (testing private method via module visibility)
-        FirmwareService::clear_data_folder().expect("should clear folder");
+    mod clear_data_folder {
+        use super::*;
 
-        // Verify files are deleted
-        assert!(!data_path.join("file1.txt").exists());
-        assert!(!data_path.join("file2.txt").exists());
+        #[test]
+        fn removes_all_files() {
+            let data_path = &AppConfig::get().paths.data_dir;
+
+            // Ensure directory exists
+            fs::create_dir_all(data_path).expect("should create data dir");
+
+            // Create some test files
+            File::create(data_path.join("file1.txt"))
+                .expect("should create file1")
+                .write_all(b"test")
+                .expect("should write");
+            File::create(data_path.join("file2.txt"))
+                .expect("should create file2")
+                .write_all(b"test")
+                .expect("should write");
+
+            // Verify files exist
+            assert!(data_path.join("file1.txt").exists());
+            assert!(data_path.join("file2.txt").exists());
+
+            // Clear folder
+            FirmwareService::clear_data_folder().expect("should clear folder");
+
+            // Verify files are deleted
+            assert!(!data_path.join("file1.txt").exists());
+            assert!(!data_path.join("file2.txt").exists());
+        }
+
+        #[test]
+        fn succeeds_with_empty_directory() {
+            let data_path = &AppConfig::get().paths.data_dir;
+
+            // Ensure directory exists and is empty
+            fs::create_dir_all(data_path).expect("should create data dir");
+
+            // Clear folder when already empty
+            let result = FirmwareService::clear_data_folder();
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn preserves_subdirectories() {
+            let data_path = &AppConfig::get().paths.data_dir;
+
+            // Ensure directory exists
+            fs::create_dir_all(data_path).expect("should create data dir");
+
+            // Create a subdirectory
+            let subdir = data_path.join("subdir");
+            fs::create_dir_all(&subdir).expect("should create subdir");
+
+            // Create a file in root
+            File::create(data_path.join("file.txt"))
+                .expect("should create file")
+                .write_all(b"test")
+                .expect("should write");
+
+            // Clear folder
+            FirmwareService::clear_data_folder().expect("should clear folder");
+
+            // File should be deleted
+            assert!(!data_path.join("file.txt").exists());
+
+            // Subdirectory should still exist (only files are removed)
+            assert!(subdir.exists());
+            assert!(subdir.is_dir());
+
+            // Cleanup
+            let _ = fs::remove_dir(&subdir);
+        }
+    }
+
+    mod load_update {
+        use super::*;
+        use crate::omnect_device_service_client::LoadUpdate;
+
+        #[tokio::test]
+        async fn forwards_request_to_device_service() {
+            let mut device_mock = DeviceServiceClient::default();
+
+            device_mock
+                .expect_load_update()
+                .withf(|req: &LoadUpdate| {
+                    req.update_file_path == AppConfig::get().paths.host_update_file
+                })
+                .times(1)
+                .returning(|_| Box::pin(async { Ok("update loaded successfully".to_string()) }));
+
+            let result = FirmwareService::load_update(&device_mock).await;
+
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "update loaded successfully");
+        }
+
+        #[tokio::test]
+        async fn returns_error_on_device_service_failure() {
+            let mut device_mock = DeviceServiceClient::default();
+
+            device_mock
+                .expect_load_update()
+                .returning(|_| Box::pin(async { Err(anyhow::anyhow!("device service error")) }));
+
+            let result = FirmwareService::load_update(&device_mock).await;
+
+            assert!(result.is_err());
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("device service error")
+            );
+        }
+    }
+
+    mod run_update {
+        use super::*;
+
+        #[tokio::test]
+        async fn forwards_request_to_device_service() {
+            let mut device_mock = DeviceServiceClient::default();
+
+            device_mock
+                .expect_run_update()
+                .times(1)
+                .returning(|_| Box::pin(async { Ok(()) }));
+
+            // Create RunUpdate via serde (since fields are private)
+            let run_update: crate::omnect_device_service_client::RunUpdate =
+                serde_json::from_str(r#"{"validate_iothub_connection": true}"#)
+                    .expect("should deserialize");
+
+            let result = FirmwareService::run_update(&device_mock, run_update).await;
+
+            assert!(result.is_ok());
+        }
+
+        #[tokio::test]
+        async fn returns_error_on_device_service_failure() {
+            let mut device_mock = DeviceServiceClient::default();
+
+            device_mock
+                .expect_run_update()
+                .returning(|_| Box::pin(async { Err(anyhow::anyhow!("update execution failed")) }));
+
+            let run_update: crate::omnect_device_service_client::RunUpdate =
+                serde_json::from_str(r#"{"validate_iothub_connection": false}"#)
+                    .expect("should deserialize");
+
+            let result = FirmwareService::run_update(&device_mock, run_update).await;
+
+            assert!(result.is_err());
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("update execution failed")
+            );
+        }
     }
 }
