@@ -174,10 +174,13 @@ mod tests {
 - [x] Test `load_update` returns error on device service failure
 - [x] Test `run_update` forwards request to device service
 - [x] Test `run_update` returns error on device service failure
+- [x] Refactored tests to support parallel execution using mutex lock pattern
 
-**7 tests added (6 new)** in [firmware.rs:100-271](src/backend/src/services/firmware.rs#L100-L271)
+**7 tests added (6 new)** in [firmware.rs:100-291](src/backend/src/services/firmware.rs#L100-L291)
 
-**Note:** Tests for `handle_uploaded_firmware` with actual file uploads are not included as they require mocking `TempFile` from actix-multipart, which is complex. The `clear_data_folder` tests share a temp directory and may race in parallel execution (use `--test-threads=1` if flaky).
+**Parallel Test Support:** Tests now use static `DATA_FOLDER_LOCK` mutex following the `PASSWORD_FILE_LOCK` pattern, enabling safe parallel execution without race conditions.
+
+**Note:** Tests for `handle_uploaded_firmware` with actual file uploads are not included as they require mocking `TempFile` from actix-multipart, which is complex.
 
 #### PR 1.4: Device Service Client Tests
 - [ ] Test URL building (`build_url`)
