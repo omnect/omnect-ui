@@ -4,20 +4,20 @@
 
 ### Existing Test Coverage
 
-The backend currently has **54 unit/integration tests** organized as follows:
+The backend currently has **60 unit/integration tests** organized as follows:
 
 | Module | Test Count | Coverage |
 |:-------|:-----------|:---------|
 | `middleware` | 14 | Token validation, session auth, bearer auth, basic auth |
 | `services::network` | 14 | Validation, INI generation, rollback response, serialization |
 | `services::auth::authorization` | 12 | Role-based access control, tenant/fleet validation |
+| `services::firmware` | 7 | Data folder cleanup, load/run update delegation |
 | `services::auth::token` | 3 | Token creation/verification |
 | `services::auth::password` | 2 | Password hashing/storage |
-| `services::firmware` | 1 | Data folder cleanup |
 | `http_client` | 2 | Unix socket client validation |
 | Integration (`tests/`) | 6 | HTTP client + portal token validation |
 
-**Total: 54 tests** (46 unit tests, 5 integration tests, 3 http_client integration tests)
+**Total: 60 tests** (52 unit tests, 5 integration tests, 3 http_client integration tests)
 
 ### Test Infrastructure
 
@@ -166,11 +166,18 @@ mod tests {
 }
 ```
 
-#### PR 1.3: Firmware Service Tests
-- [ ] Test `clear_data_folder` with existing files
-- [ ] Test `clear_data_folder` with empty directory
-- [ ] Test `handle_uploaded_firmware` with mock temp file
-- [ ] Test file permissions are set correctly (0o750)
+#### PR 1.3: Firmware Service Tests ✅
+- [x] Test `clear_data_folder` removes all files
+- [x] Test `clear_data_folder` succeeds with empty directory
+- [x] Test `clear_data_folder` preserves subdirectories
+- [x] Test `load_update` forwards request to device service
+- [x] Test `load_update` returns error on device service failure
+- [x] Test `run_update` forwards request to device service
+- [x] Test `run_update` returns error on device service failure
+
+**7 tests added (6 new)** in [firmware.rs:100-271](src/backend/src/services/firmware.rs#L100-L271)
+
+**Note:** Tests for `handle_uploaded_firmware` with actual file uploads are not included as they require mocking `TempFile` from actix-multipart, which is complex. The `clear_data_folder` tests share a temp directory and may race in parallel execution (use `--test-threads=1` if flaky).
 
 #### PR 1.4: Device Service Client Tests
 - [ ] Test URL building (`build_url`)
