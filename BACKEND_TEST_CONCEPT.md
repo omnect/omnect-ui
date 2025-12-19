@@ -4,10 +4,11 @@
 
 ### Existing Test Coverage
 
-The backend currently has **60 unit/integration tests** organized as follows:
+The backend currently has **75 unit/integration tests** organized as follows:
 
 | Module | Test Count | Coverage |
 |:-------|:-----------|:---------|
+| `omnect_device_service_client` | 15 | URL building, version requirements, healthcheck logic, constants |
 | `middleware` | 14 | Token validation, session auth, bearer auth, basic auth |
 | `services::network` | 14 | Validation, INI generation, rollback response, serialization |
 | `services::auth::authorization` | 12 | Role-based access control, tenant/fleet validation |
@@ -17,7 +18,7 @@ The backend currently has **60 unit/integration tests** organized as follows:
 | `http_client` | 2 | Unix socket client validation |
 | Integration (`tests/`) | 6 | HTTP client + portal token validation |
 
-**Total: 60 tests** (52 unit tests, 5 integration tests, 3 http_client integration tests)
+**Total: 75 tests** (67 unit tests, 5 integration tests, 3 http_client integration tests)
 
 ### Test Infrastructure
 
@@ -179,11 +180,24 @@ mod tests {
 
 **Note:** Tests for `handle_uploaded_firmware` with actual file uploads are not included as they require mocking `TempFile` from actix-multipart, which is complex. The `clear_data_folder` tests share a temp directory and may race in parallel execution (use `--test-threads=1` if flaky).
 
-#### PR 1.4: Device Service Client Tests
-- [ ] Test URL building (`build_url`)
-- [ ] Test version requirement parsing
-- [ ] Test version mismatch detection in healthcheck
-- [ ] Test `healthcheck_info` response construction
+#### PR 1.4: Device Service Client Tests ✅
+- [x] Test URL building with various path formats
+- [x] Test URL normalization (leading slashes, empty paths)
+- [x] Test version requirement parsing
+- [x] Test version requirement matching (valid/invalid versions)
+- [x] Test version mismatch detection logic
+- [x] Test publish endpoint state tracking
+- [x] Test API endpoint constants
+- [x] Test required version constant validity
+
+**15 tests added** in [omnect_device_service_client.rs:353-560](src/backend/src/omnect_device_service_client.rs#L353-L560)
+
+**Tests cover:**
+- `build_url`: Path normalization (5 tests)
+- Version requirements: Parsing & matching logic (3 tests)
+- Healthcheck: Version mismatch detection (3 tests)
+- State: Publish endpoint tracking (2 tests)
+- Constants: API endpoints & version requirement (2 tests)
 
 ### Phase 2: API Handler Integration Tests
 
