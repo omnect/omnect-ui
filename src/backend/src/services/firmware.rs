@@ -8,10 +8,26 @@ use anyhow::{Context, Result};
 use log::{debug, error};
 use std::{fs, os::unix::fs::PermissionsExt};
 
+#[cfg(any(test, feature = "mock"))]
+use std::sync::{LazyLock, Mutex, MutexGuard};
+
+#[cfg(any(test, feature = "mock"))]
+#[allow(dead_code)]
+static DATA_FOLDER_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
 /// Service for firmware update file operations
 pub struct FirmwareService;
 
 impl FirmwareService {
+    /// Acquire a lock for data folder operations (test-only)
+    ///
+    /// This ensures that tests modifying the data folder don't interfere with each other
+    #[cfg(any(test, feature = "mock"))]
+    #[allow(dead_code)]
+    pub fn lock_for_test() -> MutexGuard<'static, ()> {
+        DATA_FOLDER_LOCK.lock().unwrap()
+    }
+
     /// Handle uploaded firmware file - clears data folder and persists the file
     ///
     /// # Arguments
@@ -110,14 +126,12 @@ mod tests {
     #[double]
     use crate::omnect_device_service_client::DeviceServiceClient;
 
-    // NOTE: clear_data_folder tests share the same temp directory (from AppConfig)
-    // and may race if run in parallel. Run with --test-threads=1 if flaky.
-
     mod clear_data_folder {
         use super::*;
 
         #[test]
         fn removes_all_files() {
+            let _lock = FirmwareService::lock_for_test();
             let data_path = &AppConfig::get().paths.data_dir;
 
             // Ensure directory exists
@@ -147,6 +161,7 @@ mod tests {
 
         #[test]
         fn succeeds_with_empty_directory() {
+            let _lock = FirmwareService::lock_for_test();
             let data_path = &AppConfig::get().paths.data_dir;
 
             // Ensure directory exists and is empty
@@ -159,6 +174,7 @@ mod tests {
 
         #[test]
         fn preserves_subdirectories() {
+            let _lock = FirmwareService::lock_for_test();
             let data_path = &AppConfig::get().paths.data_dir;
 
             // Ensure directory exists
