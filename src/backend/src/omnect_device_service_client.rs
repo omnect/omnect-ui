@@ -477,10 +477,9 @@ mod tests {
         fn healthcheck_includes_network_rollback_status() {
             // This tests that the healthcheck info construction includes
             // the network rollback occurred flag from NetworkConfigService
-            let rollback_occurred = NetworkConfigService::rollback_occurred();
+            let _rollback_occurred = NetworkConfigService::rollback_occurred();
 
-            // The value depends on filesystem state, just verify it's callable
-            assert!(rollback_occurred == true || rollback_occurred == false);
+            // The value depends on filesystem state, just verify it's callable without panicking
         }
     }
 
