@@ -829,7 +829,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(resetButton).toBeEnabled();
     });
 
-    test.skip('form reset button discards unsaved changes', async ({ page }) => {
+    test('form reset button discards unsaved changes', async ({ page }) => {
       const originalIp = '192.168.1.100';
 
       // Publish initial network status
