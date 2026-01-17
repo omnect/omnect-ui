@@ -501,7 +501,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       expect(rollbackState.enabled).toBe(false);
     });
 
-    test.skip('DHCP on non-server adapter', async ({ page }) => {
+    test('DHCP on non-server adapter', async ({ page }) => {
       // Publish network status (non-server, static IP)
       await harness.publishNetworkStatus([
         harness.createAdapter('eth0', {
@@ -541,15 +541,10 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page.getByText('Confirm Network Configuration Change')).not.toBeVisible();
     });
 
-    test.skip('DHCP on server adapter with rollback enabled', async ({ page }) => {
+    test('DHCP on server adapter with rollback enabled', async ({ page }) => {
       // Requires adapter IP = 'localhost' for rollback modal. Running serially.
 
-      // Navigate to Network page first
-      await page.getByText('Network').click();
-      await expect(page.getByText('eth0')).toBeVisible();
-
-      // Publish network status with localhost IP AFTER navigation
-      // This ensures the page is ready to receive the update
+      // Publish network status with localhost IP first
       await harness.publishNetworkStatus([
         harness.createAdapter('eth0', {
           ipv4: {
@@ -560,8 +555,9 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
         }),
       ]);
 
-      // Wait for update to propagate
-      await page.waitForTimeout(1500);
+      // Navigate to Network page
+      await page.getByText('Network').click();
+      await expect(page.getByText('eth0')).toBeVisible();
 
       // Click on eth0 to open the form
       await page.getByText('eth0').click();
@@ -591,8 +587,11 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       // Verify rollback modal appears (isServerAddr=true AND switchingToDhcp=true)
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
 
-      // Verify rollback checkbox is checked by default
-      await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
+      // Verify rollback checkbox is UNCHECKED by default for DHCP (unknown new IP)
+      await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).not.toBeChecked();
+
+      // Check the checkbox to enable rollback
+      await page.getByRole('checkbox', { name: /Enable automatic rollback/i }).check();
 
       // Apply changes
       await page.getByRole('button', { name: /apply changes/i }).click();
