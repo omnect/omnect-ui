@@ -24,7 +24,9 @@ pub fn handle(event: WebSocketEvent, model: &mut Model) -> Command<Effect, Event
 
         WebSocketEvent::SystemInfoUpdated(info) => update_field!(model.system_info, Some(info)),
         WebSocketEvent::NetworkStatusUpdated(status) => {
-            update_field!(model.network_status, Some(status))
+            model.network_status = Some(status);
+            model.update_current_connection_adapter();
+            crux_core::render::render()
         }
         WebSocketEvent::OnlineStatusUpdated(status) => {
             update_field!(model.online_status, Some(status))
@@ -259,6 +261,79 @@ mod tests {
             let _ = app.update(Event::WebSocket(WebSocketEvent::Disconnected), &mut model);
 
             assert!(!model.is_connected);
+        }
+    }
+
+    mod network_status {
+        use super::*;
+        use crate::types::{DeviceNetwork, InternetProtocol, IpAddress, NetworkStatus};
+
+        #[test]
+        fn updates_network_status() {
+            let app = AppTester::<App>::default();
+            let mut model = Model::default();
+
+            let status = NetworkStatus {
+                network_status: vec![DeviceNetwork {
+                    name: "eth0".to_string(),
+                    mac: "00:11:22:33:44:55".to_string(),
+                    online: true,
+                    file: Some("/etc/network/interfaces".to_string()),
+                    ipv4: InternetProtocol {
+                        addrs: vec![IpAddress {
+                            addr: "192.168.1.100".to_string(),
+                            dhcp: false,
+                            prefix_len: 24,
+                        }],
+                        dns: vec![],
+                        gateways: vec![],
+                    },
+                }],
+            };
+
+            let _ = app.update(
+                Event::WebSocket(WebSocketEvent::NetworkStatusUpdated(status.clone())),
+                &mut model,
+            );
+
+            assert_eq!(model.network_status, Some(status));
+        }
+
+        #[test]
+        fn updates_current_connection_adapter_when_browser_hostname_set() {
+            let app = AppTester::<App>::default();
+            let mut model = Model {
+                browser_hostname: Some("192.168.1.100".to_string()),
+                ..Default::default()
+            };
+
+            let status = NetworkStatus {
+                network_status: vec![DeviceNetwork {
+                    name: "eth0".to_string(),
+                    mac: "00:11:22:33:44:55".to_string(),
+                    online: true,
+                    file: Some("/etc/network/interfaces".to_string()),
+                    ipv4: InternetProtocol {
+                        addrs: vec![IpAddress {
+                            addr: "192.168.1.100".to_string(),
+                            dhcp: false,
+                            prefix_len: 24,
+                        }],
+                        dns: vec![],
+                        gateways: vec![],
+                    },
+                }],
+            };
+
+            let _ = app.update(
+                Event::WebSocket(WebSocketEvent::NetworkStatusUpdated(status)),
+                &mut model,
+            );
+
+            assert_eq!(
+                model.current_connection_adapter,
+                Some("eth0".to_string())
+            );
         }
     }
 }

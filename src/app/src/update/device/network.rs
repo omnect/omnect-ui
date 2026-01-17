@@ -297,6 +297,9 @@ pub fn handle_network_form_start_edit(
             };
             // Clear dirty flag when starting a fresh edit
             model.network_form_dirty = false;
+            // Clear rollback modal flags
+            model.should_show_rollback_modal = false;
+            model.default_rollback_enabled = false;
         }
     }
 
@@ -321,17 +324,56 @@ pub fn handle_network_form_update(
             {
                 let is_dirty = form_data != *original_data;
 
+                // Compute rollback modal flags
+                let (should_show_modal, default_enabled) =
+                    compute_rollback_modal_state(&form_data, original_data, adapter_name, model);
+
                 model.network_form_state = NetworkFormState::Editing {
                     adapter_name: adapter_name.clone(),
                     form_data,
                     original_data: original_data.clone(),
                 };
                 model.network_form_dirty = is_dirty;
+                model.should_show_rollback_modal = should_show_modal;
+                model.default_rollback_enabled = default_enabled;
             }
             crux_core::render::render()
         }
         Err(e) => model.set_error_and_render(format!("Invalid form data: {e}")),
     }
+}
+
+/// Compute whether to show rollback modal and default checkbox state
+fn compute_rollback_modal_state(
+    form_data: &NetworkFormData,
+    original_data: &NetworkFormData,
+    adapter_name: &str,
+    model: &Model,
+) -> (bool, bool) {
+    // Check if this adapter is the current connection
+    let is_current_connection = model
+        .current_connection_adapter
+        .as_ref()
+        .map(|name| name == adapter_name)
+        .unwrap_or(false);
+
+    if !is_current_connection {
+        return (false, false);
+    }
+
+    // Check if IP changed
+    let ip_changed = form_data.ip_address != original_data.ip_address;
+
+    // Check if switching to DHCP (was static, now DHCP)
+    let switching_to_dhcp = !original_data.dhcp && form_data.dhcp;
+
+    // Show modal when: IP changed OR switching to DHCP on current adapter
+    let should_show = ip_changed || switching_to_dhcp;
+
+    // Default rollback enabled: true UNLESS switching to DHCP (then false)
+    let default_enabled = !switching_to_dhcp;
+
+    (should_show, default_enabled)
 }
 
 /// Handle acknowledge network rollback - clear the rollback occurred flag
@@ -997,6 +1039,170 @@ mod tests {
 
             assert!(!model.is_loading);
             assert!(model.error_message.is_some());
+        }
+    }
+
+    mod rollback_modal_flags {
+        use super::*;
+
+        fn create_network_status_with_adapter(name: &str, ip: &str) -> NetworkStatus {
+            NetworkStatus {
+                network_status: vec![DeviceNetwork {
+                    name: name.to_string(),
+                    mac: "00:11:22:33:44:55".to_string(),
+                    online: true,
+                    file: Some("/etc/network/interfaces".to_string()),
+                    ipv4: InternetProtocol {
+                        addrs: vec![IpAddress {
+                            addr: ip.to_string(),
+                            dhcp: false,
+                            prefix_len: 24,
+                        }],
+                        dns: vec![],
+                        gateways: vec![],
+                    },
+                }],
+            }
+        }
+
+        #[test]
+        fn shows_modal_when_ip_changed_on_current_adapter() {
+            let app = AppTester::<App>::default();
+            let network_status = create_network_status_with_adapter("eth0", "192.168.1.100");
+
+            let original_data = NetworkFormData {
+                name: "eth0".to_string(),
+                ip_address: "192.168.1.100".to_string(),
+                dhcp: false,
+                prefix_len: 24,
+                dns: vec![],
+                gateways: vec![],
+            };
+
+            let mut model = Model {
+                network_status: Some(network_status),
+                current_connection_adapter: Some("eth0".to_string()),
+                network_form_state: NetworkFormState::Editing {
+                    adapter_name: "eth0".to_string(),
+                    form_data: original_data.clone(),
+                    original_data: original_data.clone(),
+                },
+                ..Default::default()
+            };
+
+            let mut changed_data = original_data.clone();
+            changed_data.ip_address = "192.168.1.101".to_string();
+
+            let _ = app.update(
+                Event::Device(DeviceEvent::NetworkFormUpdate {
+                    form_data: serde_json::to_string(&changed_data).unwrap(),
+                }),
+                &mut model,
+            );
+
+            assert!(model.should_show_rollback_modal);
+            assert!(model.default_rollback_enabled);
+        }
+
+        #[test]
+        fn shows_modal_when_switching_to_dhcp_on_current_adapter() {
+            let app = AppTester::<App>::default();
+            let network_status = create_network_status_with_adapter("eth0", "192.168.1.100");
+
+            let original_data = NetworkFormData {
+                name: "eth0".to_string(),
+                ip_address: "192.168.1.100".to_string(),
+                dhcp: false,
+                prefix_len: 24,
+                dns: vec![],
+                gateways: vec![],
+            };
+
+            let mut model = Model {
+                network_status: Some(network_status),
+                current_connection_adapter: Some("eth0".to_string()),
+                network_form_state: NetworkFormState::Editing {
+                    adapter_name: "eth0".to_string(),
+                    form_data: original_data.clone(),
+                    original_data: original_data.clone(),
+                },
+                ..Default::default()
+            };
+
+            let mut changed_data = original_data.clone();
+            changed_data.dhcp = true;
+
+            let _ = app.update(
+                Event::Device(DeviceEvent::NetworkFormUpdate {
+                    form_data: serde_json::to_string(&changed_data).unwrap(),
+                }),
+                &mut model,
+            );
+
+            assert!(model.should_show_rollback_modal);
+            assert!(!model.default_rollback_enabled); // DHCP defaults to disabled
+        }
+
+        #[test]
+        fn does_not_show_modal_for_non_current_adapter() {
+            let app = AppTester::<App>::default();
+            let network_status = create_network_status_with_adapter("eth0", "192.168.1.100");
+
+            let original_data = NetworkFormData {
+                name: "eth1".to_string(),
+                ip_address: "192.168.2.100".to_string(),
+                dhcp: false,
+                prefix_len: 24,
+                dns: vec![],
+                gateways: vec![],
+            };
+
+            let mut model = Model {
+                network_status: Some(network_status),
+                current_connection_adapter: Some("eth0".to_string()),
+                network_form_state: NetworkFormState::Editing {
+                    adapter_name: "eth1".to_string(),
+                    form_data: original_data.clone(),
+                    original_data: original_data.clone(),
+                },
+                ..Default::default()
+            };
+
+            let mut changed_data = original_data.clone();
+            changed_data.ip_address = "192.168.2.101".to_string();
+
+            let _ = app.update(
+                Event::Device(DeviceEvent::NetworkFormUpdate {
+                    form_data: serde_json::to_string(&changed_data).unwrap(),
+                }),
+                &mut model,
+            );
+
+            assert!(!model.should_show_rollback_modal);
+            assert!(!model.default_rollback_enabled);
+        }
+
+        #[test]
+        fn clears_flags_on_form_start_edit() {
+            let app = AppTester::<App>::default();
+            let network_status = create_network_status_with_adapter("eth0", "192.168.1.100");
+
+            let mut model = Model {
+                network_status: Some(network_status),
+                should_show_rollback_modal: true,
+                default_rollback_enabled: true,
+                ..Default::default()
+            };
+
+            let _ = app.update(
+                Event::Device(DeviceEvent::NetworkFormStartEdit {
+                    adapter_name: "eth0".to_string(),
+                }),
+                &mut model,
+            );
+
+            assert!(!model.should_show_rollback_modal);
+            assert!(!model.default_rollback_enabled);
         }
     }
 }

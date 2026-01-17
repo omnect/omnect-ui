@@ -121,15 +121,20 @@ watch(() => props.networkAdapter, (newAdapter) => {
 }, { deep: true })
 
 const isDHCP = computed(() => addressAssignment.value === "dhcp")
-const isServerAddr = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr === location.hostname)
-const ipChanged = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.addr !== ipAddress.value)
-const dhcpChanged = computed(() => props.networkAdapter?.ipv4?.addrs[0]?.dhcp !== isDHCP.value)
-const switchingToDhcp = computed(() => !props.networkAdapter?.ipv4?.addrs[0]?.dhcp && isDHCP.value)
 
-// Modal state for rollback confirmation
-const showRollbackModal = ref(false)
-const enableRollback = ref(true) // Default to checked (enabled)
-const isDhcpChange = ref(false) // Track if this is a DHCP change
+// Use Core's computed rollback modal flags
+const showRollbackModal = computed(() => viewModel.should_show_rollback_modal)
+const enableRollback = ref(true) // Tracks user's checkbox state
+
+// Watch Core's default_rollback_enabled to update checkbox when modal shows
+watch(() => viewModel.should_show_rollback_modal, (shouldShow) => {
+    if (shouldShow) {
+        enableRollback.value = viewModel.default_rollback_enabled
+    }
+})
+
+// Determine if switching to DHCP for UI text (Core computes this, but we still need it for modal text)
+const switchingToDhcp = computed(() => !props.networkAdapter?.ipv4?.addrs[0]?.dhcp && isDHCP.value)
 
 const restoreSettings = () => {
     // Reset Core state (clears dirty flag and NetworkFormState)
@@ -167,27 +172,21 @@ watch(
 )
 
 const submit = async () => {
-    // Check if we need to show the rollback confirmation modal
-    // Show modal when:
-    // 1. Static IP changed on current adapter, OR
-    // 2. Switching to DHCP on current adapter (IP will likely change)
-    if (isServerAddr.value && (ipChanged.value || switchingToDhcp.value)) {
-        isDhcpChange.value = switchingToDhcp.value
-        showRollbackModal.value = true
-        return
+    // Core now determines whether to show modal via should_show_rollback_modal
+    // If modal should be shown, it will appear automatically via the v-model binding
+    // If modal is not shown, submit directly
+    if (!viewModel.should_show_rollback_modal) {
+        await submitNetworkConfig(false)
     }
-
-    // If not changing server IP, submit directly without rollback
-    await submitNetworkConfig(false)
+    // Otherwise, modal will show and user clicks "Apply Changes" which calls submitNetworkConfig(true)
 }
 
 const submitNetworkConfig = async (includeRollback: boolean) => {
     isSubmitting.value = true
-    showRollbackModal.value = false
 
     const config = JSON.stringify({
-        isServerAddr: isServerAddr.value,
-        ipChanged: ipChanged.value,
+        isServerAddr: props.isCurrentConnection,
+        ipChanged: props.networkAdapter.ipv4?.addrs[0]?.addr !== ipAddress.value,
         name: props.networkAdapter.name,
         dhcp: isDHCP.value,
         ip: ipAddress.value ?? null,
@@ -203,7 +202,9 @@ const submitNetworkConfig = async (includeRollback: boolean) => {
 }
 
 const cancelRollbackModal = () => {
-    showRollbackModal.value = false
+    // Reset form to clear the should_show_rollback_modal flag in Core
+    networkFormReset(props.networkAdapter.name)
+    resetFormFields()
 }
 </script>
 
@@ -220,7 +221,7 @@ const cancelRollbackModal = () => {
                         This change will disconnect your current session.
                     </v-alert>
                     <p class="mb-4">
-                        <template v-if="isDhcpChange">
+                        <template v-if="switchingToDhcp">
                             You are about to switch to DHCP on the network adapter you're currently connected to.
                             This will likely assign a new IP address and interrupt your connection.
                         </template>

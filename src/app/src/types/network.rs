@@ -1,5 +1,37 @@
 use serde::{Deserialize, Serialize};
 
+/// Validate IPv4 address format
+pub fn is_valid_ipv4(ip: &str) -> bool {
+    if ip.is_empty() {
+        return true; // Empty is considered valid (for optional fields)
+    }
+
+    let parts: Vec<&str> = ip.split('.').collect();
+    if parts.len() != 4 {
+        return false;
+    }
+
+    parts.iter().all(|part| {
+        if let Ok(num) = part.parse::<u32>() {
+            num <= 255
+        } else {
+            false
+        }
+    })
+}
+
+/// Validate and parse netmask value
+/// Accepts "/24" or "24" format, returns prefix length if valid
+pub fn parse_netmask(mask: &str) -> Option<u32> {
+    let cleaned = mask.trim_start_matches('/');
+    if let Ok(prefix_len) = cleaned.parse::<u32>() {
+        if prefix_len <= 32 {
+            return Some(prefix_len);
+        }
+    }
+    None
+}
+
 /// IP address configuration
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IpAddress {
@@ -31,6 +63,30 @@ pub struct DeviceNetwork {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NetworkStatus {
     pub network_status: Vec<DeviceNetwork>,
+}
+
+impl NetworkStatus {
+    /// Determine which adapter is the current connection based on browser hostname
+    pub fn current_connection_adapter(&self, browser_hostname: Option<&str>) -> Option<&DeviceNetwork> {
+        let hostname = browser_hostname?;
+
+        // First, try to find a direct IP match
+        for adapter in &self.network_status {
+            if adapter.ipv4.addrs.iter().any(|ip| ip.addr == hostname) {
+                return Some(adapter);
+            }
+        }
+
+        // If hostname is not an IP (e.g., "omnect-device"), return the first online adapter
+        let is_hostname_an_ip = is_valid_ipv4(hostname) && !hostname.is_empty();
+        if !is_hostname_an_ip {
+            return self.network_status
+                .iter()
+                .find(|adapter| adapter.online && !adapter.ipv4.addrs.is_empty());
+        }
+
+        None
+    }
 }
 
 /// Network configuration request
@@ -258,4 +314,142 @@ pub struct SetNetworkConfigResponse {
     pub rollback_timeout_seconds: u64,
     pub ui_port: u16,
     pub rollback_enabled: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod validation {
+        use super::*;
+
+        #[test]
+        fn is_valid_ipv4_accepts_valid_addresses() {
+            assert!(is_valid_ipv4("192.168.1.1"));
+            assert!(is_valid_ipv4("10.0.0.1"));
+            assert!(is_valid_ipv4("172.16.0.1"));
+            assert!(is_valid_ipv4("0.0.0.0"));
+            assert!(is_valid_ipv4("255.255.255.255"));
+        }
+
+        #[test]
+        fn is_valid_ipv4_accepts_empty_string() {
+            assert!(is_valid_ipv4(""));
+        }
+
+        #[test]
+        fn is_valid_ipv4_rejects_invalid_addresses() {
+            assert!(!is_valid_ipv4("256.1.1.1"));
+            assert!(!is_valid_ipv4("192.168.1"));
+            assert!(!is_valid_ipv4("192.168.1.1.1"));
+            assert!(!is_valid_ipv4("abc.def.ghi.jkl"));
+            assert!(!is_valid_ipv4("192.168.-1.1"));
+        }
+
+        #[test]
+        fn parse_netmask_accepts_valid_values() {
+            assert_eq!(parse_netmask("24"), Some(24));
+            assert_eq!(parse_netmask("/24"), Some(24));
+            assert_eq!(parse_netmask("0"), Some(0));
+            assert_eq!(parse_netmask("32"), Some(32));
+            assert_eq!(parse_netmask("/8"), Some(8));
+        }
+
+        #[test]
+        fn parse_netmask_rejects_invalid_values() {
+            assert_eq!(parse_netmask("33"), None);
+            assert_eq!(parse_netmask("abc"), None);
+            assert_eq!(parse_netmask("-1"), None);
+            assert_eq!(parse_netmask("24.5"), None);
+        }
+    }
+
+    mod current_connection {
+        use super::*;
+
+        fn create_adapter(name: &str, ip: &str, online: bool) -> DeviceNetwork {
+            DeviceNetwork {
+                name: name.to_string(),
+                mac: "00:11:22:33:44:55".to_string(),
+                online,
+                file: Some("/etc/network/interfaces".to_string()),
+                ipv4: InternetProtocol {
+                    addrs: vec![IpAddress {
+                        addr: ip.to_string(),
+                        dhcp: false,
+                        prefix_len: 24,
+                    }],
+                    dns: vec![],
+                    gateways: vec![],
+                },
+            }
+        }
+
+        #[test]
+        fn returns_adapter_with_matching_ip() {
+            let status = NetworkStatus {
+                network_status: vec![
+                    create_adapter("eth0", "192.168.1.100", true),
+                    create_adapter("eth1", "192.168.2.100", true),
+                ],
+            };
+
+            let adapter = status.current_connection_adapter(Some("192.168.1.100"));
+            assert_eq!(adapter.map(|a| &a.name), Some(&"eth0".to_string()));
+        }
+
+        #[test]
+        fn returns_first_online_adapter_for_hostname() {
+            let status = NetworkStatus {
+                network_status: vec![
+                    create_adapter("eth0", "192.168.1.100", false),
+                    create_adapter("eth1", "192.168.2.100", true),
+                    create_adapter("eth2", "192.168.3.100", true),
+                ],
+            };
+
+            let adapter = status.current_connection_adapter(Some("omnect-device"));
+            assert_eq!(adapter.map(|a| &a.name), Some(&"eth1".to_string()));
+        }
+
+        #[test]
+        fn returns_none_for_no_hostname() {
+            let status = NetworkStatus {
+                network_status: vec![create_adapter("eth0", "192.168.1.100", true)],
+            };
+
+            let adapter = status.current_connection_adapter(None);
+            assert_eq!(adapter, None);
+        }
+
+        #[test]
+        fn returns_none_for_no_match() {
+            let status = NetworkStatus {
+                network_status: vec![create_adapter("eth0", "192.168.1.100", true)],
+            };
+
+            let adapter = status.current_connection_adapter(Some("192.168.99.99"));
+            assert_eq!(adapter, None);
+        }
+
+        #[test]
+        fn returns_none_when_no_online_adapters() {
+            let status = NetworkStatus {
+                network_status: vec![create_adapter("eth0", "192.168.1.100", false)],
+            };
+
+            let adapter = status.current_connection_adapter(Some("omnect-device"));
+            assert_eq!(adapter, None);
+        }
+
+        #[test]
+        fn returns_adapter_with_matching_localhost() {
+            let status = NetworkStatus {
+                network_status: vec![create_adapter("eth0", "localhost", true)],
+            };
+
+            let adapter = status.current_connection_adapter(Some("localhost"));
+            assert_eq!(adapter.map(|a| &a.name), Some(&"eth0".to_string()));
+        }
+    }
 }
