@@ -63,16 +63,11 @@ test.describe('Network Settings', () => {
     // await page.getByRole('button', { name: /\/24/ }).click(); // Example if we needed to change it
     
     await page.getByRole('textbox', { name: /Gateway/i }).first().fill('192.168.1.1');
-    
-    // Click Save (not Apply)
-    // Workaround for viewport issue: manually click using coordinates
+
+    // Click Save button
+    // Note: Using dispatchEvent workaround because Playwright's auto-scroll triggers v-overlay scrim
     const saveButton = page.getByRole('button', { name: /save/i });
-    const box = await saveButton.boundingBox();
-    if (box) {
-      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    } else {
-      throw new Error('Save button not found or not visible');
-    }
+    await saveButton.dispatchEvent('click');
     
     // Confirm dialog (title: Confirm Network Configuration Change)
     // Button: Apply Changes
