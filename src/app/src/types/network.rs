@@ -77,14 +77,8 @@ impl NetworkStatus {
             }
         }
 
-        // If hostname is not an IP (e.g., "omnect-device"), return the first online adapter
-        let is_hostname_an_ip = is_valid_ipv4(hostname) && !hostname.is_empty();
-        if !is_hostname_an_ip {
-            return self.network_status
-                .iter()
-                .find(|adapter| adapter.online && !adapter.ipv4.addrs.is_empty());
-        }
-
+        // If hostname is a domain name (not an IP), we can't determine which adapter
+        // is the current connection without DNS resolution, so return None
         None
     }
 }

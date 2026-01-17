@@ -160,11 +160,11 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page.locator('#overlay')).toBeVisible();
 
       // Wait for timeout to occur in browser (5 seconds)
-      // We wait a bit more to allow for processing and state transition
-      await page.waitForTimeout(7000);
+      // We wait longer to ensure the timeout definitely fires
+      await page.waitForTimeout(10000);
 
       // Verify spinner text changed to rollback initiation message
-      await expect(page.locator('#overlay').getByText(/Automatic rollback initiated/i).first()).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('#overlay').getByText(/Automatic rollback initiated/i).first()).toBeVisible({ timeout: 5000 });
 
       // Wait for healthcheck success on old IP (configured to succeed after 8s total)
       // At this point, Core should detect success, clear spinner, invalidate session, and redirect
@@ -361,7 +361,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
   });
 
   test.describe('HIGH: Basic Configuration Workflows', () => {
-    test.skip('static IP on non-server adapter - no rollback modal', async ({ page }) => {
+    test('static IP on non-server adapter - no rollback modal', async ({ page }) => {
       // Publish network status where adapter is NOT the server address
       // Browser hostname is localhost, adapter IP is different (not localhost)
       // isServerAddr = (adapter.ip === location.hostname) = ('192.168.1.200' === 'localhost') = false
