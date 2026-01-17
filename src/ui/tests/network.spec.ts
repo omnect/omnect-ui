@@ -37,7 +37,7 @@ test.describe('Network Settings', () => {
     });
   });
 
-  test.skip('shows rollback timer on configuration change', async ({ page }) => {
+  test('shows rollback timer on configuration change', async ({ page }) => {
     // Navigate to Network page
     await page.getByText('Network').click();
 
@@ -77,8 +77,10 @@ test.describe('Network Settings', () => {
     // Confirm dialog (title: Confirm Network Configuration Change)
     // Button: Apply Changes
     await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
+
+    // Click Apply Changes button
     await page.getByRole('button', { name: /apply changes/i }).click();
-    
+
     // Wait for modal to close
     await expect(page.getByText('Confirm Network Configuration Change')).not.toBeVisible();
     

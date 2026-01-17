@@ -158,12 +158,16 @@ pub fn handle_set_network_config_response(
 
                 model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
                 model.network_form_state = NetworkFormState::Idle;
+                // Clear rollback modal flag after config is applied
+                model.should_show_rollback_modal = false;
                 crux_core::render::render()
             } else {
                 // Not changing current connection's IP - just show success message
                 model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
                 model.network_change_state = NetworkChangeState::Idle;
                 model.network_form_state = NetworkFormState::Idle;
+                // Clear rollback modal flag
+                model.should_show_rollback_modal = false;
                 model.overlay_spinner.clear();
                 crux_core::render::render()
             }

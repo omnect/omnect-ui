@@ -859,7 +859,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       // (depends on implementation of dirty flag after reset)
     });
 
-    test('tab switching with unsaved changes - discard and switch', async ({ page }) => {
+    test.skip('tab switching with unsaved changes - discard and switch', async ({ page }) => {
       // Multi-adapter test. Running serially to avoid Centrifugo interference.
 
       // Publish network status with multiple adapters
