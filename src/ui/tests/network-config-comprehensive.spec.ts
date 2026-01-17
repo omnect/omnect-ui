@@ -304,7 +304,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(saveButton).toBeEnabled({ timeout: 5000 });
     });
 
-    test.skip('REGRESSION: form fields not reset during editing (caret stability)', async ({ page }) => {
+    test('REGRESSION: form fields not reset during editing (caret stability)', async ({ page }) => {
       // Regression test for bug where form fields were reset during editing,
       // causing the caret to jump to the end and user changes to be lost.
       // Root cause: watch on network_form_dirty was resetting form during initialization
