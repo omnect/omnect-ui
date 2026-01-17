@@ -120,7 +120,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page).toHaveURL(/\/login/, { timeout: 15000 });
     });
 
-    test.skip('DHCP rollback - automatic redirect to login after timeout', async ({ page }) => {
+    test('DHCP rollback - automatic redirect to login after timeout', async ({ page }) => {
       // Use a short rollback timeout for testing
       const shortTimeoutSeconds = 5;
       // Ensure we clear any existing mocks for /network
@@ -154,17 +154,30 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       const saveButton = page.getByRole('button', { name: /save/i });
       const box = await saveButton.boundingBox();
       if (box) { await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2); }
+
+      // Verify rollback modal appears
+      await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
+
+      // Enable rollback (DHCP defaults to disabled)
+      await page.getByRole('checkbox', { name: /Enable automatic rollback/i }).check();
+
       await page.getByRole('button', { name: /apply changes/i }).click();
 
       // Verify overlay appears
       await expect(page.locator('#overlay')).toBeVisible();
 
+      // Simulate rollback on backend (device reverts to old IP)
+      await harness.simulateRollbackTimeout();
+
       // Wait for timeout to occur in browser (5 seconds)
       // We wait longer to ensure the timeout definitely fires
-      await page.waitForTimeout(10000);
+      await page.waitForTimeout(6000);
+
+      // Configure healthcheck to succeed now that rollback happened
+      await harness.mockHealthcheck(page, { healthcheckAlwaysFails: false });
 
       // Verify spinner text changed to rollback initiation message
-      await expect(page.locator('#overlay').getByText(/Automatic rollback initiated/i).first()).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('#overlay').getByText(/Automatic rollback initiated/i).first()).toBeVisible({ timeout: 15000 });
 
       // Wait for healthcheck success on old IP (configured to succeed after 8s total)
       // At this point, Core should detect success, clear spinner, invalidate session, and redirect
