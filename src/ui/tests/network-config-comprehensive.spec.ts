@@ -719,7 +719,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await page.waitForTimeout(1000);
     });
 
-    test.skip('gateway field readonly when DHCP enabled', async ({ page }) => {
+    test('gateway field readonly when DHCP enabled', async ({ page }) => {
       // Publish network status with Static IP (start with editable fields)
       await harness.publishNetworkStatus([
         harness.createAdapter('eth0', {
@@ -742,6 +742,10 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       // Verify Static is currently selected
       await expect(page.getByLabel('Static')).toBeChecked();
 
+      // Verify gateway field is editable in Static mode
+      const gatewayField = page.getByRole('textbox', { name: /Gateways/i });
+      await expect(gatewayField).toBeEditable();
+
       // Switch to DHCP
       await page.getByLabel('DHCP').click({ force: true });
       await page.waitForTimeout(300);
@@ -749,12 +753,18 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       // Verify DHCP is now selected
       await expect(page.getByLabel('DHCP')).toBeChecked();
 
+      // Verify gateway field is now readonly
+      await expect(gatewayField).not.toBeEditable();
+
       // Switch back to Static
       await page.getByLabel('Static').click({ force: true });
       await page.waitForTimeout(300);
 
       // Verify Static is selected again
       await expect(page.getByLabel('Static')).toBeChecked();
+
+      // Verify gateway field is editable again
+      await expect(gatewayField).toBeEditable();
     });
 
     test('netmask dropdown selection', async ({ page }) => {
@@ -1181,11 +1191,11 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page.getByText('(current connection)')).toBeVisible();
     });
 
-    test('current connection detection - first online adapter fallback', async ({ page }) => {
+    test('current connection detection - hostname not matching any IP', async ({ page }) => {
       // Multi-adapter test. Running serially to avoid Centrifugo interference.
 
-      // Publish multiple adapters, first one online
-      // Since hostname is not an IP (it's localhost or domain), should mark first online adapter
+      // Publish multiple adapters, both online
+      // Since hostname ("localhost") doesn't match any adapter IP, no "(current connection)" should be shown
       await harness.publishNetworkStatus([
         harness.createAdapter('eth0', {
           online: true,
@@ -1213,13 +1223,13 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       // Click eth0 tab
       await page.getByRole('tab', { name: 'eth0' }).click();
 
-      // Verify eth0 is marked as current connection (first online adapter)
-      await expect(page.getByText('(current connection)')).toBeVisible();
+      // Verify eth0 is NOT marked as current connection (hostname doesn't match IP)
+      await expect(page.getByText('(current connection)')).not.toBeVisible();
 
       // Click eth1 tab
       await page.getByRole('tab', { name: 'eth1' }).click();
 
-      // Verify eth1 is NOT marked as current connection
+      // Verify eth1 is also NOT marked as current connection
       await expect(page.getByText('(current connection)')).not.toBeVisible();
     });
   });
