@@ -142,8 +142,17 @@ test.describe('Network Rollback Defaults', () => {
     // IP is auto-filled with current IP ('localhost'), do NOT change it.
     await page.getByRole('button', { name: /save/i }).click();
 
+    // Verify Modal
     await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
+
+    // Verify Checkbox is CHECKED
     await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
+
+    // Apply changes
+    await page.getByRole('button', { name: /apply changes/i }).click();
+
+    // Verify overlay appears with countdown label
+    await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible({ timeout: 10000 });
   });
 
   test('Rollback should show MODAL not SNACKBAR when connection is restored at old IP', async ({ page }) => {

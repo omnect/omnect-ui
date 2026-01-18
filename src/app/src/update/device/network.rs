@@ -22,8 +22,11 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
     match parsed_config {
         Ok(config_req) => {
             // Store network change state for later use
-            // Show modal for: IP changed OR switching to DHCP on current adapter
-            if config_req.is_server_addr && (config_req.ip_changed || config_req.switching_to_dhcp)
+            // Show modal for: IP changed OR switching to DHCP on current adapter OR rollback explicitly enabled
+            if config_req.is_server_addr
+                && (config_req.ip_changed
+                    || config_req.switching_to_dhcp
+                    || config_req.enable_rollback.unwrap_or(false))
             {
                 model.network_change_state = NetworkChangeState::ApplyingConfig {
                     is_server_addr: true,
