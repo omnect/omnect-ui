@@ -211,7 +211,7 @@ test.describe('Network Rollback Defaults', () => {
     await page.getByRole('textbox', { name: /IP Address/i }).fill('192.168.1.150');
 
     // Click Save
-    await page.getByRole('button', { name: /save/i }).dispatchEvent('click');
+    await page.getByRole('button', { name: /save/i }).click();
 
     // Verify Modal
     await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
@@ -220,3 +220,4 @@ test.describe('Network Rollback Defaults', () => {
     await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
   });
 });
+
