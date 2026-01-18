@@ -67,7 +67,7 @@ test.describe('Network Settings', () => {
     // Click Save button
     // Note: Using dispatchEvent workaround because Playwright's auto-scroll triggers v-overlay scrim
     const saveButton = page.getByRole('button', { name: /save/i });
-    await saveButton.dispatchEvent('click');
+    await saveButton.click();
     
     // Confirm dialog (title: Confirm Network Configuration Change)
     // Button: Apply Changes

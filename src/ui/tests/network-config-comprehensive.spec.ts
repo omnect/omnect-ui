@@ -79,7 +79,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       // Submit with rollback enabled
       // Note: Using dispatchEvent workaround because Playwright's auto-scroll triggers v-overlay scrim
       const saveButton = page.getByRole('button', { name: /save/i });
-      await saveButton.dispatchEvent('click');
+      await saveButton.click();
 
       // Verify rollback modal appears (because isServerAddr=true and ipChanged=true)
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
@@ -147,7 +147,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await page.getByLabel('DHCP').click({ force: true });
       await page.waitForTimeout(500);
       const saveButton = page.getByRole('button', { name: /save/i });
-      await saveButton.dispatchEvent('click');
+      await saveButton.click();
 
       // Verify rollback modal appears
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
@@ -213,7 +213,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Submit with rollback enabled
       const saveButton = page.getByRole('button', { name: /save/i });
-      await saveButton.dispatchEvent('click');
+      await saveButton.click();
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
       await page.getByRole('button', { name: /apply changes/i }).click();
 
@@ -302,7 +302,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Submit (no rollback modal since not current connection)
       const saveButton = page.getByRole('button', { name: /save/i });
-      await saveButton.dispatchEvent('click');
+      await saveButton.click();
 
       // Verify form state reverts to Editing (state-based: Save button re-enabled)
       // This indicates the error was handled and form is back to editable state
@@ -398,7 +398,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Submit
       const saveButton = page.getByRole('button', { name: /save/i });
-      await saveButton.dispatchEvent('click');
+      await saveButton.click();
 
       // Verify NO rollback modal appears (isServerAddr is false)
       await page.waitForTimeout(500);
@@ -437,7 +437,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Submit
       const saveButton = page.getByRole('button', { name: /save/i });
-      await saveButton.dispatchEvent('click');
+      await saveButton.click();
 
       // Verify rollback modal appears
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
@@ -482,7 +482,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Submit
       const saveButton = page.getByRole('button', { name: /save/i });
-      await saveButton.dispatchEvent('click');
+      await saveButton.click();
 
       // Verify rollback modal appears
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
@@ -535,7 +535,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Submit
       const saveButton = page.getByRole('button', { name: /save/i });
-      await saveButton.dispatchEvent('click');
+      await saveButton.click();
 
       // Verify NO rollback modal (isServerAddr is false)
       await page.waitForTimeout(500);
@@ -582,7 +582,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Submit
       const saveButton = page.getByRole('button', { name: /save/i });
-      await saveButton.dispatchEvent('click');
+      await saveButton.click();
 
       // Verify rollback modal appears (isServerAddr=true AND switchingToDhcp=true)
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
@@ -636,7 +636,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Submit
       const saveButton = page.getByRole('button', { name: /save/i });
-      await saveButton.dispatchEvent('click');
+      await saveButton.click();
 
       // Verify rollback modal appears (isServerAddr=true AND switchingToDhcp=true)
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
@@ -678,7 +678,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Submit
       const saveButton = page.getByRole('button', { name: /save/i });
-      await saveButton.dispatchEvent('click');
+      await saveButton.click();
 
       // Wait for submission
       await page.waitForTimeout(1000);
@@ -710,7 +710,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Submit
       const saveButton = page.getByRole('button', { name: /save/i });
-      await saveButton.dispatchEvent('click');
+      await saveButton.click();
 
       // Wait for submission
       await page.waitForTimeout(1000);
