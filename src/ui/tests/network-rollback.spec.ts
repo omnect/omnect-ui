@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './fixtures/mock-api';
 import { publishToCentrifugo } from './fixtures/centrifugo';
+import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './fixtures/mock-api';
+import { NetworkTestHarness } from './fixtures/network-test-harness';
 
 test.describe('Network Rollback Status', () => {
-  test('rollback status is cleared after ack and does not reappear on re-login', async ({ page, context }) => {
+  test('rollback status is cleared after ack and does not reappear on re-login', async ({ page }) => {
     // Track healthcheck calls and network state
     let healthcheckRollbackStatus = true;
     const originalIp = '192.168.1.100';
@@ -126,5 +127,96 @@ test.describe('Network Rollback Status', () => {
     // The network status with originalIp was published via Centrifugo
     // which confirms the rollback worked correctly and the system is showing
     // the original IP (not the invalid one that would have triggered rollback)
+  });
+});
+
+test.describe('Network Rollback Defaults', () => {
+  let harness: NetworkTestHarness;
+
+  test.beforeEach(async ({ page }) => {
+    harness = new NetworkTestHarness();
+    await mockConfig(page);
+    await mockLoginSuccess(page);
+    await mockRequireSetPassword(page);
+    await harness.mockNetworkConfig(page);
+    await harness.mockHealthcheck(page);
+
+    await page.goto('/');
+    await page.getByPlaceholder(/enter your password/i).fill('password');
+    await page.getByRole('button', { name: /log in/i }).click();
+    await expect(page.getByText('Common Info')).toBeVisible();
+  });
+
+  test.afterEach(() => {
+    harness.reset();
+  });
+
+  test('Static -> DHCP: Rollback should be DISABLED by default', async ({ page }) => {
+    // Start with Static IP (localhost to trigger rollback modal)
+    await harness.publishNetworkStatus([
+      harness.createAdapter('eth0', {
+        ipv4: {
+          addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
+          dns: ['8.8.8.8'],
+          gateways: ['192.168.1.1'],
+        },
+      }),
+    ]);
+
+    await page.getByText('Network').click();
+    await page.getByText('eth0').click();
+    await expect(page.getByLabel('Static')).toBeChecked();
+
+    // Switch to DHCP
+    await page.getByLabel('DHCP').click({ force: true });
+
+    // Click Save
+    await page.getByRole('button', { name: /save/i }).click();
+
+    // Verify Modal
+    await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
+
+    // Verify Checkbox is UNCHECKED
+    await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).not.toBeChecked();
+  });
+
+  test('DHCP -> Static: Rollback should be ENABLED by default', async ({ page }) => {
+    // Start with DHCP (localhost to trigger rollback modal logic if we were changing IP,
+    // but for DHCP -> Static we are setting a NEW IP.
+    // Rollback logic applies if we are configuring the CURRENT adapter.)
+
+    // We need to simulate that we are connected via eth0 which is currently DHCP.
+    // And we are changing it to Static.
+
+    await harness.publishNetworkStatus([
+      harness.createAdapter('eth0', {
+        ipv4: {
+          addrs: [{ addr: 'localhost', dhcp: true, prefix_len: 24 }],
+          dns: ['8.8.8.8'],
+          gateways: ['192.168.1.1'],
+        },
+      }),
+    ]);
+
+    await page.getByText('Network').click();
+    await page.getByText('eth0').click();
+
+    // Verify we are in DHCP mode
+    await expect(page.getByLabel('DHCP')).toBeChecked();
+
+    // Switch to Static
+    await page.getByLabel('Static').click({ force: true });
+
+    // Set a new IP
+    await page.getByRole('textbox', { name: /IP Address/i }).fill('192.168.1.150');
+
+    // Click Save
+    await page.getByRole('button', { name: /save/i }).dispatchEvent('click');
+
+    // Verify Modal
+    await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
+
+    // Verify Checkbox is CHECKED
+    await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
   });
 });
