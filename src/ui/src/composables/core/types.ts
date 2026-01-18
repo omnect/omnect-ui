@@ -18,9 +18,10 @@ export type {
 	HealthcheckInfo,
 	Event,
 	Effect,
-	Model as CoreViewModel,
+	CoreViewModel,
 	UpdateManifest,
 	NetworkFormData,
+	NetworkConfigRequest,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 
 // Import types and variant classes for conversions

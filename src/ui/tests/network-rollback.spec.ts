@@ -219,5 +219,39 @@ test.describe('Network Rollback Defaults', () => {
     // Verify Checkbox is CHECKED
     await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
   });
+
+  test('DHCP -> Static (Same IP): Rollback should be ENABLED', async ({ page }) => {
+    // Start with DHCP (localhost)
+    await harness.publishNetworkStatus([
+      harness.createAdapter('eth0', {
+        ipv4: {
+          addrs: [{ addr: 'localhost', dhcp: true, prefix_len: 24 }],
+          dns: ['8.8.8.8'],
+          gateways: ['192.168.1.1'],
+        },
+      }),
+    ]);
+
+    await page.getByText('Network').click();
+    await page.getByText('eth0').click();
+
+    // Verify we are in DHCP mode
+    await expect(page.getByLabel('DHCP')).toBeChecked();
+
+    // Switch to Static
+    await page.getByLabel('Static').click({ force: true });
+    
+    // IP is auto-filled with current IP ('localhost')
+    // We do NOT change it.
+
+    // Click Save
+    await page.getByRole('button', { name: /save/i }).click();
+
+    // Verify Modal
+    await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
+
+    // Verify Checkbox is CHECKED
+    await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
+  });
 });
 

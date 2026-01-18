@@ -5,6 +5,7 @@ import { useCore } from "../../composables/useCore"
 import { useClipboard } from "../../composables/useClipboard"
 import { useIPValidation } from "../../composables/useIPValidation"
 import type { DeviceNetwork } from "../../types"
+import type { NetworkConfigRequest } from "../../composables/useCore"
 
 const { showError } = useSnackbar()
 const { viewModel, setNetworkConfig, networkFormReset, networkFormUpdate, networkFormStartEdit } = useCore()
@@ -185,21 +186,21 @@ const submit = async () => {
 const submitNetworkConfig = async (includeRollback: boolean) => {
     isSubmitting.value = true
 
-    const config = JSON.stringify({
+    const config: NetworkConfigRequest = {
         isServerAddr: props.isCurrentConnection,
         ipChanged: props.networkAdapter.ipv4?.addrs[0]?.addr !== ipAddress.value,
         name: props.networkAdapter.name,
         dhcp: isDHCP.value,
-        ip: ipAddress.value ?? null,
-        previousIp: props.networkAdapter.ipv4?.addrs[0]?.addr,
-        netmask: netmask.value ?? null,
-        gateway: gateways.value.split("\n").filter(g => g.trim()) ?? [],
-        dns: dns.value.split("\n").filter(d => d.trim()) ?? [],
+        ip: ipAddress.value || null,
+        previousIp: props.networkAdapter.ipv4?.addrs[0]?.addr || null,
+        netmask: netmask.value || null,
+        gateway: gateways.value.split("\n").filter(g => g.trim()) || [],
+        dns: dns.value.split("\n").filter(d => d.trim()) || [],
         enableRollback: includeRollback ? enableRollback.value : null,
         switchingToDhcp: switchingToDhcp.value
-    })
+    }
 
-    await setNetworkConfig(config)
+    await setNetworkConfig(JSON.stringify(config))
 }
 
 const cancelRollbackModal = () => {

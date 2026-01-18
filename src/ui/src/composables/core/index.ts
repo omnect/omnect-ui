@@ -96,6 +96,7 @@ export type {
 	CoreViewModel,
 	UpdateManifest,
 	NetworkFormData,
+	NetworkConfigRequest,
 } from './types'
 
 // ============================================================================

@@ -365,14 +365,11 @@ fn compute_rollback_modal_state(
         return (false, false);
     }
 
-    // Check if IP changed
-    let ip_changed = form_data.ip_address != original_data.ip_address;
-
     // Check if switching to DHCP (was static, now DHCP)
     let switching_to_dhcp = !original_data.dhcp && form_data.dhcp;
 
-    // Show modal when: IP changed OR switching to DHCP on current adapter
-    let should_show = ip_changed || switching_to_dhcp;
+    // Show modal when any setting changed on current adapter
+    let should_show = form_data != original_data;
 
     // Default rollback enabled: true UNLESS switching to DHCP (then false)
     let default_enabled = !switching_to_dhcp;
