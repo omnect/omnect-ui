@@ -123,8 +123,9 @@ watch(() => props.networkAdapter, (newAdapter) => {
 const isDHCP = computed(() => addressAssignment.value === "dhcp")
 
 // Use Core's computed rollback modal flags
-const showRollbackModal = computed(() => viewModel.should_show_rollback_modal)
+const isRollbackRequired = computed(() => viewModel.should_show_rollback_modal)
 const enableRollback = ref(true) // Tracks user's checkbox state
+const confirmationModalOpen = ref(false)
 
 // Watch Core's default_rollback_enabled to update checkbox when modal shows
 watch(() => viewModel.should_show_rollback_modal, (shouldShow) => {
@@ -167,18 +168,18 @@ watch(
 	(newMessage) => {
 		if (newMessage) {
 			isSubmitting.value = false
+            confirmationModalOpen.value = false
 		}
 	}
 )
 
 const submit = async () => {
-    // Core now determines whether to show modal via should_show_rollback_modal
-    // If modal should be shown, it will appear automatically via the v-model binding
-    // If modal is not shown, submit directly
-    if (!viewModel.should_show_rollback_modal) {
+    // Check if the change requires rollback protection
+    if (isRollbackRequired.value) {
+        confirmationModalOpen.value = true
+    } else {
         await submitNetworkConfig(false)
     }
-    // Otherwise, modal will show and user clicks "Apply Changes" which calls submitNetworkConfig(true)
 }
 
 const submitNetworkConfig = async (includeRollback: boolean) => {
@@ -202,16 +203,14 @@ const submitNetworkConfig = async (includeRollback: boolean) => {
 }
 
 const cancelRollbackModal = () => {
-    // Reset form to clear the should_show_rollback_modal flag in Core
-    networkFormReset(props.networkAdapter.name)
-    resetFormFields()
+    confirmationModalOpen.value = false
 }
 </script>
 
 <template>
     <div>
         <!-- Rollback Confirmation Modal -->
-        <v-dialog v-model="showRollbackModal" max-width="600">
+        <v-dialog v-model="confirmationModalOpen" max-width="600">
             <v-card>
                 <v-card-title class="text-h5">
                     Confirm Network Configuration Change
@@ -230,21 +229,23 @@ const cancelRollbackModal = () => {
                             This will interrupt your connection.
                         </template>
                     </p>
-                    <v-checkbox
-                        v-model="enableRollback"
-                        label="Enable automatic rollback (recommended)"
-                        hide-details
-                    >
-                        <template #label>
-                            <div>
-                                <strong>Enable automatic rollback (recommended)</strong>
-                                <div class="text-caption text-medium-emphasis">
-                                    If you can't reach the new IP and log in within 90 seconds, the device will automatically
-                                    restore the previous configuration.
-                                </div>
-                            </div>
-                        </template>
-                    </v-checkbox>
+          <v-checkbox
+            v-model="enableRollback"
+            :label="switchingToDhcp ? 'Enable automatic rollback' : 'Enable automatic rollback (recommended)'"
+            hide-details
+          >
+            <template v-slot:label>
+              <strong>{{ switchingToDhcp ? 'Enable automatic rollback' : 'Enable automatic rollback (recommended)' }}</strong>
+            </template>
+          </v-checkbox>
+          <div class="text-caption text-medium-emphasis ml-8">
+            <template v-if="switchingToDhcp">
+              Not recommended for DHCP: You won't know the new IP address, making it difficult to confirm the change before the 90 second timeout triggers a rollback.
+            </template>
+            <template v-else>
+              If you can't reach the new IP and log in within 90 seconds, the device will automatically restore the previous configuration.
+            </template>
+          </div>
                 </v-card-text>
                 <v-card-actions>
                     <v-spacer></v-spacer>
