@@ -183,8 +183,8 @@ pub fn handle_healthcheck_response(
                 model.network_change_state = NetworkChangeState::Idle;
                 model.overlay_spinner.clear();
                 model.invalidate_session();
-                model.success_message =
-                    Some("Automatic network rollback successful. Please log in.".to_string());
+                // Do not show success message here. The "Network Settings Rolled Back" modal
+                // will be triggered by the `network_rollback_occurred` flag in the healthcheck response.
             }
         }
         _ => {}

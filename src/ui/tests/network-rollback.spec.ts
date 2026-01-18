@@ -253,5 +253,74 @@ test.describe('Network Rollback Defaults', () => {
     // Verify Checkbox is CHECKED
     await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
   });
+
+  test('Rollback should show MODAL not SNACKBAR when connection is restored at old IP', async ({ page }) => {
+    // 1. Setup: Start with Static IP
+    await harness.publishNetworkStatus([
+      harness.createAdapter('eth0', {
+        ipv4: {
+          addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
+          dns: ['8.8.8.8'],
+          gateways: ['192.168.1.1'],
+        },
+      }),
+    ]);
+
+    await page.getByText('Network').click();
+    await page.getByText('eth0').click();
+
+    // 2. Change to DHCP with Rollback
+    await page.getByLabel('DHCP').click({ force: true });
+    
+    // Mock /network to return a short rollback timeout for testing
+    await harness.mockNetworkConfig(page, { rollbackTimeoutSeconds: 2 });
+
+    // Click Save (triggers modal)
+    await page.getByRole('button', { name: /save/i }).click();
+    
+    // Modal appears
+    await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
+    
+    // Check "Enable automatic rollback" (it defaults to unchecked for Static->DHCP)
+    await page.getByRole('checkbox', { name: /Enable automatic rollback/i }).check();
+    
+    // Override healthcheck mock to return network_rollback_occurred: true
+    // This ensures the Core receives the correct status when it polls the old IP
+    await page.unroute('**/healthcheck');
+    await page.route('**/healthcheck', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          version_info: {
+            required: '>=0.39.0',
+            current: '0.40.0',
+            mismatch: false,
+          },
+          update_validation_status: {
+            status: 'valid',
+          },
+          network_rollback_occurred: true,
+        }),
+      });
+    });
+
+    // 3. Apply changes (triggers transition to WaitingForNewIp)
+    await page.getByRole('button', { name: /Apply Changes/i }).click();
+
+    // 4. Verify we are in the "spinner" state with countdown
+    await expect(page.getByText('Applying network settings')).toBeVisible();
+    
+    // 5. Wait for timeout to expire.
+    // The UI state machine will transition to WaitingForOldIp.
+
+    // Wait for the success message or modal.
+    
+    // We expect the SNACKBAR to NOT be visible
+    await expect(page.getByText('Automatic network rollback successful')).not.toBeVisible();
+    
+    // And assert we DO see the modal content
+    await expect(page.getByText('The network settings were rolled back to the previous configuration')).toBeVisible({ timeout: 10000 });
+  });
 });
 

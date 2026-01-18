@@ -143,6 +143,7 @@ export function updateViewModelFromCore(): void {
 					update_validation_status: {
 						status: coreViewModel.healthcheck.update_validation_status.status,
 					},
+					network_rollback_occurred: coreViewModel.healthcheck.network_rollback_occurred,
 				}
 			: null
 

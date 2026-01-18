@@ -221,12 +221,14 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
             *attempt += 1;
             // Poll the old IP to see if rollback completed
             let url = format!("https://{old_ip}:{ui_port}/healthcheck");
-            http_get_silent!(
-                url,
-                on_success: Event::Device(DeviceEvent::HealthcheckResponse(Ok(
-                    HealthcheckInfo::default()
-                ))),
-                on_error: Event::Ui(UiEvent::ClearSuccess)
+            // Use http_get! to parse the response body (needed for network_rollback_occurred flag)
+            use crate::http_get;
+            http_get!(
+                Device,
+                DeviceEvent,
+                &url,
+                HealthcheckResponse,
+                crate::types::HealthcheckInfo
             )
         }
         _ => crux_core::render::render(),
