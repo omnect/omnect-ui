@@ -1,11 +1,16 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { publishToCentrifugo } from './fixtures/centrifugo';
 import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './fixtures/mock-api';
 import { NetworkTestHarness } from './fixtures/network-test-harness';
 
+// Helper to navigate to network adapter settings
+const navigateToAdapter = async (page: Page, adapterName: string) => {
+  await page.getByText('Network').click();
+  await page.getByText(adapterName).click();
+};
+
 test.describe('Network Rollback Status', () => {
   test('rollback status is cleared after ack and does not reappear on re-login', async ({ page }) => {
-    // Track healthcheck calls and network state
     let healthcheckRollbackStatus = true;
     const originalIp = '192.168.1.100';
 
@@ -13,120 +18,62 @@ test.describe('Network Rollback Status', () => {
     await mockLoginSuccess(page);
     await mockRequireSetPassword(page);
 
-    // Mock healthcheck with rollback occurred status
     await page.route('**/healthcheck', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          version_info: {
-            required: '>=0.39.0',
-            current: '0.40.0',
-            mismatch: false,
-          },
-          update_validation_status: {
-            status: 'valid',
-          },
+          version_info: { required: '>=0.39.0', current: '0.40.0', mismatch: false },
+          update_validation_status: { status: 'valid' },
           network_rollback_occurred: healthcheckRollbackStatus,
         }),
       });
     });
 
-    // Mock ack-rollback endpoint
     await page.route('**/ack-rollback', async (route) => {
       if (route.request().method() === 'POST') {
-        // Simulate clearing the rollback status on the backend
         healthcheckRollbackStatus = false;
-        await route.fulfill({
-          status: 200,
-        });
+        await route.fulfill({ status: 200 });
       }
     });
 
-    // Step 1: Navigate to page - rollback notification appears on mount (before login)
     await page.goto('/');
-
-    // The rollback notification dialog appears immediately (from healthcheck in onMounted)
     await expect(page.getByText('Network Settings Rolled Back')).toBeVisible({ timeout: 10000 });
 
-    // Step 2: Acknowledge the rollback message
-    // This should call /ack-rollback (now without auth requirement) and clear the backend marker
     await page.getByRole('button', { name: /ok/i }).click();
     await expect(page.getByText('Network Settings Rolled Back')).not.toBeVisible();
-
-    // Wait a moment for the async POST to /ack-rollback to complete
     await page.waitForTimeout(500);
 
-    // Now we can log in
     await page.getByPlaceholder(/enter your password/i).fill('password');
     await page.getByRole('button', { name: /log in/i }).click();
     await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
 
-    // Publish network status with the original IP (after rollback)
-    // This simulates the network being rolled back to the original configuration
-    await publishToCentrifugo('NetworkStatusV1', {
-      network_status: [
-        {
-          name: 'eth0',
-          mac: '00:11:22:33:44:55',
-          online: true,
-          ipv4: {
-            addrs: [{ addr: originalIp, dhcp: false, prefix_len: 24 }],
-            dns: ['8.8.8.8'],
-            gateways: ['192.168.1.1'],
-          },
-        },
-      ],
-    });
+    const adapterConfig = {
+      name: 'eth0',
+      mac: '00:11:22:33:44:55',
+      online: true,
+      ipv4: {
+        addrs: [{ addr: originalIp, dhcp: false, prefix_len: 24 }],
+        dns: ['8.8.8.8'],
+        gateways: ['192.168.1.1'],
+      },
+    };
 
-    // Navigate to Network page to verify network data is loaded
-    await page.getByText('Network').click();
+    await publishToCentrifugo('NetworkStatusV1', { network_status: [adapterConfig] });
+    await navigateToAdapter(page, 'eth0'); // Use helper
     await expect(page.getByText('eth0')).toBeVisible();
 
-    // Note: IP address verification in the UI would require opening the network details
-    // and navigating to the specific form fields. For this test, we verify that:
-    // 1. The network status was published with the correct original IP
-    // 2. The interface is visible and accessible
-    // The actual IP display would be tested in a dedicated network configuration E2E test
-
-    // Step 3: Reload the page to simulate logout and re-login
     await page.reload();
-
-    // The rollback notification should NOT appear again because we acknowledged it
-    // and the /ack-rollback call cleared the backend marker file
     await expect(page.getByText('Network Settings Rolled Back')).not.toBeVisible({ timeout: 3000 });
 
-    // Can proceed with login
     await page.getByPlaceholder(/enter your password/i).fill('password');
     await page.getByRole('button', { name: /log in/i }).click();
     await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
-
-    // Verify no rollback notification
     await expect(page.getByText('Network Settings Rolled Back')).not.toBeVisible();
 
-    // Publish network status again (after reload) to ensure data persists
-    await publishToCentrifugo('NetworkStatusV1', {
-      network_status: [
-        {
-          name: 'eth0',
-          mac: '00:11:22:33:44:55',
-          online: true,
-          ipv4: {
-            addrs: [{ addr: originalIp, dhcp: false, prefix_len: 24 }],
-            dns: ['8.8.8.8'],
-            gateways: ['192.168.1.1'],
-          },
-        },
-      ],
-    });
-
-    // Navigate to Network page again to verify network state persists
-    await page.getByText('Network').click();
+    await publishToCentrifugo('NetworkStatusV1', { network_status: [adapterConfig] });
+    await navigateToAdapter(page, 'eth0'); // Use helper
     await expect(page.getByText('eth0')).toBeVisible();
-
-    // The network status with originalIp was published via Centrifugo
-    // which confirms the rollback worked correctly and the system is showing
-    // the original IP (not the invalid one that would have triggered rollback)
   });
 });
 
@@ -151,175 +98,84 @@ test.describe('Network Rollback Defaults', () => {
     harness.reset();
   });
 
-  test('Static -> DHCP: Rollback should be DISABLED by default', async ({ page }) => {
-    // Start with Static IP (localhost to trigger rollback modal)
+  const setupAdapter = async (page: Page, ip: string, dhcp: boolean) => {
     await harness.publishNetworkStatus([
       harness.createAdapter('eth0', {
         ipv4: {
-          addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
+          addrs: [{ addr: ip, dhcp, prefix_len: 24 }],
           dns: ['8.8.8.8'],
           gateways: ['192.168.1.1'],
         },
       }),
     ]);
+    await navigateToAdapter(page, 'eth0');
+  };
 
-    await page.getByText('Network').click();
-    await page.getByText('eth0').click();
+  test('Static -> DHCP: Rollback should be DISABLED by default', async ({ page }) => {
+    await setupAdapter(page, 'localhost', false);
     await expect(page.getByLabel('Static')).toBeChecked();
 
-    // Switch to DHCP
     await page.getByLabel('DHCP').click({ force: true });
-
-    // Click Save
     await page.getByRole('button', { name: /save/i }).click();
 
-    // Verify Modal
     await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
-
-    // Verify Checkbox is UNCHECKED
     await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).not.toBeChecked();
   });
 
   test('DHCP -> Static: Rollback should be ENABLED by default', async ({ page }) => {
-    // Start with DHCP (localhost to trigger rollback modal logic if we were changing IP,
-    // but for DHCP -> Static we are setting a NEW IP.
-    // Rollback logic applies if we are configuring the CURRENT adapter.)
-
-    // We need to simulate that we are connected via eth0 which is currently DHCP.
-    // And we are changing it to Static.
-
-    await harness.publishNetworkStatus([
-      harness.createAdapter('eth0', {
-        ipv4: {
-          addrs: [{ addr: 'localhost', dhcp: true, prefix_len: 24 }],
-          dns: ['8.8.8.8'],
-          gateways: ['192.168.1.1'],
-        },
-      }),
-    ]);
-
-    await page.getByText('Network').click();
-    await page.getByText('eth0').click();
-
-    // Verify we are in DHCP mode
+    await setupAdapter(page, 'localhost', true);
     await expect(page.getByLabel('DHCP')).toBeChecked();
 
-    // Switch to Static
     await page.getByLabel('Static').click({ force: true });
-
-    // Set a new IP
     await page.getByRole('textbox', { name: /IP Address/i }).fill('192.168.1.150');
-
-    // Click Save
     await page.getByRole('button', { name: /save/i }).click();
 
-    // Verify Modal
     await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
-
-    // Verify Checkbox is CHECKED
     await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
   });
 
   test('DHCP -> Static (Same IP): Rollback should be ENABLED', async ({ page }) => {
-    // Start with DHCP (localhost)
-    await harness.publishNetworkStatus([
-      harness.createAdapter('eth0', {
-        ipv4: {
-          addrs: [{ addr: 'localhost', dhcp: true, prefix_len: 24 }],
-          dns: ['8.8.8.8'],
-          gateways: ['192.168.1.1'],
-        },
-      }),
-    ]);
-
-    await page.getByText('Network').click();
-    await page.getByText('eth0').click();
-
-    // Verify we are in DHCP mode
+    await setupAdapter(page, 'localhost', true);
     await expect(page.getByLabel('DHCP')).toBeChecked();
 
-    // Switch to Static
     await page.getByLabel('Static').click({ force: true });
-    
-    // IP is auto-filled with current IP ('localhost')
-    // We do NOT change it.
-
-    // Click Save
+    // IP is auto-filled with current IP ('localhost'), do NOT change it.
     await page.getByRole('button', { name: /save/i }).click();
 
-    // Verify Modal
     await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
-
-    // Verify Checkbox is CHECKED
     await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
   });
 
   test('Rollback should show MODAL not SNACKBAR when connection is restored at old IP', async ({ page }) => {
-    // 1. Setup: Start with Static IP
-    await harness.publishNetworkStatus([
-      harness.createAdapter('eth0', {
-        ipv4: {
-          addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
-          dns: ['8.8.8.8'],
-          gateways: ['192.168.1.1'],
-        },
-      }),
-    ]);
+    await setupAdapter(page, 'localhost', false);
 
-    await page.getByText('Network').click();
-    await page.getByText('eth0').click();
-
-    // 2. Change to DHCP with Rollback
     await page.getByLabel('DHCP').click({ force: true });
     
     // Mock /network to return a short rollback timeout for testing
     await harness.mockNetworkConfig(page, { rollbackTimeoutSeconds: 2 });
 
-    // Click Save (triggers modal)
     await page.getByRole('button', { name: /save/i }).click();
-    
-    // Modal appears
     await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
-    
-    // Check "Enable automatic rollback" (it defaults to unchecked for Static->DHCP)
     await page.getByRole('checkbox', { name: /Enable automatic rollback/i }).check();
     
     // Override healthcheck mock to return network_rollback_occurred: true
-    // This ensures the Core receives the correct status when it polls the old IP
     await page.unroute('**/healthcheck');
     await page.route('**/healthcheck', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          version_info: {
-            required: '>=0.39.0',
-            current: '0.40.0',
-            mismatch: false,
-          },
-          update_validation_status: {
-            status: 'valid',
-          },
+          version_info: { required: '>=0.39.0', current: '0.40.0', mismatch: false },
+          update_validation_status: { status: 'valid' },
           network_rollback_occurred: true,
         }),
       });
     });
 
-    // 3. Apply changes (triggers transition to WaitingForNewIp)
     await page.getByRole('button', { name: /Apply Changes/i }).click();
-
-    // 4. Verify we are in the "spinner" state with countdown
     await expect(page.getByText('Applying network settings')).toBeVisible();
     
-    // 5. Wait for timeout to expire.
-    // The UI state machine will transition to WaitingForOldIp.
-
-    // Wait for the success message or modal.
-    
-    // We expect the SNACKBAR to NOT be visible
     await expect(page.getByText('Automatic network rollback successful')).not.toBeVisible();
-    
-    // And assert we DO see the modal content
     await expect(page.getByText('The network settings were rolled back to the previous configuration')).toBeVisible({ timeout: 10000 });
   });
 });
