@@ -123,4 +123,3 @@ cargo clippy -p omnect-ui-core -- -D warnings
 ### Technical Debt
 
 - [ ] Refactor `Model.auth_token` to not be serialized to the view model directly. The current approach of removing `#[serde(skip_serializing)]` in `src/app/src/model.rs` is a workaround for `shared_types` deserialization misalignment. A long-term solution should involve either making TypeGen respect `skip_serializing` or separating view-specific model fields.
-- [ ] Address `crux_http` error handling for non-2xx HTTP responses: The current implementation uses a workaround (`x-original-status` header in `useCore.ts` and corresponding logic in macros) because `crux_http` (v0.15) appears to discard response bodies for 4xx/5xx status codes, preventing detailed error messages from reaching the Core. This workaround should be removed if future `crux_http` versions provide a more direct way to access error response bodies.
