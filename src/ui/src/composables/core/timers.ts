@@ -34,7 +34,7 @@ export function setEventSender(callback: (event: Event) => Promise<void>): void 
 
 const RECONNECTION_POLL_INTERVAL_MS = Number(import.meta.env.VITE_RECONNECTION_POLL_INTERVAL_MS) || 5000 // 5 seconds
 const REBOOT_TIMEOUT_MS = Number(import.meta.env.VITE_REBOOT_TIMEOUT_MS) || 300000 // 5 minutes
-const FACTORY_RESET_TIMEOUT_MS = 600000 // 10 minutes
+const FACTORY_RESET_TIMEOUT_MS = Number(import.meta.env.VITE_FACTORY_RESET_TIMEOUT_MS) || 600000 // 10 minutes
 const NEW_IP_POLL_INTERVAL_MS = Number(import.meta.env.VITE_NEW_IP_POLL_INTERVAL_MS) || 5000 // 5 seconds
 
 // ============================================================================
