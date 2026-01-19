@@ -173,18 +173,22 @@ pub enum NetworkFormState {
 
 impl NetworkFormState {
     /// Transition from Editing to Submitting state
-    pub fn to_submitting(&self) -> Option<Self> {
+    pub fn to_submitting(&self, target_adapter_name: &str) -> Option<Self> {
         if let Self::Editing {
             adapter_name,
             form_data,
             original_data,
         } = self
         {
-            Some(Self::Submitting {
-                adapter_name: adapter_name.clone(),
-                form_data: form_data.clone(),
-                original_data: original_data.clone(),
-            })
+            if adapter_name == target_adapter_name {
+                Some(Self::Submitting {
+                    adapter_name: adapter_name.clone(),
+                    form_data: form_data.clone(),
+                    original_data: original_data.clone(),
+                })
+            } else {
+                None
+            }
         } else {
             None
         }

@@ -174,6 +174,17 @@ watch(
 	}
 )
 
+// Watch for form state changes from Core as a reliable way to reset submitting state
+watch(
+	() => viewModel.network_form_state,
+	(newState) => {
+		// If we were submitting and the state is no longer submitting, reset our flag
+		if (isSubmitting.value && newState?.type !== 'submitting') {
+			isSubmitting.value = false
+		}
+	}
+)
+
 const submit = async () => {
     // Check if the change requires rollback protection
     if (isRollbackRequired.value) {
@@ -186,10 +197,6 @@ const submit = async () => {
 const submitNetworkConfig = async (includeRollback: boolean) => {
     isSubmitting.value = true
     confirmationModalOpen.value = false
-
-    // Clear previous messages in Core so watchers trigger again if we get same messages
-    viewModel.success_message = null
-    viewModel.error_message = null
 
     const config: NetworkConfigRequest = {
         isServerAddr: props.isCurrentConnection,

@@ -1,18 +1,20 @@
-import { test, expect, Page } from '@playwright/test';
-import { publishToCentrifugo } from './fixtures/centrifugo';
+import { test, expect } from '@playwright/test';
 import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './fixtures/mock-api';
 import { NetworkTestHarness } from './fixtures/network-test-harness';
 
-// Helper to navigate to network adapter settings
-const navigateToAdapter = async (page: Page, adapterName: string) => {
-  await page.getByText('Network').click();
-  await page.getByText(adapterName).click();
-};
-
 test.describe('Network Rollback Status', () => {
+  let harness: NetworkTestHarness;
+
+  test.beforeEach(async () => {
+    harness = new NetworkTestHarness();
+  });
+
+  test.afterEach(() => {
+    harness.reset();
+  });
+
   test('rollback status is cleared after ack and does not reappear on re-login', async ({ page }) => {
     let healthcheckRollbackStatus = true;
-    const originalIp = '192.168.1.100';
 
     await mockConfig(page);
     await mockLoginSuccess(page);
@@ -48,20 +50,13 @@ test.describe('Network Rollback Status', () => {
     await page.getByRole('button', { name: /log in/i }).click();
     await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
 
-    const adapterConfig = {
-      name: 'eth0',
-      mac: '00:11:22:33:44:55',
-      online: true,
+    await harness.setup(page, {
       ipv4: {
-        addrs: [{ addr: originalIp, dhcp: false, prefix_len: 24 }],
+        addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
         dns: ['8.8.8.8'],
         gateways: ['192.168.1.1'],
       },
-    };
-
-    await publishToCentrifugo('NetworkStatusV1', { network_status: [adapterConfig] });
-    await navigateToAdapter(page, 'eth0'); // Use helper
-    await expect(page.getByText('eth0')).toBeVisible();
+    });
 
     await page.reload();
     await expect(page.getByText('Network Settings Rolled Back')).not.toBeVisible({ timeout: 3000 });
@@ -71,8 +66,8 @@ test.describe('Network Rollback Status', () => {
     await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Network Settings Rolled Back')).not.toBeVisible();
 
-    await publishToCentrifugo('NetworkStatusV1', { network_status: [adapterConfig] });
-    await navigateToAdapter(page, 'eth0'); // Use helper
+    await harness.navigateToNetwork(page);
+    await harness.navigateToAdapter(page, 'eth0');
     await expect(page.getByText('eth0')).toBeVisible();
   });
 });
@@ -98,21 +93,8 @@ test.describe('Network Rollback Defaults', () => {
     harness.reset();
   });
 
-  const setupAdapter = async (page: Page, ip: string, dhcp: boolean) => {
-    await harness.publishNetworkStatus([
-      harness.createAdapter('eth0', {
-        ipv4: {
-          addrs: [{ addr: ip, dhcp, prefix_len: 24 }],
-          dns: ['8.8.8.8'],
-          gateways: ['192.168.1.1'],
-        },
-      }),
-    ]);
-    await navigateToAdapter(page, 'eth0');
-  };
-
   test('Static -> DHCP: Rollback should be DISABLED by default', async ({ page }) => {
-    await setupAdapter(page, 'localhost', false);
+    await harness.setup(page, { ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }] } });
     await expect(page.getByLabel('Static')).toBeChecked();
 
     await page.getByLabel('DHCP').click({ force: true });
@@ -123,7 +105,7 @@ test.describe('Network Rollback Defaults', () => {
   });
 
   test('DHCP -> Static: Rollback should be ENABLED by default', async ({ page }) => {
-    await setupAdapter(page, 'localhost', true);
+    await harness.setup(page, { ipv4: { addrs: [{ addr: 'localhost', dhcp: true, prefix_len: 24 }] } });
     await expect(page.getByLabel('DHCP')).toBeChecked();
 
     await page.getByLabel('Static').click({ force: true });
@@ -135,7 +117,7 @@ test.describe('Network Rollback Defaults', () => {
   });
 
   test('DHCP -> Static (Same IP): Rollback should be ENABLED', async ({ page }) => {
-    await setupAdapter(page, 'localhost', true);
+    await harness.setup(page, { ipv4: { addrs: [{ addr: 'localhost', dhcp: true, prefix_len: 24 }] } });
     await expect(page.getByLabel('DHCP')).toBeChecked();
 
     await page.getByLabel('Static').click({ force: true });
@@ -156,7 +138,7 @@ test.describe('Network Rollback Defaults', () => {
   });
 
   test('Rollback should show MODAL not SNACKBAR when connection is restored at old IP', async ({ page }) => {
-    await setupAdapter(page, 'localhost', false);
+    await harness.setup(page, { ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }] } });
 
     await page.getByLabel('DHCP').click({ force: true });
     
@@ -191,31 +173,6 @@ test.describe('Network Rollback Defaults', () => {
 
 test.describe('Network Rollback Regression', () => {
   let harness: NetworkTestHarness;
-
-  const navigateToAdapter = async (page: Page, adapterName: string) => {
-    await page.getByText('Network').click();
-    await expect(page.getByText(adapterName)).toBeVisible();
-    await page.getByText(adapterName).click();
-    await expect(page.getByRole('textbox', { name: /IP Address/i }).first()).toBeVisible({ timeout: 5000 });
-  };
-
-  const setupAdapter = async (page: Page, config: Partial<DeviceNetwork>, adapterName = 'eth0') => {
-    await harness.publishNetworkStatus([
-      harness.createAdapter(adapterName, config),
-    ]);
-    
-    // Set browser hostname to match the adapter IP so Core detects it as current connection
-    const ip = config.ipv4?.addrs?.[0]?.addr || 'localhost';
-    await page.evaluate((hostname) => {
-        // @ts-ignore
-        if (window.setBrowserHostname) {
-            // @ts-ignore
-            window.setBrowserHostname(hostname);
-        }
-    }, ip);
-
-    await navigateToAdapter(page, adapterName);
-  };
 
   test.beforeEach(async ({ page }) => {
     harness = new NetworkTestHarness();
@@ -306,8 +263,17 @@ test.describe('Network Rollback Regression', () => {
   test('Rollback modal should close on second apply after a rollback', async ({ page }) => {
     test.setTimeout(60000); // Increase timeout for rollback scenario
 
+    // Set browser hostname to match the adapter IP so Core detects it as current connection
+    await page.evaluate(() => {
+        // @ts-ignore
+        if (window.setBrowserHostname) {
+            // @ts-ignore
+            window.setBrowserHostname('localhost');
+        }
+    });
+
     // 1. Setup adapter with static IP (current connection)
-    await setupAdapter(page, {
+    await harness.setup(page, {
       ipv4: {
         addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
         dns: ['8.8.8.8'],
@@ -370,7 +336,8 @@ test.describe('Network Rollback Regression', () => {
 
     // Ensure we are back on the adapter page
     if (!await page.getByRole('textbox', { name: /IP Address/i }).first().isVisible()) {
-         await navigateToAdapter(page, 'eth0');
+         await harness.navigateToNetwork(page);
+         await harness.navigateToAdapter(page, 'eth0');
     }
 
     const currentIpInput = page.getByRole('textbox', { name: /IP Address/i }).first();

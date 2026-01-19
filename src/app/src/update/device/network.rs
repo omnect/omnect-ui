@@ -44,16 +44,17 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
             }
 
             // Transition network form to submitting state
-            if let Some(submitting) = model.network_form_state.to_submitting() {
+            if let Some(submitting) = model.network_form_state.to_submitting(&config_req.name) {
                 model.network_form_state = submitting;
             }
 
             // Clear dirty flag when submitting
             model.network_form_dirty = false;
 
-            // Clear any previous success message so that identical subsequent messages
+            // Clear any previous messages so that identical subsequent messages
             // (e.g. from multiple network config applies) trigger the UI watcher correctly.
             model.success_message = None;
+            model.error_message = None;
 
             // Send the request to backend
             auth_post!(
