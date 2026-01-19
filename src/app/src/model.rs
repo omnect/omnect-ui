@@ -119,6 +119,14 @@ impl Model {
             .and_then(|status| status.current_connection_adapter(self.browser_hostname.as_deref()))
             .map(|adapter| adapter.name.clone());
     }
+
+    /// Check if the given adapter name matches the current connection adapter
+    pub fn is_current_adapter(&self, name: &str) -> bool {
+        self.current_connection_adapter
+            .as_ref()
+            .map(|current| current == name)
+            .unwrap_or(false)
+    }
 }
 
 impl ModelErrorHandler for Model {

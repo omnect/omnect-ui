@@ -330,10 +330,7 @@ mod tests {
                 &mut model,
             );
 
-            assert_eq!(
-                model.current_connection_adapter,
-                Some("eth0".to_string())
-            );
+            assert_eq!(model.current_connection_adapter, Some("eth0".to_string()));
         }
     }
 }

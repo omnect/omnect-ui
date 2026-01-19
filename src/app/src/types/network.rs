@@ -408,7 +408,7 @@ mod tests {
         }
 
         #[test]
-        fn returns_first_online_adapter_for_hostname() {
+        fn returns_none_for_hostname_without_ip_match() {
             let status = NetworkStatus {
                 network_status: vec![
                     create_adapter("eth0", "192.168.1.100", false),
@@ -418,7 +418,7 @@ mod tests {
             };
 
             let adapter = status.current_connection_adapter(Some("omnect-device"));
-            assert_eq!(adapter.map(|a| &a.name), Some(&"eth1".to_string()));
+            assert_eq!(adapter, None);
         }
 
         #[test]

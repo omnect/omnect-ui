@@ -307,10 +307,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::ReconnectionTimeout),
-                &mut model,
-            );
+            let _ = app.update(Event::Device(DeviceEvent::ReconnectionTimeout), &mut model);
 
             assert!(matches!(
                 model.device_operation_state,
@@ -333,10 +330,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::ReconnectionTimeout),
-                &mut model,
-            );
+            let _ = app.update(Event::Device(DeviceEvent::ReconnectionTimeout), &mut model);
 
             assert!(matches!(
                 model.device_operation_state,
@@ -358,10 +352,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::ReconnectionTimeout),
-                &mut model,
-            );
+            let _ = app.update(Event::Device(DeviceEvent::ReconnectionTimeout), &mut model);
 
             assert!(matches!(
                 model.device_operation_state,
@@ -382,10 +373,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::ReconnectionTimeout),
-                &mut model,
-            );
+            let _ = app.update(Event::Device(DeviceEvent::ReconnectionTimeout), &mut model);
 
             assert_eq!(model.device_operation_state, DeviceOperationState::Idle);
         }
@@ -409,7 +397,7 @@ mod tests {
 
                 let _ = app.update(
                     Event::Device(DeviceEvent::HealthcheckResponse(Err(
-                        "Connection failed".to_string(),
+                        "Connection failed".to_string()
                     ))),
                     &mut model,
                 );
@@ -470,7 +458,10 @@ mod tests {
                     &mut model,
                 );
 
-                assert_eq!(model.device_operation_state, DeviceOperationState::Rebooting);
+                assert_eq!(
+                    model.device_operation_state,
+                    DeviceOperationState::Rebooting
+                );
             }
         }
 
@@ -489,7 +480,7 @@ mod tests {
 
                 let _ = app.update(
                     Event::Device(DeviceEvent::HealthcheckResponse(Err(
-                        "Connection failed".to_string(),
+                        "Connection failed".to_string()
                     ))),
                     &mut model,
                 );
@@ -547,7 +538,7 @@ mod tests {
 
                 let _ = app.update(
                     Event::Device(DeviceEvent::HealthcheckResponse(Err(
-                        "Connection failed".to_string(),
+                        "Connection failed".to_string()
                     ))),
                     &mut model,
                 );
@@ -619,8 +610,7 @@ mod tests {
 
                 let _ = app.update(
                     Event::Device(DeviceEvent::HealthcheckResponse(Ok(create_healthcheck(
-                        "NoUpdate",
-                        false,
+                        "NoUpdate", false,
                     )))),
                     &mut model,
                 );
@@ -670,7 +660,7 @@ mod tests {
 
                 let _ = app.update(
                     Event::Device(DeviceEvent::HealthcheckResponse(Err(
-                        "Connection failed".to_string(),
+                        "Connection failed".to_string()
                     ))),
                     &mut model,
                 );
@@ -822,7 +812,7 @@ mod tests {
 
                 let _ = app.update(
                     Event::Device(DeviceEvent::HealthcheckResponse(Err(
-                        "Connection failed".to_string(),
+                        "Connection failed".to_string()
                     ))),
                     &mut model,
                 );

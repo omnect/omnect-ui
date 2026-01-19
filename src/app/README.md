@@ -31,8 +31,12 @@ The Crux Core follows the Model-View-Update pattern:
   - `device/` - Device action handlers
     - `mod.rs` - Device event dispatcher
     - `operations.rs` - Device operations (reboot, factory reset, updates)
-    - `network.rs` - Network configuration handlers
     - `reconnection.rs` - Device reconnection handlers
+    - `network/` - Network configuration handlers
+      - `mod.rs` - Module re-exports
+      - `config.rs` - Network config request/response
+      - `form.rs` - Form state management
+      - `verification.rs` - IP check and rollback logic
   - `websocket.rs` - WebSocket/Centrifugo handlers
   - `ui.rs` - UI action handlers (clear error/success)
 - `src/capabilities/centrifugo.rs` - Custom WebSocket capability (deprecated API, kept for Effect enum generation)
