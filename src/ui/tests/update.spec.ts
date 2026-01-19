@@ -1,44 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './fixtures/mock-api';
+import { setupAndLogin } from './fixtures/test-setup';
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
 test.describe('Device Update', () => {
   test.beforeEach(async ({ page }) => {
-    await mockConfig(page);
-    await mockLoginSuccess(page);
-    await mockRequireSetPassword(page);
-    
-    // Mock initial healthcheck
-    await page.route('**/healthcheck', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-            version_info: { current: '1.0.0', required: '1.0.0', mismatch: false },
-            update_validation_status: { status: 'NoUpdate' },
-            network_rollback_occurred: false
-        })
-      });
-    });
-
-    // Mock network config
-    await page.route('**/network', async (route) => {
-        if (route.request().method() === 'GET') {
-            await route.fulfill({ status: 200, body: JSON.stringify({ interfaces: [] }) });
-        } else {
-            await route.continue();
-        }
-    });
-
-    await page.goto('/');
-    
-    // Login
-    await page.getByPlaceholder(/enter your password/i).fill('password');
-    await page.getByRole('button', { name: /log in/i }).click();
-    
-    // Wait for dashboard to ensure login completed
-    await expect(page.getByText('Common Info')).toBeVisible();
+    await setupAndLogin(page);
 
     // Navigate to update page using sidebar to preserve WASM state
     const sidebar = page.getByTestId('main-nav'); // I saw data-cy="main-nav" in BaseSideBar.vue

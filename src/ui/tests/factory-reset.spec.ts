@@ -1,44 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './fixtures/mock-api';
+import { setupAndLogin } from './fixtures/test-setup';
 
 test.describe('Device Factory Reset', () => {
   test.beforeEach(async ({ page }) => {
-    await mockConfig(page);
-    await mockLoginSuccess(page);
-    await mockRequireSetPassword(page);
-    
-    // Mock healthcheck to avoid errors on app load
-    await page.route('**/healthcheck', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-            version_info: { current: '1.0.0', required: '1.0.0' },
-            network_rollback_occurred: false
-        })
-      });
-    });
-
-    // Mock initial network config to avoid errors
-    await page.route('**/network', async (route) => {
-        if (route.request().method() === 'GET') {
-            await route.fulfill({
-                status: 200,
-                body: JSON.stringify({ interfaces: [] })
-            });
-        } else {
-            await route.continue();
-        }
-    });
-
-    await page.goto('/');
-    
-    // Perform login
-    await page.getByPlaceholder(/enter your password/i).fill('password');
-    await page.getByRole('button', { name: /log in/i }).click();
-    
-    // Wait for dashboard
-    await expect(page.getByText('Common Info')).toBeVisible();
+    await setupAndLogin(page);
   });
 
   test('user can initiate factory reset from the device actions menu', async ({ page }) => {
