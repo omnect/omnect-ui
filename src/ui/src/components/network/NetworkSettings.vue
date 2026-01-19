@@ -185,6 +185,11 @@ const submit = async () => {
 
 const submitNetworkConfig = async (includeRollback: boolean) => {
     isSubmitting.value = true
+    confirmationModalOpen.value = false
+
+    // Clear previous messages in Core so watchers trigger again if we get same messages
+    viewModel.success_message = null
+    viewModel.error_message = null
 
     const config: NetworkConfigRequest = {
         isServerAddr: props.isCurrentConnection,

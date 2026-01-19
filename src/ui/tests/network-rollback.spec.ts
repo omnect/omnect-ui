@@ -189,3 +189,208 @@ test.describe('Network Rollback Defaults', () => {
   });
 });
 
+test.describe('Network Rollback Regression', () => {
+  let harness: NetworkTestHarness;
+
+  const navigateToAdapter = async (page: Page, adapterName: string) => {
+    await page.getByText('Network').click();
+    await expect(page.getByText(adapterName)).toBeVisible();
+    await page.getByText(adapterName).click();
+    await expect(page.getByRole('textbox', { name: /IP Address/i }).first()).toBeVisible({ timeout: 5000 });
+  };
+
+  const setupAdapter = async (page: Page, config: Partial<DeviceNetwork>, adapterName = 'eth0') => {
+    await harness.publishNetworkStatus([
+      harness.createAdapter(adapterName, config),
+    ]);
+    
+    // Set browser hostname to match the adapter IP so Core detects it as current connection
+    const ip = config.ipv4?.addrs?.[0]?.addr || 'localhost';
+    await page.evaluate((hostname) => {
+        // @ts-ignore
+        if (window.setBrowserHostname) {
+            // @ts-ignore
+            window.setBrowserHostname(hostname);
+        }
+    }, ip);
+
+    await navigateToAdapter(page, adapterName);
+  };
+
+  test.beforeEach(async ({ page }) => {
+    harness = new NetworkTestHarness();
+
+    // Shim WebSocket to redirect 192.168.1.150 to localhost
+    await page.addInitScript(() => {
+        const OriginalWebSocket = window.WebSocket;
+        // @ts-ignore
+        window.WebSocket = function(url, protocols) {
+            if (typeof url === 'string' && url.includes('192.168.1.150')) {
+                console.log(`[Shim] Redirecting WebSocket ${url} to localhost`);
+                url = url.replace('192.168.1.150', 'localhost');
+            }
+            return new OriginalWebSocket(url, protocols);
+        };
+        window.WebSocket.prototype = OriginalWebSocket.prototype;
+        window.WebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
+        window.WebSocket.OPEN = OriginalWebSocket.OPEN;
+        window.WebSocket.CLOSING = OriginalWebSocket.CLOSING;
+        window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
+    });
+
+    // Mock the redirect to the new IP to prevent navigation failure
+    await page.route(/.*192\.168\.1\.150.*/, async (route) => {
+        const url = new URL(route.request().url());
+        
+        // Handle healthcheck separately to avoid CORS and ensure correct response
+        if (url.pathname.includes('/healthcheck')) {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                headers: {
+                    'Access-Control-Allow-Origin': 'https://localhost:5173', // or '*'
+                    'Access-Control-Allow-Credentials': 'true',
+                },
+                body: JSON.stringify({
+                    version_info: { required: '>=0.39.0', current: '0.40.0', mismatch: false },
+                    update_validation_status: { status: 'valid' },
+                    network_rollback_occurred: harness.getRollbackState().occurred,
+                }),
+            });
+            return;
+        }
+
+        // For other requests (main page, assets), proxy to localhost
+        const originalUrl = page.url(); 
+        const originalPort = new URL(originalUrl).port || '5173';
+        const originalProtocol = new URL(originalUrl).protocol;
+        
+        const newUrl = `${originalProtocol}//localhost:${originalPort}${url.pathname}${url.search}`;
+        
+        console.log(`Redirecting ${url.href} to ${newUrl}`);
+        
+        try {
+            const response = await page.request.fetch(newUrl, {
+                method: route.request().method(),
+                headers: route.request().headers(),
+                data: route.request().postDataBuffer(),
+                ignoreHTTPSErrors: true
+            });
+            
+            await route.fulfill({
+                response: response
+            });
+        } catch (e) {
+            console.error('Failed to proxy request:', e);
+            await route.abort();
+        }
+    });
+
+    await mockConfig(page);
+    await mockLoginSuccess(page);
+    await mockRequireSetPassword(page);
+    await harness.mockNetworkConfig(page, { rollbackTimeoutSeconds: 10 }); // Short timeout
+    await harness.mockHealthcheck(page);
+    await harness.mockAckRollback(page);
+
+    await page.goto('/');
+    await page.getByPlaceholder(/enter your password/i).fill('password');
+    await page.getByRole('button', { name: /log in/i }).click();
+    await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
+  });
+
+  test.afterEach(() => {
+    harness.reset();
+  });
+
+  test('Rollback modal should close on second apply after a rollback', async ({ page }) => {
+    test.setTimeout(60000); // Increase timeout for rollback scenario
+
+    // 1. Setup adapter with static IP (current connection)
+    await setupAdapter(page, {
+      ipv4: {
+        addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
+        dns: ['8.8.8.8'],
+        gateways: ['192.168.1.1'],
+      },
+    });
+
+    // 2. First Change - will trigger rollback
+    const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+    await ipInput.fill('192.168.1.150');
+
+    await page.getByRole('button', { name: /save/i }).click();
+
+    const confirmDialog = page.getByText('Confirm Network Configuration Change');
+    await expect(confirmDialog).toBeVisible();
+
+    const rollbackCheckbox = page.getByRole('checkbox', { name: /Enable automatic rollback/i });
+    if (!(await rollbackCheckbox.isChecked())) {
+        await rollbackCheckbox.check();
+    }
+
+    await page.getByRole('button', { name: /apply changes/i }).click();
+
+    // Verify modal closed
+    await expect(confirmDialog).not.toBeVisible();
+
+    // Verify rollback overlay appears
+    await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible();
+
+    // Wait for at least one healthcheck attempt on the new IP
+    await page.waitForResponse(resp => resp.url().includes('192.168.1.150') && resp.url().includes('healthcheck'));
+
+    // 3. Simulate Rollback Timeout
+    await harness.simulateRollbackTimeout();
+
+    // UI should eventually show "Network Settings Rolled Back"
+    await expect(page.getByText('Network Settings Rolled Back')).toBeVisible({ timeout: 30000 });
+
+    // 4. Acknowledge Rollback
+    await page.getByRole('button', { name: /ok/i }).click();
+
+    // Verify we are back to normal
+    await expect(page.getByText('Network Settings Rolled Back')).not.toBeVisible();
+
+    // Handle re-login if necessary
+    if (await page.getByRole('button', { name: /log in/i }).isVisible()) {
+        await page.getByPlaceholder(/enter your password/i).fill('password');
+        await page.getByRole('button', { name: /log in/i }).click();
+        await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
+    }
+
+    // Force the browser hostname to match the harness IP.
+    await page.evaluate((ip) => {
+        // @ts-ignore
+        if (window.setBrowserHostname) {
+            // @ts-ignore
+            window.setBrowserHostname(ip);
+        }
+    }, '192.168.1.100');
+
+    // Ensure we are back on the adapter page
+    if (!await page.getByRole('textbox', { name: /IP Address/i }).first().isVisible()) {
+         await navigateToAdapter(page, 'eth0');
+    }
+
+    const currentIpInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+    await expect(currentIpInput).toHaveValue('192.168.1.100');
+
+    // 5. Second Change - try again
+    await currentIpInput.fill('192.168.1.151');
+    await page.getByRole('button', { name: /save/i }).click();
+
+    await expect(confirmDialog).toBeVisible();
+
+    // Ensure rollback is checked
+     if (!(await rollbackCheckbox.isChecked())) {
+        await rollbackCheckbox.check();
+    }
+
+    await page.getByRole('button', { name: /apply changes/i }).click();
+
+    // 6. Verify modal closed (second time)
+    await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
+  });
+});
+

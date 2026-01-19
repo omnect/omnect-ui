@@ -67,13 +67,27 @@ pub struct NetworkStatus {
 
 impl NetworkStatus {
     /// Determine which adapter is the current connection based on browser hostname
-    pub fn current_connection_adapter(&self, browser_hostname: Option<&str>) -> Option<&DeviceNetwork> {
+    pub fn current_connection_adapter(
+        &self,
+        browser_hostname: Option<&str>,
+    ) -> Option<&DeviceNetwork> {
         let hostname = browser_hostname?;
 
         // First, try to find a direct IP match
         for adapter in &self.network_status {
-            if adapter.ipv4.addrs.iter().any(|ip| ip.addr == hostname) {
-                return Some(adapter);
+            for ip in &adapter.ipv4.addrs {
+                if ip.addr == hostname {
+                    return Some(adapter);
+                }
+            }
+        }
+
+        // Special case: if we are on localhost, and an adapter has "localhost" IP, match it
+        if hostname == "localhost" {
+            for adapter in &self.network_status {
+                if adapter.ipv4.addrs.iter().any(|ip| ip.addr == "localhost") {
+                    return Some(adapter);
+                }
             }
         }
 
@@ -282,10 +296,7 @@ pub enum NetworkChangeState {
         switching_to_dhcp: bool,
     },
     /// New IP confirmed reachable, browser will redirect
-    NewIpReachable {
-        new_ip: String,
-        ui_port: u16,
-    },
+    NewIpReachable { new_ip: String, ui_port: u16 },
     /// Timeout expired without confirming new IP (rollback disabled case)
     NewIpTimeout {
         new_ip: String,

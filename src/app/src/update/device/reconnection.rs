@@ -172,6 +172,9 @@ pub fn handle_healthcheck_response(
                     new_ip: new_ip.clone(),
                     ui_port: port,
                 };
+                // Clear any leftover messages
+                model.success_message = None;
+                model.error_message = None;
                 // Update overlay for redirect
                 model.overlay_spinner = OverlaySpinnerState::new("Network settings applied")
                     .with_text(format!("Redirecting to new IP: {new_ip}:{port}"));
@@ -183,6 +186,9 @@ pub fn handle_healthcheck_response(
                 model.network_change_state = NetworkChangeState::Idle;
                 model.overlay_spinner.clear();
                 model.invalidate_session();
+                // Clear any leftover messages
+                model.success_message = None;
+                model.error_message = None;
                 // Do not show success message here. The "Network Settings Rolled Back" modal
                 // will be triggered by the `network_rollback_occurred` flag in the healthcheck response.
             }

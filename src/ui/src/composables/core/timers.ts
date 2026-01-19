@@ -189,6 +189,11 @@ export function startNewIpPolling(): void {
 
 	console.log('[useCore] Starting new IP polling')
 
+	// Clear messages when starting polling so that arriving at new IP/re-login 
+	// doesn't have stale success/error state
+	viewModel.success_message = null
+	viewModel.error_message = null
+
 	// Get timeout from viewModel (provided by backend)
 	const state = viewModel.network_change_state
 	if (!state || (state.type !== 'waiting_for_new_ip' && state.type !== 'waiting_for_old_ip')) {
@@ -344,6 +349,9 @@ export function initializeTimerWatchers(): void {
 			// Navigate to new IP when it's reachable
 			if (newState?.type === 'new_ip_reachable') {
 				console.log(`[useCore] Redirecting to new IP: ${newState.new_ip}:${newState.ui_port}`)
+				// Clear messages before redirecting so they don't persist on arrival at new IP
+				viewModel.success_message = null
+				viewModel.error_message = null
 				// Use HTTPS (server only listens on HTTPS)
 				window.location.href = `https://${newState.new_ip}:${newState.ui_port}`
 			}

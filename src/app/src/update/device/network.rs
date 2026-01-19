@@ -21,9 +21,15 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
 
     match parsed_config {
         Ok(config_req) => {
+            let is_server_addr = model
+                .current_connection_adapter
+                .as_ref()
+                .map(|name| name == &config_req.name)
+                .unwrap_or(false);
+
             // Store network change state for later use
-            // Show modal for: IP changed OR switching to DHCP on current adapter OR rollback explicitly enabled
-            if config_req.is_server_addr
+            // Show modal for: current connection AND (IP changed OR switching to DHCP OR rollback explicitly enabled)
+            if is_server_addr
                 && (config_req.ip_changed
                     || config_req.switching_to_dhcp
                     || config_req.enable_rollback.unwrap_or(false))
@@ -44,6 +50,10 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
 
             // Clear dirty flag when submitting
             model.network_form_dirty = false;
+
+            // Clear any previous success message so that identical subsequent messages
+            // (e.g. from multiple network config applies) trigger the UI watcher correctly.
+            model.success_message = None;
 
             // Send the request to backend
             auth_post!(
