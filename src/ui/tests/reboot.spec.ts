@@ -119,9 +119,9 @@ test.describe('Device Reboot', () => {
     // Verify initial state
     await expect(page.getByText('Device is rebooting')).toBeVisible();
 
-    // Wait for timeout (configured to 500ms in test env)
+    // Wait for timeout (configured to 2000ms in test env)
     // We add a little buffer to be safe
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2500);
 
     // Verify timeout message
     // The exact text comes from Rust: 

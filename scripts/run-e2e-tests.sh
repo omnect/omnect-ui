@@ -109,7 +109,7 @@ echo "🏗️  Building frontend..."
 # Faster polling for E2E tests
 export VITE_RECONNECTION_POLL_INTERVAL_MS=500
 export VITE_NEW_IP_POLL_INTERVAL_MS=500
-export VITE_REBOOT_TIMEOUT_MS=500
+export VITE_REBOOT_TIMEOUT_MS=2000
 export VITE_FACTORY_RESET_TIMEOUT_MS=500
 
 if bun run build-preview > /tmp/vite-build.log 2>&1; then
