@@ -1,11 +1,12 @@
 use crux_core::Command;
 
-use crate::events::{DeviceEvent, Event, UiEvent};
-use crate::http_get_silent;
-use crate::model::Model;
-use crate::types::{HealthcheckInfo, NetworkChangeState, OverlaySpinnerState};
-use crate::unauth_post;
-use crate::Effect;
+use crate::{
+    events::{DeviceEvent, Event, UiEvent},
+    http_get_silent,
+    model::Model,
+    types::{HealthcheckInfo, NetworkChangeState, OverlaySpinnerState},
+    unauth_post, Effect,
+};
 
 /// Helper to update network state and spinner based on configuration response
 pub fn update_network_state_and_spinner(
@@ -187,10 +188,7 @@ pub fn handle_ack_rollback(model: &mut Model) -> Command<Effect, Event> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::DeviceEvent;
     use crate::types::{HealthcheckInfo, UpdateValidationStatus, VersionInfo};
-    use crate::App;
-    use crux_core::testing::AppTester;
 
     mod ip_change_detection {
         use super::*;
@@ -198,7 +196,6 @@ mod tests {
         #[test]
         #[ignore]
         fn tick_increments_attempt_counter() {
-            let app = AppTester::<App>::default();
             let mut model = Model {
                 network_change_state: NetworkChangeState::WaitingForNewIp {
                     new_ip: "192.168.1.101".to_string(),
@@ -211,7 +208,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(Event::Device(DeviceEvent::NewIpCheckTick), &mut model);
+            let _ = handle_new_ip_check_tick(&mut model);
 
             if let NetworkChangeState::WaitingForNewIp { attempt, .. } = model.network_change_state
             {
@@ -221,7 +218,6 @@ mod tests {
 
         #[test]
         fn tick_skips_polling_when_switching_to_dhcp() {
-            let app = AppTester::<App>::default();
             let mut model = Model {
                 network_change_state: NetworkChangeState::WaitingForNewIp {
                     new_ip: "".to_string(),
@@ -234,7 +230,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(Event::Device(DeviceEvent::NewIpCheckTick), &mut model);
+            let _ = handle_new_ip_check_tick(&mut model);
 
             if let NetworkChangeState::WaitingForNewIp { attempt, .. } = model.network_change_state
             {
@@ -244,7 +240,6 @@ mod tests {
 
         #[test]
         fn timeout_transitions_to_waiting_for_old_ip_if_rollback_enabled() {
-            let app = AppTester::<App>::default();
             let mut model = Model {
                 network_change_state: NetworkChangeState::WaitingForNewIp {
                     new_ip: "192.168.1.101".to_string(),
@@ -258,7 +253,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(Event::Device(DeviceEvent::NewIpCheckTimeout), &mut model);
+            let _ = handle_new_ip_check_timeout(&mut model);
 
             assert!(matches!(
                 model.network_change_state,
@@ -277,7 +272,6 @@ mod tests {
 
         #[test]
         fn timeout_transitions_to_timeout_state_if_rollback_disabled() {
-            let app = AppTester::<App>::default();
             let mut model = Model {
                 network_change_state: NetworkChangeState::WaitingForNewIp {
                     new_ip: "192.168.1.101".to_string(),
@@ -290,7 +284,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(Event::Device(DeviceEvent::NewIpCheckTimeout), &mut model);
+            let _ = handle_new_ip_check_timeout(&mut model);
 
             assert!(matches!(
                 model.network_change_state,
@@ -308,7 +302,6 @@ mod tests {
 
         #[test]
         fn successful_healthcheck_on_new_ip() {
-            let app = AppTester::<App>::default();
             let mut model = Model {
                 network_change_state: NetworkChangeState::WaitingForNewIp {
                     new_ip: "192.168.1.101".to_string(),
@@ -333,8 +326,8 @@ mod tests {
                 network_rollback_occurred: false,
             };
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::HealthcheckResponse(Ok(healthcheck.clone()))),
+            let _ = crate::update::device::handle(
+                DeviceEvent::HealthcheckResponse(Ok(healthcheck.clone())),
                 &mut model,
             );
 
@@ -347,7 +340,6 @@ mod tests {
 
         #[test]
         fn clears_rollback_flag_in_healthcheck() {
-            let app = AppTester::<App>::default();
             let mut model = Model {
                 healthcheck: Some(HealthcheckInfo {
                     version_info: VersionInfo {
@@ -363,7 +355,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(Event::Device(DeviceEvent::AckRollback), &mut model);
+            let _ = handle_ack_rollback(&mut model);
 
             if let Some(healthcheck) = &model.healthcheck {
                 assert!(!healthcheck.network_rollback_occurred);
@@ -372,45 +364,38 @@ mod tests {
 
         #[test]
         fn handles_missing_healthcheck_gracefully() {
-            let app = AppTester::<App>::default();
             let mut model = Model {
                 healthcheck: None,
                 ..Default::default()
             };
 
-            let _ = app.update(Event::Device(DeviceEvent::AckRollback), &mut model);
+            let _ = handle_ack_rollback(&mut model);
 
             assert!(model.healthcheck.is_none());
         }
 
         #[test]
         fn ack_rollback_response_stops_loading() {
-            let app = AppTester::<App>::default();
             let mut model = Model {
                 is_loading: true,
                 ..Default::default()
             };
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::AckRollbackResponse(Ok(()))),
-                &mut model,
-            );
+            let _ =
+                crate::update::device::handle(DeviceEvent::AckRollbackResponse(Ok(())), &mut model);
 
             assert!(!model.is_loading);
         }
 
         #[test]
         fn ack_rollback_response_error_sets_error_message() {
-            let app = AppTester::<App>::default();
             let mut model = Model {
                 is_loading: true,
                 ..Default::default()
             };
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::AckRollbackResponse(Err(
-                    "Failed to acknowledge rollback".to_string(),
-                ))),
+            let _ = crate::update::device::handle(
+                DeviceEvent::AckRollbackResponse(Err("Failed to acknowledge rollback".to_string())),
                 &mut model,
             );
 

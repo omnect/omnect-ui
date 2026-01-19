@@ -101,6 +101,9 @@ omnect-ui/
 ├── src/
 │   ├── backend/          # Rust backend (Actix-web)
 │   ├── app/              # Crux Core (business logic)
+│   │   ├── src/
+│   │   │   ├── commands/ # Custom side-effect commands
+│   │   │   └── ...
 │   ├── shared_types/     # TypeGen for TypeScript bindings
 │   └── ui/               # Vue 3 frontend
 ├── scripts/              # Build and development scripts

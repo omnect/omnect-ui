@@ -1,9 +1,10 @@
 use crux_core::Command;
 
-use crate::events::{Event, UiEvent};
-use crate::model::Model;
-use crate::update_field;
-use crate::Effect;
+use crate::{
+    events::{Event, UiEvent},
+    model::Model,
+    update_field, Effect,
+};
 
 /// Handle UI-related events (clear messages, etc.)
 pub fn handle(event: UiEvent, model: &mut Model) -> Command<Effect, Event> {
@@ -21,44 +22,39 @@ pub fn handle(event: UiEvent, model: &mut Model) -> Command<Effect, Event> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::{Event, UiEvent};
+    use crate::events::UiEvent;
     use crate::types::{DeviceNetwork, InternetProtocol, IpAddress, NetworkStatus};
-    use crate::App;
-    use crux_core::testing::AppTester;
 
     #[test]
     fn clear_error_removes_error_message() {
-        let app = AppTester::<App>::default();
         let mut model = Model {
             error_message: Some("Test error".to_string()),
             ..Default::default()
         };
 
-        let _ = app.update(Event::Ui(UiEvent::ClearError), &mut model);
+        let _ = handle(UiEvent::ClearError, &mut model);
 
         assert_eq!(model.error_message, None);
     }
 
     #[test]
     fn clear_success_removes_success_message() {
-        let app = AppTester::<App>::default();
         let mut model = Model {
             success_message: Some("Test success".to_string()),
             ..Default::default()
         };
 
-        let _ = app.update(Event::Ui(UiEvent::ClearSuccess), &mut model);
+        let _ = handle(UiEvent::ClearSuccess, &mut model);
 
         assert_eq!(model.success_message, None);
     }
 
     #[test]
     fn set_browser_hostname_stores_hostname() {
-        let app = AppTester::<App>::default();
         let mut model = Model::default();
 
-        let _ = app.update(
-            Event::Ui(UiEvent::SetBrowserHostname("192.168.1.100".to_string())),
+        let _ = handle(
+            UiEvent::SetBrowserHostname("192.168.1.100".to_string()),
             &mut model,
         );
 
@@ -67,7 +63,6 @@ mod tests {
 
     #[test]
     fn set_browser_hostname_updates_current_connection_adapter() {
-        let app = AppTester::<App>::default();
         let mut model = Model {
             network_status: Some(NetworkStatus {
                 network_status: vec![DeviceNetwork {
@@ -89,8 +84,8 @@ mod tests {
             ..Default::default()
         };
 
-        let _ = app.update(
-            Event::Ui(UiEvent::SetBrowserHostname("192.168.1.100".to_string())),
+        let _ = handle(
+            UiEvent::SetBrowserHostname("192.168.1.100".to_string()),
             &mut model,
         );
 

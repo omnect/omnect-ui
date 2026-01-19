@@ -99,10 +99,7 @@ fn compute_rollback_modal_state(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::DeviceEvent;
     use crate::types::{DeviceNetwork, InternetProtocol, IpAddress, NetworkStatus};
-    use crate::App;
-    use crux_core::testing::AppTester;
 
     fn create_test_network_adapter(name: &str, ip: &str, dhcp: bool) -> DeviceNetwork {
         DeviceNetwork {
@@ -127,7 +124,6 @@ mod tests {
 
         #[test]
         fn start_edit_transitions_to_editing_state() {
-            let app = AppTester::<App>::default();
             let adapter = create_test_network_adapter("eth0", "192.168.1.100", false);
             let mut model = Model {
                 network_status: Some(NetworkStatus {
@@ -136,12 +132,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::NetworkFormStartEdit {
-                    adapter_name: "eth0".to_string(),
-                }),
-                &mut model,
-            );
+            let _ = handle_network_form_start_edit("eth0".to_string(), &mut model);
 
             assert!(matches!(
                 model.network_form_state,
@@ -151,7 +142,7 @@ mod tests {
                 adapter_name,
                 form_data,
                 original_data,
-            } = model.network_form_state
+            } = &model.network_form_state
             {
                 assert_eq!(adapter_name, "eth0");
                 assert_eq!(form_data.ip_address, "192.168.1.100");
@@ -163,7 +154,6 @@ mod tests {
 
         #[test]
         fn update_with_unchanged_data_keeps_clean_flag() {
-            let app = AppTester::<App>::default();
             let form_data = NetworkFormData {
                 name: "eth0".to_string(),
                 ip_address: "192.168.1.100".to_string(),
@@ -183,19 +173,14 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::NetworkFormUpdate {
-                    form_data: serde_json::to_string(&form_data).unwrap(),
-                }),
-                &mut model,
-            );
+            let _ =
+                handle_network_form_update(serde_json::to_string(&form_data).unwrap(), &mut model);
 
             assert!(!model.network_form_dirty);
         }
 
         #[test]
         fn update_with_changed_data_sets_dirty_flag() {
-            let app = AppTester::<App>::default();
             let original_data = NetworkFormData {
                 name: "eth0".to_string(),
                 ip_address: "192.168.1.100".to_string(),
@@ -218,10 +203,8 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::NetworkFormUpdate {
-                    form_data: serde_json::to_string(&changed_data).unwrap(),
-                }),
+            let _ = handle_network_form_update(
+                serde_json::to_string(&changed_data).unwrap(),
                 &mut model,
             );
 
@@ -230,7 +213,6 @@ mod tests {
 
         #[test]
         fn reset_restarts_edit_from_original_adapter_data() {
-            let app = AppTester::<App>::default();
             let adapter = create_test_network_adapter("eth0", "192.168.1.100", false);
 
             let modified_data = NetworkFormData {
@@ -255,18 +237,13 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::NetworkFormReset {
-                    adapter_name: "eth0".to_string(),
-                }),
-                &mut model,
-            );
+            let _ = handle_network_form_start_edit("eth0".to_string(), &mut model);
 
             if let NetworkFormState::Editing {
                 form_data,
                 original_data,
                 ..
-            } = model.network_form_state
+            } = &model.network_form_state
             {
                 assert_eq!(form_data.ip_address, "192.168.1.100");
                 assert_eq!(original_data.ip_address, "192.168.1.100");
@@ -300,7 +277,6 @@ mod tests {
 
         #[test]
         fn shows_modal_when_ip_changed_on_current_adapter() {
-            let app = AppTester::<App>::default();
             let network_status = create_network_status_with_adapter("eth0", "192.168.1.100");
 
             let original_data = NetworkFormData {
@@ -326,10 +302,8 @@ mod tests {
             let mut changed_data = original_data.clone();
             changed_data.ip_address = "192.168.1.101".to_string();
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::NetworkFormUpdate {
-                    form_data: serde_json::to_string(&changed_data).unwrap(),
-                }),
+            let _ = handle_network_form_update(
+                serde_json::to_string(&changed_data).unwrap(),
                 &mut model,
             );
 
@@ -339,7 +313,6 @@ mod tests {
 
         #[test]
         fn shows_modal_when_switching_to_dhcp_on_current_adapter() {
-            let app = AppTester::<App>::default();
             let network_status = create_network_status_with_adapter("eth0", "192.168.1.100");
 
             let original_data = NetworkFormData {
@@ -365,10 +338,8 @@ mod tests {
             let mut changed_data = original_data.clone();
             changed_data.dhcp = true;
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::NetworkFormUpdate {
-                    form_data: serde_json::to_string(&changed_data).unwrap(),
-                }),
+            let _ = handle_network_form_update(
+                serde_json::to_string(&changed_data).unwrap(),
                 &mut model,
             );
 
@@ -378,7 +349,6 @@ mod tests {
 
         #[test]
         fn does_not_show_modal_for_non_current_adapter() {
-            let app = AppTester::<App>::default();
             let network_status = create_network_status_with_adapter("eth0", "192.168.1.100");
 
             let original_data = NetworkFormData {
@@ -404,10 +374,8 @@ mod tests {
             let mut changed_data = original_data.clone();
             changed_data.ip_address = "192.168.2.101".to_string();
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::NetworkFormUpdate {
-                    form_data: serde_json::to_string(&changed_data).unwrap(),
-                }),
+            let _ = handle_network_form_update(
+                serde_json::to_string(&changed_data).unwrap(),
                 &mut model,
             );
 
@@ -417,7 +385,6 @@ mod tests {
 
         #[test]
         fn clears_flags_on_form_start_edit() {
-            let app = AppTester::<App>::default();
             let network_status = create_network_status_with_adapter("eth0", "192.168.1.100");
 
             let mut model = Model {
@@ -427,12 +394,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let _ = app.update(
-                Event::Device(DeviceEvent::NetworkFormStartEdit {
-                    adapter_name: "eth0".to_string(),
-                }),
-                &mut model,
-            );
+            let _ = handle_network_form_start_edit("eth0".to_string(), &mut model);
 
             assert!(!model.should_show_rollback_modal);
             assert!(!model.default_rollback_enabled);

@@ -121,7 +121,7 @@ omnect-ui/
 │   ├── app/                      # Crux Core (business logic)
 │   │   ├── Cargo.toml
 │   │   └── src/
-│   │       ├── lib.rs            # App struct, Capabilities, re-exports
+│   │       ├── lib.rs            # App struct, Effect enum, re-exports
 │   │       ├── model.rs          # Model struct (application state)
 │   │       ├── events.rs         # Event enum
 │   │       ├── types/            # Domain types (organized by domain)
@@ -133,22 +133,24 @@ omnect-ui/
 │   │       │   ├── update.rs     # Update validation types
 │   │       │   └── common.rs     # Common shared types
 │   │       ├── wasm.rs           # WASM bindings
-│       ├── update/           # Domain-based event handlers
-│       │   ├── mod.rs        # Main dispatcher
-│       │   ├── auth.rs       # Authentication handlers
-│       │   ├── device.rs     # Device action handlers
-│       │   ├── websocket.rs  # WebSocket/Centrifugo handlers
-│       │   ├── ui.rs         # UI action handlers
-│       │   └── device/
-│       │       ├── mod.rs        # Device event dispatcher
-│       │       ├── operations.rs # Device operations (reboot, factory reset, updates)
-│       │       ├── reconnection.rs # Device reconnection handlers
-│       │       └── network/      # Network configuration handlers
-│       │           ├── mod.rs
-│       │           ├── config.rs
-│       │           ├── form.rs
-│       │           └── verification.rs
-│       └── capabilities/     # Custom capabilities (Centrifugo)
+│       ├── commands/         # Custom command implementations
+│       │   ├── mod.rs
+│       │   └── centrifugo.rs # Centrifugo WebSocket commands
+│       └── update/           # Domain-based event handlers
+│           ├── mod.rs        # Main dispatcher
+│           ├── auth.rs       # Authentication handlers
+│           ├── device.rs     # Device action handlers
+│           ├── websocket.rs  # WebSocket/Centrifugo handlers
+│           ├── ui.rs         # UI action handlers
+│           └── device/
+│               ├── mod.rs        # Device event dispatcher
+│               ├── operations.rs # Device operations (reboot, factory reset, updates)
+│               ├── reconnection.rs # Device reconnection handlers
+│               └── network/      # Network configuration handlers
+│                   ├── mod.rs
+│                   ├── config.rs
+│                   ├── form.rs
+│                   └── verification.rs
 │   ├── backend/                  # Rust backend (Actix-web)
 │   │   ├── Cargo.toml
 │   │   ├── src/
@@ -217,12 +219,12 @@ const systemInfo = computed(() => viewModel.system_info)
 
 - `src/ui/src/composables/useCore.ts` - Core WASM bridge + HTTP/Centrifugo effect handlers
 - `src/ui/src/components/DeviceInfoCore.vue` - Example migrated component
-- `src/app/src/lib.rs` - App struct, Capabilities, and re-exports
+- `src/app/src/lib.rs` - App struct, Effect enum, and re-exports
 - `src/app/src/model.rs` - Model struct (application state)
 - `src/app/src/events.rs` - Event enum definitions
 - `src/app/src/types/` - Domain types organized by domain (auth, device, network, etc.)
 - `src/app/src/update/` - Domain-based event handlers (auth, device, websocket, ui)
-- `src/app/src/capabilities/centrifugo.rs` - Custom Centrifugo capability
+- `src/app/src/commands/centrifugo.rs` - Custom Centrifugo commands
 - `scripts/build-frontend.sh` - Build complete frontend (WASM + TypeScript types + UI)
 
 ## Code Architecture

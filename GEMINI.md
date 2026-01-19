@@ -28,6 +28,27 @@ The application follows the Crux pattern where:
 3. Shell processes Effects (render UI, make HTTP requests, manage WebSocket)
 4. Shell reads ViewModel from Core for rendering
 
+### Use Statements - Keep Them Grouped
+```rust
+// ✅ Good - grouped and concise
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use crate::core::{
+    error::{ServiceError, ServiceResult},
+    types::AuthorizationState,
+};
+
+// ❌ Bad - verbose and separate
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+use crate::core::error::ServiceError;
+use crate::core::error::ServiceResult;
+use crate::core::types::AuthorizationState;
+```
+
 ## Build Commands
 
 ### Backend (Rust)
@@ -70,6 +91,8 @@ cargo fmt
 # Build WASM module (from src/app/ directory)
 wasm-pack build --target web --out-dir ../ui/src/core/pkg
 ```
+
+**Note on getrandom**: Crux 0.17+ uses `getrandom` 0.3, which requires the `wasm_js` feature for WASM targets. This is enabled in `src/app/Cargo.toml`.
 
 ### Frontend (Vue 3)
 
@@ -126,7 +149,7 @@ omnect-ui/
 │   ├── app/                      # Crux Core (business logic)
 │   │   ├── Cargo.toml
 │   │   └── src/
-│   │       ├── lib.rs            # App struct, Capabilities, re-exports
+│   │       ├── lib.rs            # App struct, Effect enum, re-exports
 │   │       ├── model.rs          # Model struct (application state)
 │   │       ├── events.rs         # Event enum
 │   │       ├── types/            # Domain types (organized by domain)
@@ -137,23 +160,12 @@ omnect-ui/
 │   │       │   ├── factory_reset.rs  # Factory reset types
 │   │       │   ├── update.rs     # Update validation types
 │   │       │   └── common.rs     # Common shared types
-│   │       ├── wasm.rs           # WASM bindings
-│       ├── update/           # Domain-based event handlers
-│       │   ├── mod.rs        # Main dispatcher
-│       │   ├── auth.rs       # Authentication handlers
-│       │   ├── device.rs     # Device action handlers
-│       │   ├── websocket.rs  # WebSocket/Centrifugo handlers
-│       │   ├── ui.rs         # UI action handlers
-│       │   └── device/
-│       │       ├── mod.rs        # Device event dispatcher
-│       │       ├── operations.rs # Device operations (reboot, factory reset, updates)
-│       │       ├── reconnection.rs # Device reconnection handlers
-│       │       └── network/      # Network configuration handlers
-│       │           ├── mod.rs
-│       │           ├── config.rs
-│       │           ├── form.rs
-│       │           └── verification.rs
-│       └── capabilities/     # Custom capabilities (Centrifugo)
+│       ├── wasm.rs           # WASM bindings
+│       ├── commands/         # Custom command implementations
+│       │   ├── mod.rs
+│       │   └── centrifugo.rs # Centrifugo WebSocket commands
+│       └── update/           # Domain-based event handlers
+│           ├── mod.rs        # Main dispatcher
 │   ├── backend/                  # Rust backend (Actix-web)
 │   │   ├── Cargo.toml
 │   │   ├── src/
@@ -222,12 +234,12 @@ const systemInfo = computed(() => viewModel.system_info)
 
 - `src/ui/src/composables/useCore.ts` - Core WASM bridge + HTTP/Centrifugo effect handlers
 - `src/ui/src/components/DeviceInfoCore.vue` - Example migrated component
-- `src/app/src/lib.rs` - App struct, Capabilities, and re-exports
+- `src/app/src/lib.rs` - App struct, Effect enum, and re-exports
 - `src/app/src/model.rs` - Model struct (application state)
 - `src/app/src/events.rs` - Event enum definitions
 - `src/app/src/types/` - Domain types organized by domain (auth, device, network, etc.)
 - `src/app/src/update/` - Domain-based event handlers (auth, device, websocket, ui)
-- `src/app/src/capabilities/centrifugo.rs` - Custom Centrifugo capability
+- `src/app/src/commands/centrifugo.rs` - Custom Centrifugo commands
 - `scripts/build-frontend.sh` - Build complete frontend (WASM + TypeScript types + UI)
 
 ## Code Architecture
@@ -291,6 +303,17 @@ When submitting changes to this codebase:
 - **Post-Deployment Testing**: After a build and deployment, **always await explicit user confirmation** before starting any tests. The user will prepare the login screen as the starting point.
 
 ### Gemini Context (Session Findings)
+
+### Crux 0.17 Upgrade
+
+The application has been upgraded to Crux 0.17 (0.17.0-rc2) and Crux HTTP 0.16 (0.16.0-rc2).
+
+1. **Effect Definition**: The legacy `Capabilities` struct has been replaced by a manually defined `Effect` enum in `src/app/src/lib.rs`, annotated with `#[crux_macros::effect(typegen)]`.
+2. **App Trait**: The `App` trait implementation in `lib.rs` now uses the updated `update` signature (without the `capabilities` argument).
+3. **Bridge API**: The WASM FFI bindings in `src/app/src/wasm.rs` have been updated to use the new `Bridge` API: `CORE.update()`, `CORE.view()`, and `CORE.resolve()`.
+4. **Shell Effect Processing**: The UI shell (`src/ui/src/composables/core/effects.ts`) now handles the new `Request` structure where `requestId` is at the top level and the `effect` is a nested variant.
+5. **Command API**: Legacy capabilities have been removed. Custom side-effects like Centrifugo are now implemented using the `Command` API in `src/app/src/commands/`.
+6. **Testing API**: Tests have been migrated from the deprecated `AppTester` to the new Command-based Testing API.
 
 ### Critical Workarounds & Fixes
 
