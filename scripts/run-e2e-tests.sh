@@ -106,6 +106,10 @@ fi
 # Build the frontend for preview mode (eliminates Vite dev optimization issues)
 # Note: Using default base path (/) for preview server, not /static for production backend
 echo "🏗️  Building frontend..."
+# Faster polling for E2E tests
+export VITE_RECONNECTION_POLL_INTERVAL_MS=500
+export VITE_NEW_IP_POLL_INTERVAL_MS=500
+
 if bun run build-preview > /tmp/vite-build.log 2>&1; then
     echo "✅ Frontend build complete!"
 else

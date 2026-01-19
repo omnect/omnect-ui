@@ -32,10 +32,10 @@ export function setEventSender(callback: (event: Event) => Promise<void>): void 
 // Timer Constants
 // ============================================================================
 
-const RECONNECTION_POLL_INTERVAL_MS = 5000 // 5 seconds
+const RECONNECTION_POLL_INTERVAL_MS = Number(import.meta.env.VITE_RECONNECTION_POLL_INTERVAL_MS) || 5000 // 5 seconds
 const REBOOT_TIMEOUT_MS = 300000 // 5 minutes
 const FACTORY_RESET_TIMEOUT_MS = 600000 // 10 minutes
-const NEW_IP_POLL_INTERVAL_MS = 5000 // 5 seconds
+const NEW_IP_POLL_INTERVAL_MS = Number(import.meta.env.VITE_NEW_IP_POLL_INTERVAL_MS) || 5000 // 5 seconds
 
 // ============================================================================
 // Timer IDs
@@ -244,6 +244,13 @@ export function startNewIpPolling(): void {
 
 	// Only start countdown and timeout if rollback is enabled (timeout > 0)
 	if (rollbackTimeout > 0) {
+		// Update countdown immediately
+		if (countdownDeadline !== null) {
+			const remainingMs = Math.max(0, countdownDeadline - Date.now())
+			const remainingSeconds = Math.ceil(remainingMs / 1000)
+			viewModel.overlay_spinner.countdown_seconds = remainingSeconds
+		}
+
 		// Start countdown interval (every 1 second for UI countdown)
 		// Calculate remaining seconds from deadline instead of decrementing
 		newIpCountdownIntervalId = setInterval(() => {

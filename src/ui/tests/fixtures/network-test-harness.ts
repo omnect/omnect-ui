@@ -5,7 +5,7 @@ import { publishToCentrifugo } from './centrifugo';
  * Polling interval used by the application for healthcheck requests.
  * This must match NEW_IP_POLL_INTERVAL_MS in src/ui/src/composables/core/timers.ts
  */
-export const HEALTHCHECK_POLL_INTERVAL_MS = 5000;
+export const HEALTHCHECK_POLL_INTERVAL_MS = Number(process.env.VITE_NEW_IP_POLL_INTERVAL_MS) || 5000;
 
 /**
  * Default rollback timeout in seconds if not specified
@@ -223,11 +223,7 @@ export class NetworkTestHarness {
           }),
         });
       } else {
-        await route.fulfill({
-          status: 503,
-          contentType: 'application/json',
-          body: JSON.stringify({ error: 'Device unreachable - connection timed out' }),
-        });
+        await route.abort();
       }
     });
   }

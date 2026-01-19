@@ -60,9 +60,14 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       expect(harness.getRollbackState().enabled).toBe(true);
 
       await harness.simulateRollbackTimeout();
+      // Wait long enough for client-side timeout (3s) to fire, which triggers the UI update
+      // Increased to 6s for stability in slow environments
       await page.waitForTimeout(6000);
 
       await harness.mockHealthcheck(page, { healthcheckAlwaysFails: false });
+      // Explicitly fail the new IP healthcheck to force timeout/rollback logic on client
+      // We use abort() to simulate a network error because the app masks 503 responses as 200
+      await page.route('**/*192.168.1.150*/healthcheck', route => route.abort());
 
       await expect(page.locator('#overlay').getByText(/Automatic rollback initiated/i).first()).toBeVisible({ timeout: 15000 });
       await expect(page.locator('#overlay')).not.toBeVisible({ timeout: 20000 });
@@ -70,10 +75,11 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
     });
 
     test('DHCP rollback - automatic redirect to login after timeout', async ({ page }) => {
-      const shortTimeoutSeconds = 5;
+      const shortTimeoutSeconds = 3;
       await page.unroute('**/network');
       await harness.mockNetworkConfig(page, { rollbackTimeoutSeconds: shortTimeoutSeconds });
-      await harness.mockHealthcheck(page, { healthcheckSuccessAfter: 8000 });
+      // Ensure healthcheck fails initially so we can verify the timeout/rollback state
+      await harness.mockHealthcheck(page, { healthcheckAlwaysFails: true });
 
       await harness.setup(page, {
         ipv4: {
@@ -94,11 +100,15 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page.locator('#overlay')).toBeVisible();
 
       await harness.simulateRollbackTimeout();
-      await page.waitForTimeout(6000);
+      // Wait for client timeout (3s) to trigger UI update
+      await page.waitForTimeout(4000);
 
+      // Verify rollback message matches
+      await expect(page.locator('#overlay').getByText(/Automatic rollback initiated/i).first()).toBeVisible({ timeout: 15000 });
+
+      // Now allow recovery
       await harness.mockHealthcheck(page, { healthcheckAlwaysFails: false });
 
-      await expect(page.locator('#overlay').getByText(/Automatic rollback initiated/i).first()).toBeVisible({ timeout: 15000 });
       await expect(page.locator('#overlay')).not.toBeVisible({ timeout: 20000 });
       await expect(page).toHaveURL(/\/login/, { timeout: 10000 });
       // Changed: expect MODAL instead of snackbar (fix: show rollback modal instead of snackbar on dynamic rollback)
@@ -106,7 +116,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
     });
 
     test('rollback cancellation - new IP becomes reachable within timeout', async ({ page }) => {
-      await harness.mockHealthcheck(page, { healthcheckSuccessAfter: 6000 });
+      await harness.mockHealthcheck(page, { healthcheckSuccessAfter: 2000 });
 
       await harness.setup(page, {
         ipv4: {
@@ -125,7 +135,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible({ timeout: 10000 });
 
-      await page.waitForTimeout(7000);
+      await page.waitForTimeout(3000);
       await harness.simulateNewIpReachable();
       await page.waitForTimeout(1000);
 
@@ -208,14 +218,22 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       // Verify it's not the current connection
       await expect(page.getByText('(current connection)')).not.toBeVisible();
 
-      const dnsInput = page.getByRole('textbox', { name: /DNS/i }).first();
-      await dnsInput.fill('1.1.1.1');
+      const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      await ipInput.fill('192.168.1.102'); // Change static IP
 
       // Use the new helper to click Save and verify it finishes
       await harness.saveAndVerify(page);
 
-      // Save again to ensure identical subsequent messages still trigger loading reset
-      await dnsInput.fill('8.8.4.4');
+      // Verify IP field is still editable
+      await expect(ipInput).toBeEditable();
+
+      // Switch to DHCP
+      await page.locator('.v-window-item--active').getByLabel('DHCP').click({ force: true });
+      await expect(page.locator('.v-window-item--active').getByLabel('DHCP')).toBeChecked();
+
+      // Verify IP field is NOT editable (or hidden/disabled)
+      await expect(ipInput).not.toBeEditable();
+
       await harness.saveAndVerify(page);
     });
   });

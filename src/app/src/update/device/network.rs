@@ -169,22 +169,33 @@ pub fn handle_set_network_config_response(
                         false,
                     );
                 }
-
-                model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
-                model.network_form_state = NetworkFormState::Idle;
-                // Clear rollback modal flag after config is applied
-                model.should_show_rollback_modal = false;
-                crux_core::render::render()
             } else {
-                // Not changing current connection's IP - just show success message
-                model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
+                // Not changing current connection's IP - just clear state
                 model.network_change_state = NetworkChangeState::Idle;
-                model.network_form_state = NetworkFormState::Idle;
-                // Clear rollback modal flag
-                model.should_show_rollback_modal = false;
                 model.overlay_spinner.clear();
-                crux_core::render::render()
             }
+
+            model.success_message = Some(NETWORK_CONFIG_SUCCESS.to_string());
+
+            // Transition back to editing state with the new data as original
+            if let NetworkFormState::Submitting {
+                adapter_name,
+                form_data,
+                ..
+            } = &model.network_form_state
+            {
+                model.network_form_state = NetworkFormState::Editing {
+                    adapter_name: adapter_name.clone(),
+                    original_data: form_data.clone(),
+                    form_data: form_data.clone(),
+                };
+            } else {
+                model.network_form_state = NetworkFormState::Idle;
+            }
+
+            // Clear rollback modal flag after config is applied
+            model.should_show_rollback_modal = false;
+            crux_core::render::render()
         }
         Err(e) => {
             model.set_error(e);
@@ -761,6 +772,62 @@ mod tests {
             assert_eq!(model.network_change_state, NetworkChangeState::Idle);
             assert!(model.overlay_spinner.is_visible());
             assert!(model.overlay_spinner.countdown_seconds().is_none());
+        }
+
+        #[test]
+        fn non_server_adapter_returns_to_editing_state() {
+            let app = AppTester::<App>::default();
+            let form_data = NetworkFormData {
+                name: "eth1".to_string(),
+                ip_address: "192.168.2.101".to_string(),
+                dhcp: false,
+                prefix_len: 24,
+                dns: vec![],
+                gateways: vec![],
+            };
+
+            let mut model = Model {
+                network_form_state: NetworkFormState::Submitting {
+                    adapter_name: "eth1".to_string(),
+                    form_data: form_data.clone(),
+                    original_data: NetworkFormData {
+                        name: "eth1".to_string(),
+                        ip_address: "192.168.2.100".to_string(),
+                        dhcp: false,
+                        prefix_len: 24,
+                        dns: vec![],
+                        gateways: vec![],
+                    },
+                },
+                network_change_state: NetworkChangeState::Idle,
+                is_loading: true,
+                ..Default::default()
+            };
+
+            let response = SetNetworkConfigResponse {
+                rollback_timeout_seconds: 0,
+                ui_port: 443,
+                rollback_enabled: false,
+            };
+
+            let _ = app.update(
+                Event::Device(DeviceEvent::SetNetworkConfigResponse(Ok(response))),
+                &mut model,
+            );
+
+            assert_eq!(model.network_change_state, NetworkChangeState::Idle);
+            if let NetworkFormState::Editing {
+                adapter_name,
+                form_data: current_data,
+                original_data,
+            } = &model.network_form_state
+            {
+                assert_eq!(adapter_name, "eth1");
+                assert_eq!(current_data.ip_address, "192.168.2.101");
+                assert_eq!(original_data.ip_address, "192.168.2.101");
+            } else {
+                panic!("Form state should be Editing, but was {:?}", model.network_form_state);
+            }
         }
 
         #[test]
