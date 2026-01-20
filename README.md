@@ -108,9 +108,9 @@ omnect-ui/
 │   └── ui/               # Vue 3 frontend
 ├── scripts/              # Build and development scripts
 │   └── build-frontend.sh # Build WASM + TypeScript types + UI
+│   └── setup-centrifugo.sh  # Download script for Centrifugo
 ├── tools/                # Development tools
 │   ├── centrifugo        # WebSocket server binary (gitignored)
-│   └── setup-centrifugo.sh  # Download script for Centrifugo
 ├── Dockerfile            # Multi-stage Docker build
 └── build-and-deploy-image.sh  # Build and deployment script
 ```

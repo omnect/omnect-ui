@@ -3,6 +3,10 @@ set -e
 
 # Internal script to run E2E tests inside the container
 
+# Navigate to repository root (parent of scripts directory)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
 # Cleanup function to kill spawned processes
 cleanup() {
     echo "🧹 Cleaning up processes..."
@@ -20,22 +24,14 @@ pkill -9 -f "bun run.*5173" 2>/dev/null || true
 pkill -9 -f "node.*vite.*5173" 2>/dev/null || true
 sleep 2
 
-# 1. Ensure bun is installed (needed for UI)
+# 1. Ensure bun is installed (needed for building and running UI)
 if ! command -v bun &> /dev/null; then
-    echo "⚠️ Bun not found, installing..."
-    curl -fsSL https://bun.sh/install | bash
-    export BUN_INSTALL="$HOME/.bun"
-    export PATH="$BUN_INSTALL/bin:$PATH"
+    echo "❌ bun not found in PATH."
+    exit 1
 fi
 
-# 2. Ensure Centrifugo is available (using the tool script if needed)
-if ! command -v centrifugo &> /dev/null; then
-    echo "⚠️ Centrifugo not found in PATH, checking tools directory..."
-    if [ ! -f "tools/centrifugo" ]; then
-        ./tools/setup-centrifugo.sh
-    fi
-    export PATH=$PATH:$(pwd)/tools
-fi
+# 2. Ensure Centrifugo is available
+./scripts/setup-centrifugo.sh
 
 # 3. Start Centrifugo directly (Backend is mocked, but we need real WS)
 echo "🚀 Starting Centrifugo..."
@@ -65,7 +61,7 @@ export CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY="secret"
 export CENTRIFUGO_HTTP_API_KEY="api_key"
 export CENTRIFUGO_LOG_LEVEL="info"
 
-centrifugo -c "$CENTRIFUGO_CONFIG" > /tmp/centrifugo.log 2>&1 &
+./tools/centrifugo -c "$CENTRIFUGO_CONFIG" > /tmp/centrifugo.log 2>&1 &
 CENTRIFUGO_PID=$!
 
 echo "⏳ Waiting for Centrifugo..."
