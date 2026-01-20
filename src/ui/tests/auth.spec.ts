@@ -78,7 +78,7 @@ test.describe('Authentication', () => {
     await expect(page.getByText(/set password/i).first()).toBeVisible();
   });
 
-  test.skip('can set initial password successfully', async ({ page }) => {
+  test('can set initial password successfully', async ({ page }) => {
     await mockPortalAuth(page);
     // Mock require-set-password returning true
     await page.route('**/require-set-password', async (route) => {
