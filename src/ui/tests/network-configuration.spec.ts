@@ -372,11 +372,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page.getByText('The network settings were rolled back to the previous configuration')).toBeVisible({ timeout: 10000 });
     });
 
-    // FIXME: This test has flaky re-login logic after rollback acknowledgment
-    // The test fails due to persistent snackbar/overlay that blocks the login button after page reload
-    // Error: "HTTP error 404: 404" snackbar remains visible and prevents login
-    // This test needs investigation into proper post-rollback state handling
-    test.fixme('Rollback modal should close on second apply after a rollback', async ({ page }) => {
+    test('Rollback modal should close on second apply after a rollback', async ({ page }) => {
       test.setTimeout(60000); // Increase timeout for rollback scenario
 
       // Shim WebSocket to redirect 192.168.1.150 to localhost
@@ -502,42 +498,80 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       // 4. Acknowledge Rollback
       await page.getByRole('button', { name: /ok/i }).click();
 
-      // Verify we are back to normal
+      // Verify rollback dialog is fully closed
       await expect(page.getByText('Network Settings Rolled Back')).not.toBeVisible();
 
-      // After rollback, reload the page to get back to a clean state
-      // This avoids flaky re-login logic
-      await page.reload();
+      // Wait for the ack-rollback API call to complete and backend to process it
+      // This ensures the rollback flag is cleared before we reload
+      await page.waitForTimeout(2000);
+
+      // Navigate to localhost to avoid the 192.168.1.150 route and reload cleanly
+      await page.goto('/');
+      await page.waitForLoadState('domcontentloaded');
+
+      // Wait for the login page to be ready
       await page.waitForTimeout(1000);
 
-      // Log in again
+      // Dismiss rollback dialog if it appears again (backend hasn't cleared flag yet)
+      const rollbackDialog = page.getByText('Network Settings Rolled Back');
+      if (await rollbackDialog.isVisible()) {
+        await page.getByRole('button', { name: /ok/i }).click();
+        await expect(rollbackDialog).not.toBeVisible();
+        await page.waitForTimeout(500);
+      }
+
+      // Re-login after navigation
       await page.getByPlaceholder(/enter your password/i).fill('password');
       await page.getByRole('button', { name: /log in/i }).click();
-      await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText('Common Info')).toBeVisible({ timeout: 15000 });
 
       // Navigate to the network page
       await harness.navigateToNetwork(page);
       await harness.navigateToAdapter(page, 'eth0');
+
+      // Wait for the Core to fully initialize and load network status
+      // After reload, it takes a moment for Centrifugo to reconnect and publish status
+      await page.waitForTimeout(2000);
+
+      // Set browser hostname again after reload to mark eth0 as current connection
+      await page.evaluate(() => {
+        // @ts-ignore
+        if (window.setBrowserHostname) {
+          // @ts-ignore
+          window.setBrowserHostname('192.168.1.100');
+        }
+      });
+
+      // Wait for Core to process the hostname change
+      await page.waitForTimeout(500);
 
       // After rollback, IP should be back to the original value (192.168.1.100)
       const currentIpInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await expect(currentIpInput).toHaveValue('192.168.1.100');
 
       // 5. Second Change - try again with a different IP
+      await currentIpInput.clear();
       await currentIpInput.fill('192.168.1.151');
+
+      // Wait for form to recognize the change
+      await page.waitForTimeout(500);
+
       await page.getByRole('button', { name: /save/i }).click();
 
-      await expect(confirmDialog).toBeVisible();
+      // Verify confirmation dialog appears for the second change
+      const confirmDialog2 = page.getByText('Confirm Network Configuration Change');
+      await expect(confirmDialog2).toBeVisible();
 
       // Ensure rollback is checked
-       if (!(await rollbackCheckbox.isChecked())) {
-          await rollbackCheckbox.check();
+      const rollbackCheckbox2 = page.getByRole('checkbox', { name: /Enable automatic rollback/i });
+      if (!(await rollbackCheckbox2.isChecked())) {
+          await rollbackCheckbox2.check();
       }
 
       await page.getByRole('button', { name: /apply changes/i }).click();
 
       // 6. Verify modal closed (second time)
-      await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
+      await expect(confirmDialog2).not.toBeVisible({ timeout: 5000 });
     });
   });
 
