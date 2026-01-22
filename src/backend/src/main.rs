@@ -187,13 +187,13 @@ async fn run_until_shutdown(
         result = server_task => {
             match result {
                 Ok(Ok(())) => debug!("server stopped normally"),
-                Ok(Err(e)) => debug!("server stopped with error: {e}"),
-                Err(e) => debug!("server task panicked: {e}"),
+                Ok(Err(e)) => error!("server stopped with error: {e}"),
+                Err(e) => error!("server task panicked: {e}"),
             }
             ShutdownReason::Shutdown
         },
         _ = centrifugo.wait() => {
-            debug!("centrifugo stopped unexpectedly");
+            error!("centrifugo stopped unexpectedly");
             ShutdownReason::Shutdown
         }
     };
