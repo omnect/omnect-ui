@@ -58,12 +58,12 @@ export async function executeHttpRequest(
 			fetchOptions.body = httpRequest.body as any
 		}
 
-		// Workaround: `crux_http` in the Rust core panics on relative URLs.
-		// The Rust side prefixes URLs with `http://omnect-device` to satisfy `crux_http`'s validation.
-		// This side strips the prefix to send a relative URL, which `fetch` handles correctly.
+		// Workaround: `crux_http` in the Rust core requires absolute URLs.
+		// The Rust side prefixes URLs with `https://relative` (a dummy host) to satisfy validation.
+		// This side strips the prefix to send a relative URL to avoid HTTPS certificate issues.
 		let url = httpRequest.url
-		if (url.startsWith('http://omnect-device')) {
-			url = url.replace('http://omnect-device', '')
+		if (url.startsWith('https://relative')) {
+			url = url.replace('https://relative', '')
 		}
 
 		const response = await fetch(url, fetchOptions)
