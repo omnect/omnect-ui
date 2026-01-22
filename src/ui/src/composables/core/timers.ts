@@ -65,7 +65,7 @@ export function startReconnectionPolling(isFactoryReset: boolean): void {
 
 	// Start polling interval
 	reconnectionIntervalId = setInterval(() => {
-		if (isInitialized.value && wasmModule && sendEventCallback) {
+		if (isInitialized.value && wasmModule.value && sendEventCallback) {
 			sendEventCallback(new EventVariantDevice(new DeviceEventVariantReconnectionCheckTick()))
 		}
 	}, RECONNECTION_POLL_INTERVAL_MS)
@@ -74,7 +74,7 @@ export function startReconnectionPolling(isFactoryReset: boolean): void {
 	const timeoutMs = isFactoryReset ? FACTORY_RESET_TIMEOUT_MS : REBOOT_TIMEOUT_MS
 	reconnectionTimeoutId = setTimeout(() => {
 		console.log('[useCore] Reconnection timeout reached')
-		if (isInitialized.value && wasmModule && sendEventCallback) {
+		if (isInitialized.value && wasmModule.value && sendEventCallback) {
 			sendEventCallback(new EventVariantDevice(new DeviceEventVariantReconnectionTimeout()))
 		}
 		stopReconnectionPolling()
@@ -234,7 +234,7 @@ export function startNewIpPolling(): void {
 	// If switching to DHCP, we don't know the IP so polling is useless
 	if (!switchingToDhcp) {
 		newIpIntervalId = setInterval(() => {
-			if (isInitialized.value && wasmModule && sendEventCallback) {
+			if (isInitialized.value && wasmModule.value && sendEventCallback) {
 				sendEventCallback(new EventVariantDevice(new DeviceEventVariantNewIpCheckTick()))
 			}
 		}, NEW_IP_POLL_INTERVAL_MS)
@@ -264,7 +264,7 @@ export function startNewIpPolling(): void {
 		// Set timeout
 		newIpTimeoutId = setTimeout(() => {
 			console.log('[useCore] New IP polling timeout reached')
-			if (isInitialized.value && wasmModule && sendEventCallback) {
+			if (isInitialized.value && wasmModule.value && sendEventCallback) {
 				sendEventCallback(new EventVariantDevice(new DeviceEventVariantNewIpCheckTimeout()))
 			}
 			stopNewIpPolling()

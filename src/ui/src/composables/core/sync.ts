@@ -39,7 +39,7 @@ export function setEventSender(callback: (event: Event) => Promise<void>): void 
  * and updates the reactive Vue viewModel object.
  */
 export function updateViewModelFromCore(): void {
-	if (!wasmModule) {
+	if (!wasmModule.value) {
 		return
 	}
 
@@ -48,7 +48,7 @@ export function updateViewModelFromCore(): void {
 		const wasAuthenticated = viewModel.is_authenticated
 
 		// Get serialized view model from WASM
-		const viewModelBytes = wasmModule.view() as Uint8Array
+		const viewModelBytes = wasmModule.value.view() as Uint8Array
 
 		// Deserialize it using the generated ViewModel class
 		const deserializer = new BincodeDeserializer(viewModelBytes)

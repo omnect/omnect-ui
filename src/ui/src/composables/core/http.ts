@@ -36,7 +36,7 @@ export async function executeHttpRequest(
 	requestId: number,
 	httpRequest: { method: string; url: string; headers: Array<{ name: string; value: string }>; body: Uint8Array }
 ): Promise<void> {
-	if (!wasmModule) {
+	if (!wasmModule.value) {
 		console.warn('WASM module not loaded, cannot execute HTTP request')
 		return
 	}
@@ -89,7 +89,7 @@ export async function executeHttpRequest(
 		const serializer = new BincodeSerializer()
 		result.serialize(serializer)
 		const resultBytes = serializer.getBytes()
-		const newEffectsBytes = wasmModule.handle_response(requestId, resultBytes) as Uint8Array
+		const newEffectsBytes = wasmModule.value.handle_response(requestId, resultBytes) as Uint8Array
 		if (newEffectsBytes.length > 0 && processEffectsCallback) {
 			await processEffectsCallback(newEffectsBytes)
 		}
@@ -103,7 +103,7 @@ export async function executeHttpRequest(
 		const serializer = new BincodeSerializer()
 		result.serialize(serializer)
 		const resultBytes = serializer.getBytes()
-		const newEffectsBytes = wasmModule.handle_response(requestId, resultBytes) as Uint8Array
+		const newEffectsBytes = wasmModule.value.handle_response(requestId, resultBytes) as Uint8Array
 		if (newEffectsBytes.length > 0 && processEffectsCallback) {
 			await processEffectsCallback(newEffectsBytes)
 		}

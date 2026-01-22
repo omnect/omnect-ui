@@ -123,7 +123,7 @@ function serializeEvent(event: Event): Uint8Array {
  * any resulting effects.
  */
 async function sendEventToCore(event: Event): Promise<void> {
-	if (!isInitialized.value || !wasmModule) {
+	if (!isInitialized.value || !wasmModule.value) {
 		console.warn('Core not initialized, cannot send event')
 		return
 	}
@@ -133,7 +133,7 @@ async function sendEventToCore(event: Event): Promise<void> {
 		const eventBytes = serializeEvent(event)
 
 		// Call process_event() on the WASM module
-		const effectsBytes = wasmModule.process_event(eventBytes) as Uint8Array
+		const effectsBytes = wasmModule.value.process_event(eventBytes) as Uint8Array
 
 		// Process the resulting effects
 		await processEffects(effectsBytes)
