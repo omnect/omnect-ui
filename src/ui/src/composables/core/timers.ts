@@ -310,6 +310,9 @@ export function initializeTimerWatchers(): void {
 			const newType = newState?.type
 			const oldType = oldState?.type
 
+			// Only act on type transitions
+			if (newType === oldType) return
+
 			// Start polling when entering rebooting, factory_resetting, or updating state
 			if (newType === 'rebooting' || newType === 'factory_resetting' || newType === 'updating') {
 				startReconnectionPolling(newType === 'factory_resetting')
@@ -349,7 +352,10 @@ export function initializeTimerWatchers(): void {
 			}
 
 			// Clear localStorage when entering terminal states (success, timeout, or idle)
-			if (newType === 'new_ip_reachable' || newType === 'new_ip_timeout' || newType === 'waiting_for_old_ip' || newType === 'idle') {
+			if (
+				newType !== oldType &&
+				(newType === 'new_ip_reachable' || newType === 'new_ip_timeout' || newType === 'idle')
+			) {
 				clearNetworkChangeState()
 			}
 
