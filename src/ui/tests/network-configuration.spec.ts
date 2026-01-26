@@ -48,12 +48,12 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
 
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
       await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
 
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
 
       await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible({ timeout: 10000 });
 
@@ -91,11 +91,11 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       await page.getByLabel('DHCP').click({ force: true });
       await page.waitForTimeout(500);
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
       await page.getByRole('checkbox', { name: /Enable automatic rollback/i }).check();
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
 
       await expect(page.locator('#overlay')).toBeVisible();
 
@@ -129,9 +129,9 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
 
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
 
       await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible({ timeout: 10000 });
 
@@ -174,7 +174,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.210');
 
-      const saveButton = page.getByRole('button', { name: /save/i });
+      const saveButton = page.locator('.v-window-item--active [data-cy=network-apply-button]');
       await saveButton.click();
 
       await expect(saveButton).toBeEnabled({ timeout: 5000 });
@@ -252,12 +252,12 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       // Change IP address
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       // Open modal and DISABLE rollback
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
       await page.getByRole('checkbox', { name: /Enable automatic rollback/i }).uncheck();
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
 
       // Verify overlay appears
       await expect(page.locator('#overlay')).toBeVisible({ timeout: 10000 });
@@ -290,11 +290,11 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       // Switch to DHCP
       await page.getByLabel('DHCP').click({ force: true });
       await page.waitForTimeout(500);
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
       await page.getByRole('checkbox', { name: /Enable automatic rollback/i }).check();
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
 
       // Verify overlay appears
       await expect(page.locator('#overlay')).toBeVisible({ timeout: 10000 });
@@ -322,10 +322,10 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
 
       // Button should be visible initially during polling
       await expect(page.getByRole('button', { name: /Open new address in new tab/i })).toBeVisible();
@@ -402,7 +402,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page.getByLabel('Static')).toBeChecked();
 
       await page.getByLabel('DHCP').click({ force: true });
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
       await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).not.toBeChecked();
@@ -414,7 +414,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       await page.getByLabel('Static').click({ force: true });
       await page.getByRole('textbox', { name: /IP Address/i }).fill('192.168.1.150');
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
       await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
@@ -426,7 +426,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       await page.getByLabel('Static').click({ force: true });
       // IP is auto-filled with current IP ('localhost'), do NOT change it.
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       // Verify Modal
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
@@ -435,7 +435,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
 
       // Apply changes
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
 
       // Verify overlay appears with countdown label
       await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible({ timeout: 10000 });
@@ -450,7 +450,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await page.unroute('**/network');
       await harness.mockNetworkConfig(page, { rollbackTimeoutSeconds: 2 });
 
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
       await page.getByRole('checkbox', { name: /Enable automatic rollback/i }).check();
 
@@ -468,7 +468,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
         });
       });
 
-      await page.getByRole('button', { name: /Apply Changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
       await expect(page.getByText('Applying network settings')).toBeVisible();
 
       await expect(page.getByText('Automatic network rollback successful')).not.toBeVisible();
@@ -571,7 +571,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
 
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       const confirmDialog = page.getByText('Confirm Network Configuration Change');
       await expect(confirmDialog).toBeVisible();
@@ -581,7 +581,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
           await rollbackCheckbox.check();
       }
 
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
 
       // Verify modal closed
       await expect(confirmDialog).not.toBeVisible();
@@ -659,7 +659,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       // Wait for form to recognize the change
       await page.waitForTimeout(500);
 
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       // Verify confirmation dialog appears for the second change
       const confirmDialog2 = page.getByText('Confirm Network Configuration Change');
@@ -671,7 +671,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
           await rollbackCheckbox2.check();
       }
 
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
 
       // 6. Verify modal closed (second time)
       await expect(confirmDialog2).not.toBeVisible({ timeout: 5000 });
@@ -691,7 +691,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.210');
 
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
       await page.waitForTimeout(500);
       await expect(page.getByText('Confirm Network Configuration Change')).not.toBeVisible();
     });
@@ -710,12 +710,12 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
 
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
       await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
 
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
       await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible({ timeout: 10000 });
       expect(harness.getRollbackState().enabled).toBe(true);
     });
@@ -732,12 +732,12 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
 
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
       await page.getByRole('checkbox', { name: /Enable automatic rollback/i }).uncheck();
 
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
       await page.waitForTimeout(500);
       expect(harness.getRollbackState().enabled).toBe(false);
     });
@@ -753,7 +753,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       await page.getByLabel('DHCP').click({ force: true });
       await page.waitForTimeout(300);
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       await page.waitForTimeout(500);
       await expect(page.getByText('Confirm Network Configuration Change')).not.toBeVisible();
@@ -772,13 +772,13 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       await page.getByLabel('DHCP').click({ force: true });
       await page.waitForTimeout(300);
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
       await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).not.toBeChecked();
 
       await page.getByRole('checkbox', { name: /Enable automatic rollback/i }).check();
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
       await page.waitForTimeout(1000);
       expect(harness.getRollbackState().enabled).toBe(true);
     });
@@ -794,11 +794,11 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       await page.getByLabel('DHCP').click({ force: true });
       await page.waitForTimeout(300);
-      await page.getByRole('button', { name: /save/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 5000 });
       await page.getByRole('checkbox', { name: /Enable automatic rollback/i }).uncheck();
-      await page.getByRole('button', { name: /apply changes/i }).click();
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
       await page.waitForTimeout(500);
       expect(harness.getRollbackState().enabled).toBe(false);
     });
@@ -874,7 +874,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await page.locator('.v-list-item-title').filter({ hasText: '/16' }).click();
 
       await expect(page.getByRole('button', { name: /\/16/i })).toBeVisible();
-      await expect(page.getByRole('button', { name: /save/i })).toBeEnabled();
+      await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeEnabled();
     });
 
     test('form dirty flag tracking', async ({ page }) => {
@@ -883,8 +883,8 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.210');
 
-      await expect(page.getByRole('button', { name: /save/i })).toBeEnabled();
-      await expect(page.getByRole('button', { name: /reset/i })).toBeEnabled();
+      await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeEnabled();
+      await expect(page.locator('.v-window-item--active [data-cy=network-discard-button]')).toBeEnabled();
     });
 
     test('form reset button discards unsaved changes', async ({ page }) => {
@@ -903,7 +903,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await ipInput.fill('192.168.1.210');
       await expect(ipInput).toHaveValue('192.168.1.210');
 
-      await page.getByRole('button', { name: /reset/i }).click();
+      await page.locator('.v-window-item--active [data-cy=network-discard-button]').click();
       await expect(ipInput).toHaveValue(originalIp);
     });
 
@@ -920,7 +920,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await page.getByRole('tab', { name: 'eth1' }).click();
       await expect(page.getByText('Unsaved Changes', { exact: true })).toBeVisible({ timeout: 5000 });
 
-      await page.getByRole('button', { name: /discard/i }).click();
+      await page.locator('[data-cy=network-confirm-discard-button]').click();
       await page.waitForTimeout(500);
       await expect(page.getByRole('textbox', { name: /IP Address/i }).first()).toBeVisible();
     });
@@ -1039,7 +1039,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await page.waitForTimeout(500); // Let dirty flag propagate
 
       // Verify form is dirty
-      await expect(page.getByRole('button', { name: /reset/i })).toBeEnabled();
+      await expect(page.locator('.v-window-item--active [data-cy=network-discard-button]')).toBeEnabled();
 
       // While editing, simulate network cable removal - adapter goes offline
       await harness.publishNetworkStatus([{

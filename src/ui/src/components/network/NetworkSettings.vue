@@ -272,7 +272,7 @@ const cancelRollbackModal = () => {
                     <v-btn color="secondary" variant="text" @click="cancelRollbackModal">
                         Cancel
                     </v-btn>
-                    <v-btn color="primary" variant="text" @click="submitNetworkConfig(true)">
+                    <v-btn color="primary" variant="text" @click="submitNetworkConfig(true)" data-cy="network-confirm-apply-button">
                         Apply Changes
                     </v-btn>
                 </v-card-actions>
@@ -313,11 +313,11 @@ const cancelRollbackModal = () => {
             <v-textarea v-model="dns" label="DNS" variant="outlined" rows="3" no-resize
                 append-inner-icon="mdi-content-copy" @click:append-inner="copy(ipAddress)"></v-textarea>
             <div class="flex flex-row gap-x-4">
-                <v-btn color="secondary" type="submit" variant="text" :loading="isSubmitting">
-                    Save
+                <v-btn color="secondary" type="submit" variant="text" :loading="isSubmitting" data-cy="network-apply-button">
+                    Apply Changes
                 </v-btn>
-                <v-btn :disabled="isSubmitting" type="reset" variant="text" @click.prevent="restoreSettings">
-                    Reset
+                <v-btn :disabled="isSubmitting" type="reset" variant="text" @click.prevent="restoreSettings" data-cy="network-discard-button">
+                    Discard Changes
                 </v-btn>
             </div>
         </v-form>
