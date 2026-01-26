@@ -509,7 +509,7 @@ export class NetworkTestHarness {
   async saveAndVerify(page: Page, timeout: number = 10000): Promise<void> {
     const saveButton = page.locator('.v-window-item--active [data-cy=network-apply-button]');
     await saveButton.click();
-    await expect(saveButton).toBeEnabled({ timeout });
+    await expect(saveButton).toBeDisabled({ timeout });
     await expect(page.getByText('Network configuration updated')).toBeVisible();
   }
 

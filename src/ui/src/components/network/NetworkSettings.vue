@@ -313,10 +313,10 @@ const cancelRollbackModal = () => {
             <v-textarea v-model="dns" label="DNS" variant="outlined" rows="3" no-resize
                 append-inner-icon="mdi-content-copy" @click:append-inner="copy(ipAddress)"></v-textarea>
             <div class="flex flex-row gap-x-4">
-                <v-btn color="secondary" type="submit" variant="text" :loading="isSubmitting" data-cy="network-apply-button">
+                <v-btn color="secondary" type="submit" variant="text" :loading="isSubmitting" :disabled="!viewModel.network_form_dirty" data-cy="network-apply-button">
                     Apply Changes
                 </v-btn>
-                <v-btn :disabled="isSubmitting" type="reset" variant="text" @click.prevent="restoreSettings" data-cy="network-discard-button">
+                <v-btn :disabled="isSubmitting || !viewModel.network_form_dirty" type="reset" variant="text" @click.prevent="restoreSettings" data-cy="network-discard-button">
                     Discard Changes
                 </v-btn>
             </div>

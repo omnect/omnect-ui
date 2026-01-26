@@ -880,9 +880,14 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
     test('form dirty flag tracking', async ({ page }) => {
       await harness.setup(page, {}); // default
 
+      // Verify buttons are initially disabled (not dirty)
+      await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeDisabled();
+      await expect(page.locator('.v-window-item--active [data-cy=network-discard-button]')).toBeDisabled();
+
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.210');
 
+      // Verify buttons are enabled after change (dirty)
       await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeEnabled();
       await expect(page.locator('.v-window-item--active [data-cy=network-discard-button]')).toBeEnabled();
     });
@@ -903,8 +908,16 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await ipInput.fill('192.168.1.210');
       await expect(ipInput).toHaveValue('192.168.1.210');
 
+      // Buttons should be enabled
+      await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeEnabled();
+      await expect(page.locator('.v-window-item--active [data-cy=network-discard-button]')).toBeEnabled();
+
       await page.locator('.v-window-item--active [data-cy=network-discard-button]').click();
       await expect(ipInput).toHaveValue(originalIp);
+
+      // Buttons should be disabled after reset
+      await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeDisabled();
+      await expect(page.locator('.v-window-item--active [data-cy=network-discard-button]')).toBeDisabled();
     });
 
     test('tab switching with unsaved changes - discard and switch', async ({ page }) => {
