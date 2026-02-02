@@ -7,6 +7,9 @@
 
 set -e
 
+# Change directory to the project root (parent of the scripts directory)
+cd "$(dirname "$0")/.."
+
 # Default configuration
 DEVICE_HOST="${DEVICE_HOST:-}"
 DEVICE_USER="${DEVICE_USER:-omnect}"

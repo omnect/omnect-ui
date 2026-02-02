@@ -112,27 +112,6 @@ The confirmation dialog appears when you:
 - `toml` CLI tool (for version extraction)
 - Running instance of [omnect-device-service](https://github.com/omnect/omnect-device-service)
 
-### Project Structure
-
-```
-omnect-ui/
-├── src/
-│   ├── backend/          # Rust backend (Actix-web)
-│   ├── app/              # Crux Core (business logic)
-│   │   ├── src/
-│   │   │   ├── commands/ # Custom side-effect commands
-│   │   │   └── ...
-│   ├── shared_types/     # TypeGen for TypeScript bindings
-│   └── ui/               # Vue 3 frontend
-├── scripts/              # Build and development scripts
-│   └── build-frontend.sh # Build WASM + TypeScript types + UI
-│   └── setup-centrifugo.sh  # Download script for Centrifugo
-├── tools/                # Development tools
-│   ├── centrifugo        # WebSocket server binary (gitignored)
-├── Dockerfile            # Multi-stage Docker build
-└── build-and-deploy-image.sh  # Build and deployment script
-```
-
 ### Building
 
 #### Quick Start for Local Development
@@ -172,25 +151,25 @@ Use the `build-and-deploy-image.sh` script for building and optionally deploying
 
 ```bash
 # Build ARM64 image (default)
-./build-and-deploy-image.sh
+./scripts/build-and-deploy-image.sh
 
 # Build for different architecture
-./build-and-deploy-image.sh --arch amd64
+./scripts/build-and-deploy-image.sh --arch amd64
 
 # Build with custom tag
-./build-and-deploy-image.sh --tag v1.2.0
+./scripts/build-and-deploy-image.sh --tag v1.2.0
 
 # Build and push to registry
-./build-and-deploy-image.sh --push
+./scripts/build-and-deploy-image.sh --push
 
 # Build and deploy to device
-./build-and-deploy-image.sh --deploy
+./scripts/build-and-deploy-image.sh --deploy
 
 # Full example with all options
-./build-and-deploy-image.sh --arch arm64 --tag my-feature --push --deploy --host 192.168.1.100 --port 1977
+./scripts/build-and-deploy-image.sh --arch arm64 --tag my-feature --push --deploy --host 192.168.1.100 --port 1977
 ```
 
-Run `./build-and-deploy-image.sh --help` for all available options.
+Run `./scripts/build-and-deploy-image.sh --help` for all available options.
 
 ### Testing
 
