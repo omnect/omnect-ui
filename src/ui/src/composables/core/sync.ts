@@ -137,8 +137,9 @@ export function updateViewModelFromCore(): void {
 		viewModel.healthcheck = coreViewModel.healthcheck
 			? {
 					version_info: {
-						version: coreViewModel.healthcheck.version_info.version,
-						git_sha: coreViewModel.healthcheck.version_info.git_sha,
+						required: coreViewModel.healthcheck.version_info.required,
+						current: coreViewModel.healthcheck.version_info.current,
+						mismatch: coreViewModel.healthcheck.version_info.mismatch,
 					},
 					update_validation_status: {
 						status: coreViewModel.healthcheck.update_validation_status.status,

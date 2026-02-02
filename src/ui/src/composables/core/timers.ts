@@ -289,7 +289,7 @@ export function stopNewIpPolling(): void {
 		newIpTimeoutId = null
 	}
 	// Clear countdown seconds in viewModel
-	viewModel.overlay_spinner.countdown_seconds = undefined
+	viewModel.overlay_spinner.countdown_seconds = null
 	// Clear countdown deadline
 	countdownDeadline = null
 }

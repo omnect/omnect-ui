@@ -127,7 +127,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await expect(rollbackModal).not.toBeVisible({ timeout: 2000 });
 
       // Should proceed directly to saving (no rollback modal blocking it)
-      await expect(saveButton).toBeEnabled({ timeout: 10000 });
+      await expect(saveButton).toBeDisabled({ timeout: 10000 });
       await expect(page.getByText('Network configuration updated')).toBeVisible();
     });
 
@@ -240,7 +240,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await saveButton.click();
 
       await expect(rollbackModal).not.toBeVisible({ timeout: 2000 });
-      await expect(saveButton).toBeEnabled({ timeout: 10000 });
+      await expect(saveButton).toBeDisabled({ timeout: 10000 });
       await expect(page.getByText('Network configuration updated')).toBeVisible();
 
       // Wait for form to reset after submission
@@ -405,7 +405,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       // User can still save with their value
       const saveButton = page.locator('.v-window-item--active [data-cy=network-apply-button]');
       await saveButton.click();
-      await expect(saveButton).toBeEnabled({ timeout: 10000 });
+      await expect(saveButton).toBeDisabled({ timeout: 10000 });
       await expect(page.getByText('Network configuration updated')).toBeVisible();
     });
 
@@ -505,7 +505,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       const saveButton = page.locator('.v-window-item--active [data-cy=network-apply-button]');
       await saveButton.click();
       await expect(rollbackModal).not.toBeVisible({ timeout: 2000 });
-      await expect(saveButton).toBeEnabled({ timeout: 10000 });
+      await expect(saveButton).toBeDisabled({ timeout: 10000 });
       await expect(page.getByText('Network configuration updated')).toBeVisible();
 
       await page.waitForTimeout(1000);

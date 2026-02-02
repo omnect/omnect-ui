@@ -37,6 +37,7 @@ import {
 	Timeouts,
 	Duration,
 	CentrifugoOperationVariantSubscribeAll,
+	CentrifugoOperationVariantUnsubscribeAll,
 	CentrifugoOutputVariantConnected,
 	CentrifugoOutputVariantDisconnected,
 	CentrifugoOutputVariantError,

@@ -96,8 +96,9 @@ export type {
 	CoreViewModel,
 	UpdateManifest,
 	NetworkFormData,
-	NetworkConfigRequest,
 } from './types'
+
+export { NetworkConfigRequest } from './types'
 
 // ============================================================================
 // Event Serialization
