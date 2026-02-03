@@ -93,7 +93,11 @@ cargo test --features mock
 ```text
 omnect-ui/
 ├── Cargo.toml                    # Workspace root
-├── dist/                         # Built frontend assets (gitignored)
+├── Dockerfile                    # Multi-stage Docker build
+├── scripts/                      # Build and test scripts
+│   ├── build-frontend.sh         # Build WASM + Types + UI
+│   ├── build-and-deploy-image.sh # Docker build and deploy
+│   └── run-e2e-tests.sh          # Playwright test runner
 ├── src/
 │   ├── app/                      # Crux Core (business logic)
 │   │   ├── Cargo.toml
@@ -101,18 +105,19 @@ omnect-ui/
 │   │       ├── lib.rs            # App struct, Effect enum, re-exports
 │   │       ├── model.rs          # Model struct (application state)
 │   │       ├── events.rs         # Event enum
-│   │       ├── types/            # Domain types (organized by domain)
-│   │       │   ├── mod.rs        # Module re-exports
+│   │       ├── wasm.rs           # WASM FFI bindings
+│   │       ├── macros.rs         # URL and log macros
+│   │       ├── http_helpers.rs   # HTTP request utilities
+│   │       ├── commands/         # Custom side-effect commands
+│   │       │   ├── mod.rs
+│   │       │   └── centrifugo.rs # Centrifugo WebSocket commands
+│   │       ├── types/            # Domain types
+│   │       │   ├── mod.rs
 │   │       │   ├── auth.rs       # Authentication types
 │   │       │   ├── device.rs     # Device information types
 │   │       │   ├── network.rs    # Network configuration types
-│   │       │   ├── factory_reset.rs  # Factory reset types
-│   │       │   ├── update.rs     # Update validation types
-│   │       │   └── common.rs     # Common shared types
-│   │       ├── wasm.rs           # WASM bindings
-│   │       ├── commands/         # Custom command implementations
-│   │       │   ├── mod.rs
-│   │       │   └── centrifugo.rs # Centrifugo WebSocket commands
+│   │       │   ├── factory_reset.rs
+│   │       │   └── update.rs     # Update validation types
 │   │       └── update/           # Domain-based event handlers
 │   │           ├── mod.rs        # Main dispatcher
 │   │           ├── auth.rs       # Auth event handlers
@@ -122,36 +127,42 @@ omnect-ui/
 │   ├── backend/                  # Rust backend (Actix-web)
 │   │   ├── Cargo.toml
 │   │   ├── src/
-│   │   │   ├── services/         # Business logic services
-│   │   │   ├── api.rs            # API route handlers
-│   │   │   ├── middleware.rs     # Auth and other middleware
-│   │   │   ├── config.rs         # Configuration loading
 │   │   │   ├── main.rs           # Application entry point
-│   │   │   └── keycloak_client.rs # Keycloak OIDC integration
-│   │   ├── tests/                # Integration tests
-│   │   └── config/               # Centrifugo config
+│   │   │   ├── api.rs            # API route handlers
+│   │   │   ├── middleware.rs     # Auth middleware
+│   │   │   ├── config.rs         # Configuration loading
+│   │   │   ├── http_client.rs    # Internal HTTP client
+│   │   │   ├── keycloak_client.rs
+│   │   │   ├── omnect_device_service_client.rs
+│   │   │   └── services/         # Business logic services
+│   │   │       ├── mod.rs
+│   │   │       ├── auth/         # Auth logic
+│   │   │       ├── certificate.rs
+│   │   │       ├── firmware.rs
+│   │   │       └── network.rs
+│   │   └── tests/                # Integration tests
 │   ├── shared_types/             # TypeGen for TypeScript bindings
 │   │   ├── Cargo.toml
 │   │   ├── build.rs              # TypeGen build script
 │   │   └── generated/            # Generated TypeScript types
-│   │       └── typescript/
-│   │           ├── types/        # Domain types
-│   │           ├── bincode/      # Serialization
-│   │           └── serde/        # De/serialization helpers
 │   └── ui/                       # Vue 3 Shell
 │       ├── package.json
-│       └── src/
-│           ├── assets/           # Static assets (images, icons)
-│           ├── components/       # Vue components (UI blocks)
-│           ├── composables/      # Vue composables (logic & WASM bridge)
-│           │   ├── useCore.ts    # Core WASM bridge + effect handlers
-│           │   └── useCentrifugo.ts # WebSocket client
-│           ├── pages/            # View components (routes)
-│           ├── plugins/          # Vue plugins (Vuetify, Router)
-│           ├── core/pkg/         # WASM package (gitignored)
-│           └── types/            # UI-specific types
-├── scripts/                      # Build and test scripts
-├── Dockerfile                    # Multi-stage Docker build
+│       ├── playwright.config.ts  # E2E test configuration
+│       ├── src/
+│       │   ├── App.vue           # Root component
+│       │   ├── main.ts           # UI entry point
+│       │   ├── components/       # UI components
+│       │   ├── composables/      # Logic & WASM bridge
+│       │   │   ├── useCore.ts    # Main bridge + effect handlers
+│       │   │   └── useCentrifugo.ts
+│       │   ├── pages/            # Route components
+│       │   │   ├── DeviceOverview.vue
+│       │   │   ├── DeviceUpdate.vue
+│       │   │   ├── Network.vue
+│       │   │   └── Login.vue
+│       │   ├── plugins/          # Router, Vuetify
+│       │   └── types/            # UI-specific types
+│       └── tests/                # Playwright E2E tests
 └── project-context.md            # This file
 ```
 
