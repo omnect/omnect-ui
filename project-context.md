@@ -2,6 +2,10 @@
 
 This repository implements a web frontend and backend to provide omnect specific features in a local environment, where the device might not be connected to the azure cloud.
 
+## Rules
+
+- Before committing any changes that affect the project structure, the "Project Structure" section in this file must be updated.
+
 ## 1. Architecture & Tech Stack
 
 The project uses a Cargo workspace structure and implements the Crux framework's Core/Shell architecture for the frontend.
