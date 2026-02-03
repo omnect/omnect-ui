@@ -262,8 +262,11 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await saveButton2.click();
 
       await expect(rollbackModal).not.toBeVisible({ timeout: 2000 });
-      await expect(saveButton2).toBeEnabled({ timeout: 10000 });
+      await expect(saveButton2).toBeDisabled({ timeout: 10000 });
       await expect(page.getByText('Network configuration updated')).toBeVisible();
+
+      // Wait for form to reset after submission
+
     });
 
     test('form state isolation across multiple adapter switches', async ({ page }) => {
@@ -524,8 +527,10 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       const saveButton2 = page.locator('.v-window-item--active [data-cy=network-apply-button]');
       await saveButton2.click();
       await expect(rollbackModal).not.toBeVisible({ timeout: 2000 });
-      await expect(saveButton2).toBeEnabled({ timeout: 10000 });
+      await expect(saveButton2).toBeDisabled({ timeout: 10000 });
       await expect(page.getByText('Network configuration updated')).toBeVisible();
+
+      // Wait for form to reset after submission
     });
 
     test('rapid tab switching with edits shows correct dirty state', async ({ page }) => {

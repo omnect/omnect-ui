@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue"
 import { useSnackbar } from "../../composables/useSnackbar"
-import { useCore } from "../../composables/useCore"
+import { useCore, NetworkConfigRequest } from "../../composables/useCore"
 import { useClipboard } from "../../composables/useClipboard"
 import { useIPValidation } from "../../composables/useIPValidation"
 import type { DeviceNetwork } from "../../types"
-import { NetworkConfigRequest } from "../../composables/useCore"
 
 const { showError } = useSnackbar()
 const { viewModel, setNetworkConfig, networkFormReset, networkFormUpdate } = useCore()
