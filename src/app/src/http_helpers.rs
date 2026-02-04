@@ -7,7 +7,7 @@ use crux_http::Response;
 
 /// Base URL for omnect-device API endpoints.
 ///
-/// NOTE: This is a dummy prefix required because `crux_http` (v0.16.0-rc2) requires
+/// NOTE: This is a prefix required because `crux_http` requires
 /// absolute URLs and rejects relative paths (`RelativeUrlWithoutBase` error).
 /// The UI shell (`http.ts`) strips this prefix before sending requests via `fetch()`,
 /// making them relative to avoid HTTPS certificate CN/SAN validation issues.
@@ -20,7 +20,7 @@ pub const BASE_URL: &str = "https://relative";
 /// * `endpoint` - The API endpoint path (e.g., "/api/device/reboot")
 ///
 /// # Returns
-/// A string containing the full URL with dummy prefix
+/// A string containing the full URL with prefix
 ///
 /// # Example
 /// ```
@@ -157,8 +157,3 @@ where
     model.set_error(format!("Failed to create {action} request: {error}"));
     crux_core::render::render()
 }
-
-// Note: Unit tests for these helpers are not included because crux_http::Response
-// has a private constructor. These functions are integration-tested through the
-// macros that use them. If crux_http provides a test utility for constructing
-// Response objects in the future, we can add unit tests here.

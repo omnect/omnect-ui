@@ -178,22 +178,22 @@ export interface ViewModel {
 	// Network change state (IP change detection and polling)
 	networkChangeState: NetworkChangeStateType
 
-	// Network form state (editing without WebSocket interference)
+	// Network form state
 	networkFormState: NetworkFormStateType
 
 	// Network form dirty flag (tracks unsaved changes)
 	networkFormDirty: boolean
 
-	// Browser hostname (from window.location.hostname) - used for network connection detection
+	// Browser hostname
 	browserHostname: string | null
 
-	// Current connection adapter name (computed in Core from browserHostname + networkStatus)
+	// Current connection adapter name
 	currentConnectionAdapter: string | null
 
 	// Device offline tracking
 	deviceWentOffline: boolean
 
-	// Network rollback modal state (computed in Core)
+	// Network rollback modal state
 	shouldShowRollbackModal: boolean
 	defaultRollbackEnabled: boolean
 

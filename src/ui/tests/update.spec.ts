@@ -86,7 +86,7 @@ test.describe('Device Update', () => {
     // Verify Upload occurred
     await expect(async () => expect(uploadCalled).toBe(true)).toPass();
 
-    // Verify Load occurred (it happens automatically after upload via event)
+    // Verify Load occurred
     await expect(async () => expect(loadCalled).toBe(true)).toPass();
 
     // Verify Manifest details are displayed

@@ -9,12 +9,6 @@
  *
  * The generated types from shared_types provide serialization/deserialization
  * for bincode FFI communication with the WASM module.
- *
- * Build the WASM module with:
- *   cd src/app && wasm-pack build --target web --out-dir ../ui/src/core/pkg
- *
- * Generate TypeScript types with:
- *   export PATH="$HOME/.local/share/pnpm:$PATH" && cargo build -p shared_types
  */
 
 import { readonly, type DeepReadonly } from 'vue'
@@ -174,8 +168,6 @@ async function initializeCore(): Promise<void> {
 
 		try {
 			// Dynamically import the WASM module
-			// This will be available after running:
-			// cd src/app && wasm-pack build --target web --out-dir ../ui/src/core/pkg
 			const wasm = await import('../../core/pkg/omnect_ui_core')
 			await wasm.default()
 			setWasmModule(wasm)

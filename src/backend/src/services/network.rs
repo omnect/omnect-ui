@@ -158,7 +158,7 @@ impl NetworkConfigService {
             )
             .context(format!("failed to deserialize rollback: {path:?}"))?;
 
-            // fails if deadline < now
+            // check if deadline reached
             if let Ok(remaining_time) = rollback.deadline.duration_since(SystemTime::now()) {
                 info!("pending rollback found: {rollback:?}");
                 info!(
@@ -347,11 +347,8 @@ impl NetworkConfigService {
         let config_file = network_config_file!(&network_name);
         let backup_file = network_backup_file!(&network_name);
 
-        // copy file
-        // if it doesn't exist try to find by network interfaces provided by omnect-device-service
         if !Self::copy_if_exists(&config_file, &backup_file)? {
             info!("current config file not found ({network_name})");
-            info!("will try to find file in network interfaces provided by omnect-device-service");
 
             let status = service_client
                 .status()
@@ -571,7 +568,6 @@ mod tests {
             ini.write_to_file(&config_path)
                 .expect("failed to write ini");
 
-            // Verify the file was created and contains expected content
             let contents = fs::read_to_string(&config_path).expect("failed to read ini");
             assert!(contents.contains("[Match]"));
             assert!(contents.contains("Name=eth0") || contents.contains("Name = eth0"));

@@ -83,7 +83,6 @@ export function updateViewModelFromCore(): void {
 		viewModel.onlineStatus = coreViewModel.onlineStatus ? { iothub: coreViewModel.onlineStatus.iothub } : null
 
 		// factoryReset - convert status variant to string literal
-		// Note: Skip if deserialization fails (can happen with bincode format mismatches)
 		try {
 			viewModel.factoryReset = coreViewModel.factoryReset
 				? {

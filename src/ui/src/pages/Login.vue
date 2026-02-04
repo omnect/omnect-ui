@@ -12,7 +12,6 @@ const isCheckingPasswordSetNeeded = ref(false)
 
 useAuthNavigation()
 
-// Use viewModel error message instead of local state
 const errorMsg = computed(() => viewModel.errorMessage || "")
 
 const doLogin = async (e: Event) => {

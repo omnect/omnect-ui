@@ -104,8 +104,6 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
  * Subscribes to all Centrifugo channels and forwards messages as events to Core.
  * Uses the event-based architecture where WebSocket data is parsed and sent as
  * typed events (*Updated) rather than responses.
- *
- * Note: Only SubscribeAll is implemented - individual channel operations removed.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function executeCentrifugoOperation(requestId: number, operation: any): Promise<void> {

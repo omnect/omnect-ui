@@ -27,7 +27,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
     harness.reset();
   });
 
-  test.describe('CRITICAL: Rollback Flows and Error Handling', () => {
+  test.describe('Rollback Flows and Error Handling', () => {
     test('automatic rollback timeout - healthcheck fails, rollback triggered', async ({ page }) => {
       const shortTimeoutSeconds = 3;
       await page.unroute('**/network');
@@ -111,7 +111,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       await expect(page.locator('#overlay')).not.toBeVisible({ timeout: 20000 });
       await expect(page).toHaveURL(/\/login/, { timeout: 10000 });
-      // Changed: expect MODAL instead of snackbar (fix: show rollback modal instead of snackbar on dynamic rollback)
+      // Verify the rollback modal is displayed
       await expect(page.getByText('Network Settings Rolled Back')).toBeVisible();
     });
 
@@ -180,7 +180,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(saveButton).toBeEnabled({ timeout: 5000 });
     });
 
-    test('REGRESSION: form fields not reset during editing (caret stability)', async ({ page }) => {
+    test('form fields not reset during editing (caret stability)', async ({ page }) => {
       await harness.setup(page, {
         ipv4: {
           addrs: [{ addr: '192.168.1.100', dhcp: false, prefix_len: 24 }],
@@ -208,7 +208,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(ipInput).toHaveValue('172.16.0.1');
     });
 
-    test('REGRESSION: Save on non-current adapter should not show endless progress', async ({ page }) => {
+    test('Save on non-current adapter should not show endless progress', async ({ page }) => {
       // Setup two adapters: eth0 (current) and eth1 (not current)
       await harness.setup(page, [
         { name: 'eth0', ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }] } },
@@ -269,7 +269,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await page.route('**/*192.168.1.150*/healthcheck', route => route.abort());
       await page.waitForTimeout(3000); // Wait a bit
 
-      // CRITICAL: Button remains visible (stays in waiting_for_new_ip state, no timeout)
+      // Button remains visible (stays in waiting_for_new_ip state, no timeout)
       await expect(page.getByRole('button', { name: /Open new address in new tab/i })).toBeVisible();
 
       // Verify text for no-rollback scenario
@@ -299,7 +299,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       // Verify overlay appears
       await expect(page.locator('#overlay')).toBeVisible({ timeout: 10000 });
 
-      // CRITICAL: Button should NOT be shown (IP is unknown for DHCP)
+      // Button should NOT be shown (IP is unknown for DHCP)
       await expect(page.getByRole('button', { name: /Open new address in new tab/i })).not.toBeVisible();
 
       // Verify DHCP-specific text
@@ -335,13 +335,13 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await page.route('**/*192.168.1.150*/healthcheck', route => route.abort());
       await page.waitForTimeout(6000);
 
-      // CRITICAL: Button should be HIDDEN during rollback verification (WaitingForOldIp state)
+      // Button should be HIDDEN during rollback verification (WaitingForOldIp state)
       await expect(page.locator('#overlay').getByText(/Rollback in progress/i)).toBeVisible({ timeout: 15000 });
       await expect(page.getByRole('button', { name: /Open new address in new tab/i })).not.toBeVisible();
     });
   });
 
-  test.describe('CRITICAL: Rollback Persistence and State', () => {
+  test.describe('Rollback Persistence and State', () => {
     test('rollback status is cleared after ack and does not reappear on re-login', async ({ page }) => {
       let healthcheckRollbackStatus = true;
 
@@ -1017,7 +1017,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(ipInput).toBeEditable();
     });
 
-    test('REGRESSION: adapter status updates from online to offline via WebSocket', async ({ page }) => {
+    test('adapter status updates from online to offline via WebSocket', async ({ page }) => {
       // Setup adapter initially online
       await harness.setup(page, {
         online: true,
@@ -1049,7 +1049,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page.locator('.v-chip').filter({ hasText: 'Online' })).not.toBeVisible();
     });
 
-    test('REGRESSION: adapter status updates while editing form', async ({ page }) => {
+    test('adapter status updates while editing form', async ({ page }) => {
       // Setup adapter initially online
       await harness.setup(page, {
         online: true,

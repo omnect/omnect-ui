@@ -54,8 +54,6 @@ pub fn handle_network_form_update(
             } = &model.network_form_state
             {
                 // Validate that this update is for the adapter currently being edited
-                // This protects against hidden Shell components (like v-window-items in Vue)
-                // sending updates for non-active adapters
                 if adapter_name != &form_data.name {
                     // Silently ignore updates from non-active adapters
                     return crux_core::render::render();
@@ -107,7 +105,7 @@ fn compute_rollback_modal_state(
         return (false, false);
     }
 
-    // Check if switching to DHCP (was static, now DHCP)
+    // Check if switching to DHCP
     let switching_to_dhcp = !original_data.dhcp && form_data.dhcp;
 
     // Show modal when any setting changed on current adapter

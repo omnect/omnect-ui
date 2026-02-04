@@ -76,9 +76,6 @@ watch([ipAddress, dns, gateways, addressAssignment, subnetMask], () => {
     }
 })
 
-// Note: We no longer watch props.networkAdapter directly for form fields.
-// Core is the source of truth for the "original" data.
-
 const isDHCP = computed(() => addressAssignment.value === "dhcp")
 
 const isRollbackRequired = computed(() => viewModel.shouldShowRollbackModal)

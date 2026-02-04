@@ -173,7 +173,7 @@ macro_rules! unauth_post {
 /// Used for login endpoint which requires Basic auth instead of Bearer token.
 /// Returns string body (e.g., auth token) on success, with optional conversion to target type.
 ///
-/// NOTE: URLs are prefixed with `https://relative` (dummy host) as a workaround.
+/// NOTE: URLs are prefixed with `https://relative`.
 /// `crux_http` requires absolute URLs and rejects relative paths.
 /// The UI shell (`http.ts`) strips this prefix before sending requests.
 ///
@@ -210,10 +210,9 @@ macro_rules! auth_post_basic {
 /// Macro for authenticated POST requests with standard error handling.
 /// Reduces boilerplate for POST requests that require authentication.
 ///
-/// NOTE: URLs are prefixed with `https://relative` (dummy host) as a workaround.
+/// NOTE: URLs are prefixed with `https://relative`.
 /// `crux_http` requires absolute URLs and rejects relative paths.
 /// The UI shell (`http.ts`) strips this prefix before sending requests.
-/// This workaround should be removed once `crux_http` supports relative URLs gracefully.
 ///
 /// # Patterns
 ///
@@ -236,7 +235,7 @@ macro_rules! auth_post_basic {
 /// )
 /// ```
 ///
-/// NOTE: The macro now requires a domain parameter to specify the event wrapper.
+/// NOTE: The macro requires a domain parameter to specify the event wrapper.
 /// Examples:
 /// - Auth domain: `auth_post!(Auth, AuthEvent, model, "/logout", LogoutResponse, "Logout")`
 /// - Device domain: `auth_post!(Device, DeviceEvent, model, "/reboot", RebootResponse, "Reboot")`
@@ -390,7 +389,6 @@ macro_rules! http_get {
 /// Silent HTTP GET - no loading state, custom success/error event handlers.
 ///
 /// Used for background polling where failures should not show errors to user.
-/// Does NOT check for shell hack header (since success returns custom event anyway).
 ///
 /// # Example
 /// ```ignore

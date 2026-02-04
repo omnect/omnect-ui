@@ -13,12 +13,9 @@ useMessageWatchers()
 
 const currentVersion = computed(() => viewModel.systemInfo?.os?.version)
 
-// Use viewModel.isLoading to track the load update request
-// The Core sets isLoading=true when LoadUpdate is dispatched and false when response is received
 const loadUpdateFetching = computed(() => viewModel.isLoading)
 
 const loadUpdateData = (filename?: string) => {
-	// filename is passed from file upload, but not from reload button
 	// The backend uses a fixed path regardless of the filename
 	loadUpdate(filename ?? "")
 }

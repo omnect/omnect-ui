@@ -39,7 +39,6 @@ export function useMessageWatchers(options?: {
       if (newMessage) {
         showSuccess(newMessage)
         options?.onSuccess?.(newMessage)
-        // Clear the message in Core so subsequent identical messages trigger the watcher again
         clearSuccess()
       }
     }

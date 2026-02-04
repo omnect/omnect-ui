@@ -171,7 +171,7 @@ pub struct NetworkConfigRequest {
     /// Only applicable when is_server_addr=true AND ip_changed=true.
     #[serde(default)]
     pub enable_rollback: Option<bool>,
-    /// Whether this change is switching to DHCP (for UI messaging)
+    /// Whether this change is switching to DHCP
     #[serde(default)]
     pub switching_to_dhcp: bool,
 }
@@ -202,7 +202,7 @@ impl From<&DeviceNetwork> for NetworkFormData {
     }
 }
 
-/// State of network form (to prevent WebSocket interference)
+/// State of network form
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum NetworkFormState {

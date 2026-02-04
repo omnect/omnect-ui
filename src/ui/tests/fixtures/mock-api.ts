@@ -91,7 +91,6 @@ export async function mockPortalAuth(page: Page) {
 
 export async function mockNetworkConfig(page: Page) {
   // Mock the network configuration endpoint
-  // Note: The Core sends POST to /network, not api/v1/...
   await page.route('**/network', async (route) => {
     if (route.request().method() === 'POST') {
         // Mock successful application of network config

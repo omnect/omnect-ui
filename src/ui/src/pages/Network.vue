@@ -19,7 +19,6 @@ watch(() => viewModel.networkFormDirty, (isDirty, wasDirty) => {
   if (waitingForReset.value && wasDirty === true && isDirty === false) {
     waitingForReset.value = false
 
-    // Use programmatic navigation instead of trying to resume the blocked navigation
     if (pendingRoute) {
       router.push(pendingRoute)
       pendingRoute = null

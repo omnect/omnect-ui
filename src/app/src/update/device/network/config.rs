@@ -57,13 +57,11 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
             // Clear dirty flag when submitting
             model.network_form_dirty = false;
 
-            // Clear any previous messages so that identical subsequent messages
-            // (e.g. from multiple network config applies) trigger the UI watcher correctly.
+            // Clear any previous messages.
             model.success_message = None;
             model.error_message = None;
 
             // Send the request to backend
-            // Note: we re-serialize because we might have updated the netmask
             let body = serde_json::to_string(&config_req).unwrap_or(config);
 
             auth_post!(

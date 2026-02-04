@@ -168,7 +168,6 @@ export function checkPendingNetworkChange(): void {
 	if (timeRemaining > 0) {
 		// Deadline hasn't passed yet - resume polling
 		console.log(`[useCore] Resuming network change polling (${Math.round(timeRemaining / 1000)}s remaining)`)
-		// Note: The actual resumption will happen via the watcher when Core state is restored
 	} else {
 		// Deadline has passed - check rollback status and clean up
 		console.log('[useCore] Network change deadline has passed, checking rollback status')
@@ -221,7 +220,7 @@ export function startNewIpPolling(): void {
 		switchingToDhcp = false
 	}
 
-	const timeoutMs = rollbackTimeout * 1000 // Convert seconds to milliseconds
+	const timeoutMs = rollbackTimeout * 1000
 
 	// Save to localStorage for page refresh resilience
 	// For waitingForOldIp, we might not need to save timeout, or save 0
@@ -252,7 +251,6 @@ export function startNewIpPolling(): void {
 		}
 
 		// Start countdown interval (every 1 second for UI countdown)
-		// Calculate remaining seconds from deadline instead of decrementing
 		newIpCountdownIntervalId = setInterval(() => {
 			if (countdownDeadline !== null) {
 				const remainingMs = Math.max(0, countdownDeadline - Date.now())

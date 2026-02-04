@@ -105,7 +105,6 @@ impl AppConfig {
     /// required environment variables and returns an error if any are missing
     /// or invalid.
     fn load_internal() -> Result<Self> {
-        // Validate critical paths exist before proceeding (skip in test/mock mode)
         #[cfg(not(any(test, feature = "mock")))]
         anyhow::ensure!(
             PathBuf::from("/data").try_exists().unwrap_or(false),
@@ -168,7 +167,6 @@ impl CentrifugoConfig {
             ],
         };
 
-        // In test/mock mode, use the local centrifugo instance
         #[cfg(any(test, feature = "mock"))]
         let binary_path = PathBuf::from("tools/centrifugo");
         #[cfg(not(any(test, feature = "mock")))]
@@ -282,7 +280,6 @@ impl PathConfig {
             PathBuf::from("/var/lib/").join(env!("CARGO_PKG_NAME")),
         );
 
-        // In test mode, use temp directory as default
         #[cfg(any(test, feature = "mock"))]
         let (data_dir, host_data_dir) = {
             let data_dir = std::env::temp_dir().join("omnect-ui-test");
@@ -294,7 +291,7 @@ impl PathConfig {
             (data_dir.clone(), data_dir)
         };
 
-        // Ensure config directory exists (skip in test/mock mode as it may not have permissions)
+        // Ensure config directory exists
         let config_dir = data_dir.join("config");
         std::fs::create_dir_all(&config_dir).context("failed to create config directory")?;
 

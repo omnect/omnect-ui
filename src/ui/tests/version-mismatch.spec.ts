@@ -7,7 +7,6 @@ test.describe('Version Mismatch', () => {
     await mockRequireSetPassword(page);
 
     // Mock healthcheck with version mismatch
-    // Note: Backend uses snake_case for JSON field names
     await page.route('**/healthcheck', async (route) => {
       await route.fulfill({
         status: 503,

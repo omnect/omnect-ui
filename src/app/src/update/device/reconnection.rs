@@ -92,8 +92,6 @@ pub fn handle_healthcheck_response(
                 matches!(model.device_operation_state, DeviceOperationState::Updating);
 
             // For updates, we also check the status field
-            // Consider update done when status is Succeeded, Recovered, or NoUpdate
-            // (NoUpdate means there's no pending update, so previous one completed)
             let update_done = if is_updating {
                 result.as_ref().ok().is_some_and(is_update_complete)
             } else {

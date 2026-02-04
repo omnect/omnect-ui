@@ -259,7 +259,6 @@ mod tests {
                 .times(1)
                 .returning(|_| Box::pin(async { Ok(()) }));
 
-            // Create RunUpdate via serde (since fields are private)
             let run_update: crate::omnect_device_service_client::RunUpdate =
                 serde_json::from_str(r#"{"validate_iothub_connection": true}"#)
                     .expect("should deserialize");
