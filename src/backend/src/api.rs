@@ -6,7 +6,7 @@ use crate::{
     services::{
         auth::{AuthorizationService, PasswordService, TokenManager},
         firmware::FirmwareService,
-        network::{NetworkConfigService, SetNetworkConfigRequest},
+        network::{NetworkConfigRequest, NetworkConfigService},
     },
 };
 use actix_files::NamedFile;
@@ -15,23 +15,10 @@ use actix_session::Session;
 use actix_web::{HttpResponse, Responder, web};
 use anyhow::Result;
 use log::{debug, error};
-use serde::Deserialize;
+pub use omnect_ui_core::types::{SetPasswordRequest, UpdatePasswordRequest};
 use std::collections::HashMap;
 
 pub type StaticResources = HashMap<&'static str, static_files::Resource>;
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SetPasswordPayload {
-    password: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdatePasswordPayload {
-    current_password: String,
-    password: String,
-}
 
 #[derive(MultipartForm)]
 pub struct UploadFormSingleFile {
@@ -168,7 +155,7 @@ where
     }
 
     pub async fn set_password(
-        body: web::Json<SetPasswordPayload>,
+        body: web::Json<SetPasswordRequest>,
         session: Session,
         token_manager: web::Data<TokenManager>,
     ) -> impl Responder {
@@ -189,7 +176,7 @@ where
     }
 
     pub async fn update_password(
-        body: web::Json<UpdatePasswordPayload>,
+        body: web::Json<UpdatePasswordRequest>,
         session: Session,
     ) -> impl Responder {
         debug!("update_password() called");
@@ -233,7 +220,7 @@ where
     }
 
     pub async fn set_network_config(
-        network_config: web::Json<SetNetworkConfigRequest>,
+        network_config: web::Json<NetworkConfigRequest>,
         api: web::Data<Self>,
     ) -> impl Responder {
         debug!("set_network_config() called");

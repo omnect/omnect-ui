@@ -2341,6 +2341,7 @@ dependencies = [
  "log-panics",
  "mockall",
  "mockall_double",
+ "omnect-ui-core",
  "rand_core 0.9.3",
  "reqwest",
  "rust-ini",
@@ -2372,6 +2373,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "serde_valid",
  "wasm-bindgen",
 ]
 

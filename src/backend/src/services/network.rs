@@ -2,12 +2,12 @@ use crate::omnect_device_service_client::DeviceServiceClient;
 use anyhow::{Context, Result};
 use ini::Ini;
 use log::{debug, error, info};
+pub use omnect_ui_core::types::{NetworkConfigRequest, SetNetworkConfigResponse};
 use serde::{Deserialize, Serialize};
 use serde_valid::Validate;
 use std::{
     fs,
     io::ErrorKind,
-    net::Ipv4Addr,
     path::Path,
     time::{Duration, SystemTime},
 };
@@ -69,51 +69,10 @@ const ROLLBACK_TIMEOUT_SECS: u64 = 90;
 // Structs
 // ============================================================================
 
-#[derive(Deserialize, Serialize, Clone, Validate, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct NetworkConfig {
-    is_server_addr: bool,
-    ip_changed: bool,
-    #[validate(min_length = 1)]
-    name: String,
-    dhcp: bool,
-    previous_ip: Ipv4Addr,
-    ip: Option<Ipv4Addr>,
-    #[validate(maximum = 32)]
-    #[validate(minimum = 0)]
-    netmask: Option<u8>,
-    gateway: Option<Vec<Ipv4Addr>>,
-    dns: Option<Vec<Ipv4Addr>>,
-}
-
-#[derive(Deserialize, Serialize, Clone, Validate, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct SetNetworkConfigRequest {
-    #[serde(flatten)]
-    #[validate]
-    pub network: NetworkConfig,
-    /// Whether to enable automatic rollback protection.
-    /// Only applicable when is_server_addr=true AND ip_changed=true.
-    /// If false/None, no rollback is created even for server IP changes.
-    #[serde(default)]
-    pub enable_rollback: Option<bool>,
-    /// Whether this change is switching to DHCP (for rollback logic)
-    #[serde(default)]
-    pub switching_to_dhcp: bool,
-}
-
 #[derive(Deserialize, Serialize, Clone, Debug)]
 struct Rollback {
-    network_config: NetworkConfig,
+    network_config: NetworkConfigRequest,
     deadline: SystemTime,
-}
-
-#[derive(Deserialize, Serialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct SetNetworkConfigResponse {
-    pub rollback_timeout_seconds: u64,
-    pub ui_port: u16,
-    pub rollback_enabled: bool,
 }
 
 // ============================================================================
@@ -146,7 +105,7 @@ impl NetworkConfigService {
     /// Result with the network config response including rollback timeout, or an error
     pub async fn set_network_config<T>(
         service_client: &T,
-        request: &SetNetworkConfigRequest,
+        request: &NetworkConfigRequest,
     ) -> Result<SetNetworkConfigResponse>
     where
         T: DeviceServiceClient,
@@ -158,15 +117,11 @@ impl NetworkConfigService {
         let enable_rollback = request.enable_rollback.unwrap_or(false);
         let switching_to_dhcp = request.switching_to_dhcp;
 
-        if let Err(err1) = Self::apply_network_config(
-            service_client,
-            &request.network,
-            enable_rollback,
-            switching_to_dhcp,
-        )
-        .await
+        if let Err(err1) =
+            Self::apply_network_config(service_client, request, enable_rollback, switching_to_dhcp)
+                .await
         {
-            if let Err(err2) = Self::rollback_network_config(&request.network.name) {
+            if let Err(err2) = Self::rollback_network_config(&request.name) {
                 error!("failed to rollback network config: {err2:#}");
             }
             return Err(err1);
@@ -176,8 +131,8 @@ impl NetworkConfigService {
             rollback_timeout_seconds: ROLLBACK_TIMEOUT_SECS,
             ui_port: crate::config::AppConfig::get().ui.port,
             rollback_enabled: enable_rollback
-                && request.network.is_server_addr
-                && (request.network.ip_changed || switching_to_dhcp),
+                && request.is_server_addr
+                && (request.ip_changed || switching_to_dhcp),
         })
     }
 
@@ -347,7 +302,7 @@ impl NetworkConfigService {
     /// Result indicating success or failure
     async fn apply_network_config<T>(
         service_client: &T,
-        network: &NetworkConfig,
+        network: &NetworkConfigRequest,
         enable_rollback: bool,
         switching_to_dhcp: bool,
     ) -> Result<()>
@@ -438,7 +393,7 @@ impl NetworkConfigService {
     ///
     /// # Returns
     /// Result indicating success or failure
-    fn write_network_config(network: &NetworkConfig) -> Result<()> {
+    fn write_network_config(network: &NetworkConfigRequest) -> Result<()> {
         let mut ini = Ini::new();
 
         ini.with_section(Some("Match".to_owned()))
@@ -454,16 +409,12 @@ impl NetworkConfigService {
 
             network_section.set("Address", format!("{ip}/{mask}"));
 
-            if let Some(gateways) = &network.gateway {
-                for gateway in gateways {
-                    network_section.add("Gateway", gateway.to_string());
-                }
+            for gateway in &network.gateway {
+                network_section.add("Gateway", gateway.to_string());
             }
 
-            if let Some(dnss) = &network.dns {
-                for dns in dnss {
-                    network_section.add("DNS", dns.to_string());
-                }
+            for dns in &network.dns {
+                network_section.add("DNS", dns.to_string());
             }
         }
 
@@ -484,7 +435,7 @@ impl NetworkConfigService {
     ///
     /// # Returns
     /// Result indicating success or failure
-    fn create_rollback(network: &NetworkConfig) -> Result<()> {
+    fn create_rollback(network: &NetworkConfigRequest) -> Result<()> {
         let rollback = Rollback {
             network_config: network.clone(),
             deadline: SystemTime::now() + Duration::from_secs(ROLLBACK_TIMEOUT_SECS),
@@ -510,32 +461,37 @@ impl NetworkConfigService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::Ipv4Addr;
 
-    fn create_valid_dhcp_config() -> NetworkConfig {
-        NetworkConfig {
+    fn create_valid_dhcp_config() -> NetworkConfigRequest {
+        NetworkConfigRequest {
             is_server_addr: false,
             ip_changed: false,
             name: "eth0".to_string(),
             dhcp: true,
-            previous_ip: Ipv4Addr::new(192, 168, 1, 100),
+            previous_ip: Some(Ipv4Addr::new(192, 168, 1, 100)),
             ip: None,
             netmask: None,
-            gateway: None,
-            dns: None,
+            gateway: vec![],
+            dns: vec![],
+            enable_rollback: None,
+            switching_to_dhcp: true,
         }
     }
 
-    fn create_valid_static_config() -> NetworkConfig {
-        NetworkConfig {
+    fn create_valid_static_config() -> NetworkConfigRequest {
+        NetworkConfigRequest {
             is_server_addr: false,
             ip_changed: false,
             name: "eth0".to_string(),
             dhcp: false,
-            previous_ip: Ipv4Addr::new(192, 168, 1, 100),
+            previous_ip: Some(Ipv4Addr::new(192, 168, 1, 100)),
             ip: Some(Ipv4Addr::new(192, 168, 1, 101)),
             netmask: Some(24),
-            gateway: Some(vec![Ipv4Addr::new(192, 168, 1, 1)]),
-            dns: Some(vec![Ipv4Addr::new(8, 8, 8, 8), Ipv4Addr::new(8, 8, 4, 4)]),
+            gateway: vec![Ipv4Addr::new(192, 168, 1, 1)],
+            dns: vec![Ipv4Addr::new(8, 8, 8, 8), Ipv4Addr::new(8, 8, 4, 4)],
+            enable_rollback: None,
+            switching_to_dhcp: false,
         }
     }
 
@@ -544,77 +500,41 @@ mod tests {
 
         #[test]
         fn valid_dhcp_config_passes() {
-            let config = create_valid_dhcp_config();
-            let request = SetNetworkConfigRequest {
-                network: config,
-                enable_rollback: None,
-                switching_to_dhcp: true,
-            };
-
+            let request = create_valid_dhcp_config();
             assert!(request.validate().is_ok());
         }
 
         #[test]
         fn valid_static_config_passes() {
-            let config = create_valid_static_config();
-            let request = SetNetworkConfigRequest {
-                network: config,
-                enable_rollback: None,
-                switching_to_dhcp: false,
-            };
-
+            let request = create_valid_static_config();
             assert!(request.validate().is_ok());
         }
 
         #[test]
         fn empty_interface_name_fails() {
-            let mut config = create_valid_dhcp_config();
-            config.name = String::new();
-            let request = SetNetworkConfigRequest {
-                network: config,
-                enable_rollback: None,
-                switching_to_dhcp: false,
-            };
-
+            let mut request = create_valid_dhcp_config();
+            request.name = String::new();
             assert!(request.validate().is_err());
         }
 
         #[test]
         fn netmask_above_32_fails() {
-            let mut config = create_valid_static_config();
-            config.netmask = Some(33);
-            let request = SetNetworkConfigRequest {
-                network: config,
-                enable_rollback: None,
-                switching_to_dhcp: false,
-            };
-
+            let mut request = create_valid_static_config();
+            request.netmask = Some(33);
             assert!(request.validate().is_err());
         }
 
         #[test]
         fn netmask_at_boundary_passes() {
-            let mut config = create_valid_static_config();
-            config.netmask = Some(32);
-            let request = SetNetworkConfigRequest {
-                network: config,
-                enable_rollback: None,
-                switching_to_dhcp: false,
-            };
-
+            let mut request = create_valid_static_config();
+            request.netmask = Some(32);
             assert!(request.validate().is_ok());
         }
 
         #[test]
         fn netmask_zero_passes() {
-            let mut config = create_valid_static_config();
-            config.netmask = Some(0);
-            let request = SetNetworkConfigRequest {
-                network: config,
-                enable_rollback: None,
-                switching_to_dhcp: false,
-            };
-
+            let mut request = create_valid_static_config();
+            request.netmask = Some(0);
             assert!(request.validate().is_ok());
         }
     }
@@ -626,16 +546,18 @@ mod tests {
         #[test]
         fn write_network_config_creates_valid_ini_for_dhcp() {
             let temp_dir = TempDir::new().expect("failed to create temp dir");
-            let config = NetworkConfig {
+            let config = NetworkConfigRequest {
                 is_server_addr: false,
                 ip_changed: false,
                 name: "eth0".to_string(),
                 dhcp: true,
-                previous_ip: Ipv4Addr::new(192, 168, 1, 100),
+                previous_ip: Some(Ipv4Addr::new(192, 168, 1, 100)),
                 ip: None,
                 netmask: None,
-                gateway: None,
-                dns: None,
+                gateway: vec![],
+                dns: vec![],
+                enable_rollback: None,
+                switching_to_dhcp: true,
             };
 
             // Use the internal write function logic but with a temp path
@@ -660,16 +582,18 @@ mod tests {
         #[test]
         fn write_network_config_creates_valid_ini_for_static() {
             let temp_dir = TempDir::new().expect("failed to create temp dir");
-            let config = NetworkConfig {
+            let config = NetworkConfigRequest {
                 is_server_addr: false,
                 ip_changed: false,
                 name: "eth0".to_string(),
                 dhcp: false,
-                previous_ip: Ipv4Addr::new(192, 168, 1, 100),
+                previous_ip: Some(Ipv4Addr::new(192, 168, 1, 100)),
                 ip: Some(Ipv4Addr::new(192, 168, 1, 101)),
                 netmask: Some(24),
-                gateway: Some(vec![Ipv4Addr::new(192, 168, 1, 1)]),
-                dns: Some(vec![Ipv4Addr::new(8, 8, 8, 8), Ipv4Addr::new(8, 8, 4, 4)]),
+                gateway: vec![Ipv4Addr::new(192, 168, 1, 1)],
+                dns: vec![Ipv4Addr::new(8, 8, 8, 8), Ipv4Addr::new(8, 8, 4, 4)],
+                enable_rollback: None,
+                switching_to_dhcp: false,
             };
 
             // Replicate the write logic
@@ -682,16 +606,12 @@ mod tests {
             let mask = config.netmask.expect("mask required for static");
             network_section.set("Address", format!("{ip}/{mask}"));
 
-            if let Some(gateways) = &config.gateway {
-                for gateway in gateways {
-                    network_section.add("Gateway", gateway.to_string());
-                }
+            for gateway in &config.gateway {
+                network_section.add("Gateway", gateway.to_string());
             }
 
-            if let Some(dnss) = &config.dns {
-                for dns in dnss {
-                    network_section.add("DNS", dns.to_string());
-                }
+            for dns in &config.dns {
+                network_section.add("DNS", dns.to_string());
             }
 
             let config_path = temp_dir.path().join("10-eth0.network");
@@ -773,25 +693,22 @@ mod tests {
                 "ipChanged": false,
                 "name": "eth0",
                 "dhcp": true,
-                "previousIp": "192.168.1.100"
+                "previousIp": "192.168.1.100",
+                "gateway": [],
+                "dns": []
             }"#;
 
-            let config: NetworkConfig = serde_json::from_str(json).expect("failed to deserialize");
+            let config: NetworkConfigRequest =
+                serde_json::from_str(json).expect("failed to deserialize");
 
             assert_eq!(config.name, "eth0");
             assert!(config.dhcp);
-            assert_eq!(config.previous_ip, Ipv4Addr::new(192, 168, 1, 100));
+            assert_eq!(config.previous_ip, Some(Ipv4Addr::new(192, 168, 1, 100)));
         }
 
         #[test]
         fn request_includes_enable_rollback_field() {
-            let config = create_valid_dhcp_config();
-            let request = SetNetworkConfigRequest {
-                network: config,
-                enable_rollback: Some(true),
-                switching_to_dhcp: false,
-            };
-
+            let request = create_valid_dhcp_config();
             let json = serde_json::to_string(&request).expect("failed to serialize");
             assert!(json.contains("\"enableRollback\""));
         }
