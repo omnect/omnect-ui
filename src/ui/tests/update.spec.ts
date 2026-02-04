@@ -119,9 +119,9 @@ test.describe('Device Update', () => {
                 status: 200,
                 contentType: 'application/json',
                 body: JSON.stringify({
-                    version_info: { current: '4.0.24', required: '4.0.24', mismatch: false }, // Updated version
-                    update_validation_status: { status: 'Succeeded' },
-                    network_rollback_occurred: false
+                    versionInfo: { current: '4.0.24', required: '4.0.24', mismatch: false }, // Updated version
+                    updateValidationStatus: { status: 'Succeeded' },
+                    networkRollbackOccurred: false
                 })
             });
         }

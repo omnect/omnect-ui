@@ -16,7 +16,7 @@ useAuthNavigation()
 
 // Watch for successful password set to trigger auto-login
 watch(
-	() => viewModel.requires_password_set,
+	() => viewModel.requiresPasswordSet,
 	async (requiresPasswordSet) => {
 		if (requiresPasswordSet === false && password.value) {
 			await login(password.value)

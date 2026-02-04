@@ -11,11 +11,11 @@ const { viewModel, loadUpdate } = useCore()
 useCoreInitialization()
 useMessageWatchers()
 
-const currentVersion = computed(() => viewModel.system_info?.os?.version)
+const currentVersion = computed(() => viewModel.systemInfo?.os?.version)
 
-// Use viewModel.is_loading to track the load update request
-// The Core sets is_loading=true when LoadUpdate is dispatched and false when response is received
-const loadUpdateFetching = computed(() => viewModel.is_loading)
+// Use viewModel.isLoading to track the load update request
+// The Core sets isLoading=true when LoadUpdate is dispatched and false when response is received
+const loadUpdateFetching = computed(() => viewModel.isLoading)
 
 const loadUpdateData = (filename?: string) => {
 	// filename is passed from file upload, but not from reload button
@@ -31,7 +31,7 @@ const loadUpdateData = (filename?: string) => {
 				<UpdateFileUpload @file-uploaded="loadUpdateData" />
 			</v-col>
 			<v-col sm="12" xl="6">
-				<UpdateInfo :update-manifest="viewModel.update_manifest" :load-update-fetching="loadUpdateFetching"
+				<UpdateInfo :update-manifest="viewModel.updateManifest" :load-update-fetching="loadUpdateFetching"
 					:current-version="currentVersion" @reload-update-info="loadUpdateData" />
 			</v-col>
 		</v-row>

@@ -9,9 +9,9 @@ import OmnectLogo from "./components/branding/OmnectLogo.vue"
 import OverlaySpinner from "./components/feedback/OverlaySpinner.vue"
 import UserMenu from "./components/UserMenu.vue"
 import { useCore } from "./composables/useCore"
+import type { HealthcheckInfo } from "./composables/useCore"
 import { useSnackbar } from "./composables/useSnackbar"
 import { useMessageWatchers } from "./composables/useMessageWatchers"
-import type { HealthcheckResponse } from "./types"
 
 axios.defaults.validateStatus = (_) => true
 
@@ -30,21 +30,21 @@ const showRollbackNotification: Ref<boolean> = ref(false)
 const errorTitle = ref("")
 const errorMsg = ref("")
 
-const overlaySpinnerState = computed(() => viewModel.overlay_spinner)
+const overlaySpinnerState = computed(() => viewModel.overlaySpinner)
 
-// Build redirect URL from network_change_state when waiting for new IP
+// Build redirect URL from networkChangeState when waiting for new IP
 const redirectUrl = computed(() => {
-	const state = viewModel.network_change_state
+	const state = viewModel.networkChangeState
 
 	// Show button for both waiting and timeout states (but NOT for DHCP or rollback verification)
-	if ((state.type === 'waiting_for_new_ip' || state.type === 'new_ip_timeout')
-		&& 'new_ip' in state
-		&& 'ui_port' in state
-		&& !('switching_to_dhcp' in state && state.switching_to_dhcp)) {
-		return `https://${state.new_ip}:${state.ui_port}`
+	if ((state.type === 'waitingForNewIp' || state.type === 'newIpTimeout')
+		&& 'newIp' in state
+		&& 'uiPort' in state
+		&& !('switchingToDhcp' in state && state.switchingToDhcp)) {
+		return `https://${state.newIp}:${state.uiPort}`
 	}
 
-	// Don't show for waiting_for_old_ip - rollback in progress
+	// Don't show for waitingForOldIp - rollback in progress
 	return undefined
 })
 
@@ -64,7 +64,7 @@ const acknowledgeRollback = () => {
 // Watch authentication state to redirect to login if session is lost
 // This handles the case where the backend restarts (reboot/factory reset) and the session becomes invalid
 watch(
-	() => viewModel.is_authenticated,
+	() => viewModel.isAuthenticated,
 	async (isAuthenticated) => {
 		if (isAuthenticated) {
 			subscribeToChannels()
@@ -80,7 +80,7 @@ watch(
 
 // Watch for network rollback status from healthcheck updates (e.g. after automatic rollback)
 watch(
-	() => viewModel.healthcheck?.network_rollback_occurred,
+	() => viewModel.healthcheck?.networkRollbackOccurred,
 	(occurred) => {
 		if (occurred) {
 			showRollbackNotification.value = true
@@ -96,15 +96,15 @@ onMounted(async () => {
 			Expires: "0"
 		}
 	})
-	const data = (await res.json()) as HealthcheckResponse
-	if (data.network_rollback_occurred) {
+	const data = (await res.json()) as HealthcheckInfo
+	if (data.networkRollbackOccurred) {
 		showRollbackNotification.value = true
 	}
 
 	if (!res.ok) {
 		overlay.value = true
 		errorTitle.value = "omnect-device-service version mismatch"
-		errorMsg.value = `Current version: ${data.version_info.current}. Required version ${data.version_info.required}. Please consider to update omnect Secure OS.`
+		errorMsg.value = `Current version: ${data.versionInfo.current}. Required version ${data.versionInfo.required}. Please consider to update omnect Secure OS.`
 	}
 })
 </script>
@@ -153,9 +153,9 @@ onMounted(async () => {
         </template>
       </v-snackbar>
       <OverlaySpinner :overlay="overlaySpinnerState.overlay" :title="overlaySpinnerState.title"
-        :text="overlaySpinnerState.text || undefined" :timed-out="overlaySpinnerState.timed_out"
+        :text="overlaySpinnerState.text || undefined" :timed-out="overlaySpinnerState.timedOut"
         :progress="overlaySpinnerState.progress || undefined"
-        :countdown-seconds="overlaySpinnerState.countdown_seconds || undefined"
+        :countdown-seconds="overlaySpinnerState.countdownSeconds || undefined"
         :redirect-url="redirectUrl" />
     </v-main>
   </v-app>

@@ -12,6 +12,7 @@ pub trait ModelErrorHandler {
 /// Application Model - the complete state
 /// Also serves as the ViewModel when serialized (auth_token is excluded)
 #[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct Model {
     // Device state
     pub system_info: Option<SystemInfo>,

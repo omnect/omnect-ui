@@ -34,7 +34,7 @@ export function useMessageWatchers(options?: {
 
   // Watch for success messages
   watch(
-    () => viewModel.success_message,
+    () => viewModel.successMessage,
     (newMessage) => {
       if (newMessage) {
         showSuccess(newMessage)
@@ -47,7 +47,7 @@ export function useMessageWatchers(options?: {
 
   // Watch for error messages
   watch(
-    () => viewModel.error_message,
+    () => viewModel.errorMessage,
     (newMessage) => {
       if (newMessage) {
         showError(newMessage)

@@ -96,6 +96,7 @@ export type {
 	CoreViewModel,
 	UpdateManifest,
 	NetworkFormData,
+	DeviceNetwork,
 } from './types'
 
 export { NetworkConfigRequest } from './types'
@@ -230,7 +231,7 @@ async function initializeCore(): Promise<void> {
  * })
  *
  * // Access reactive view model
- * const isOnline = computed(() => viewModel.online_status?.iothub ?? false)
+ * const isOnline = computed(() => viewModel.onlineStatus?.iothub ?? false)
  *
  * // Send events using convenience methods
  * login('password')

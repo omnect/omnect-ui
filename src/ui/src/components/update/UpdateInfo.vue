@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { ref, toRef } from "vue"
+import { ref, toRef, type DeepReadonly } from "vue"
 import { useCore } from "../../composables/useCore"
-import type { UpdateManifest } from "../../types/update-manifest"
+import type { UpdateManifest } from "../../composables/useCore"
 import KeyValuePair from "../ui-components/KeyValuePair.vue"
 
 const { runUpdate } = useCore()
 
 const props = defineProps<{
-	updateManifest: UpdateManifest | null | undefined
+	updateManifest: DeepReadonly<UpdateManifest> | null | undefined
 	currentVersion: string | undefined
 	loadUpdateFetching: boolean
 }>()

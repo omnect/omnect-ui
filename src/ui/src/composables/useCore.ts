@@ -38,6 +38,7 @@ export type {
 	CoreViewModel,
 	UpdateManifest,
 	NetworkFormData,
+	DeviceNetwork,
 } from './core'
 
 // Re-export NetworkConfigRequest class for value usage

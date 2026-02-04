@@ -211,15 +211,15 @@ export class NetworkTestHarness {
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            version_info: {
+            versionInfo: {
               required: '>=0.39.0',
               current: '0.40.0',
               mismatch: false,
             },
-            update_validation_status: {
+            updateValidationStatus: {
               status: 'valid',
             },
-            network_rollback_occurred: this.networkRollbackOccurred,
+            networkRollbackOccurred: this.networkRollbackOccurred,
           }),
         });
       } else {
@@ -251,10 +251,11 @@ export class NetworkTestHarness {
    *
    * @param adapters - Array of network adapter configurations to publish
    */
-  async publishNetworkStatus(adapters: DeviceNetwork[]): Promise<void> {
-    this.lastNetworkConfig = adapters;
+  async publishNetworkStatus(adapters: Array<Partial<DeviceNetwork> & { name: string }>): Promise<void> {
+    const fullAdapters = adapters.map(adapter => this.createAdapter(adapter.name, adapter));
+    this.lastNetworkConfig = fullAdapters;
     await publishToCentrifugo('NetworkStatusV1', {
-      network_status: adapters,
+      network_status: fullAdapters,
     });
   }
 
@@ -351,15 +352,17 @@ export class NetworkTestHarness {
    * ```
    */
   createAdapter(name: string, config: Partial<DeviceNetwork> = {}): DeviceNetwork {
+    const defaultIpv4 = {
+      addrs: [{ addr: '192.168.1.100', dhcp: false, prefix_len: 24 }],
+      dns: ['8.8.8.8'],
+      gateways: ['192.168.1.1'],
+    };
+
     return {
       name,
       mac: config.mac || '00:11:22:33:44:55',
       online: config.online !== undefined ? config.online : true,
-      ipv4: config.ipv4 || {
-        addrs: [{ addr: '192.168.1.100', dhcp: false, prefix_len: 24 }],
-        dns: ['8.8.8.8'],
-        gateways: ['192.168.1.1'],
-      },
+      ipv4: config.ipv4 ? { ...defaultIpv4, ...config.ipv4 } : defaultIpv4,
     };
   }
 

@@ -16,7 +16,7 @@ const { loading, execute } = useAsyncAction({
 	onSuccess: closeAll
 })
 
-const factoryResetKeys = computed(() => viewModel.factory_reset)
+const factoryResetKeys = computed(() => viewModel.factoryReset)
 
 const handleReboot = () => execute(reboot)
 

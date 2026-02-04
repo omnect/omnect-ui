@@ -13,11 +13,11 @@ const showUnsavedChangesDialog = ref(false)
 const pendingTab = ref<string | null>(null)
 const isReverting = ref(false)
 
-const networkStatus = computed(() => viewModel.network_status)
+const networkStatus = computed(() => viewModel.networkStatus)
 
 // Use Core's computed current connection adapter
 const isCurrentConnection = (adapter: any) => {
-  return viewModel.current_connection_adapter === adapter.name
+  return viewModel.currentConnectionAdapter === adapter.name
 }
 
 // Watch for tab changes and check for unsaved changes
@@ -31,7 +31,7 @@ watch(tab, (newTab, oldTab) => {
   }
 
   // Check if there are unsaved changes
-  if (viewModel.network_form_dirty && oldTab !== null) {
+  if (viewModel.networkFormDirty && oldTab !== null) {
     // Block the tab change and show confirmation dialog
     showUnsavedChangesDialog.value = true
     pendingTab.value = newTab as string
@@ -47,8 +47,8 @@ watch(tab, (newTab, oldTab) => {
 const confirmTabChange = () => {
   if (pendingTab.value !== null) {
     // User confirmed, discard changes and switch tabs
-    const currentAdapter = viewModel.network_form_state?.type === 'editing'
-      ? (viewModel.network_form_state as any).adapter_name
+    const currentAdapter = viewModel.networkFormState?.type === 'editing'
+      ? (viewModel.networkFormState as any).adapterName
       : null
 
     if (currentAdapter) {
@@ -80,11 +80,11 @@ const cancelTabChange = () => {
     </div>
     <div class="d-flex flex-row">
       <v-tabs v-model="tab" color="primary" direction="vertical">
-        <v-tab v-for="networkAdapter in networkStatus?.network_status" :text="networkAdapter.name"
+        <v-tab v-for="networkAdapter in networkStatus?.networkStatus" :text="networkAdapter.name"
           :value="networkAdapter.name"></v-tab>
       </v-tabs>
       <v-window v-model="tab" class="w[20vw]" direction="vertical">
-        <v-window-item v-for="networkAdapter in networkStatus?.network_status" :key="networkAdapter.name" :value="networkAdapter.name">
+        <v-window-item v-for="networkAdapter in networkStatus?.networkStatus" :key="networkAdapter.name" :value="networkAdapter.name">
           <NetworkSettings :networkAdapter="networkAdapter" :isCurrentConnection="isCurrentConnection(networkAdapter)" />
         </v-window-item>
       </v-window>

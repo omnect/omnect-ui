@@ -19,16 +19,24 @@
 macro_rules! update_field {
     // Multiple field updates (must come first to match the pattern)
     ($($model_field:expr, $value:expr);+ $(;)?) => {{
+        let mut changed = false;
         $(
-            $model_field = $value;
+            let value = $value;
+            if $model_field != value {
+                $model_field = value;
+                changed = true;
+            }
         )+
-        crux_core::render::render()
+        if changed {
+            crux_core::render::render()
+        } else {
+            crux_core::Command::done()
+        }
     }};
 
     // Single field update
     ($model_field:expr, $value:expr) => {{
-        $model_field = $value;
-        crux_core::render::render()
+        update_field!($model_field, $value;)
     }};
 }
 
@@ -401,6 +409,47 @@ macro_rules! http_get_silent {
                 Ok(response) if response.status().is_success() => $success_event,
                 _ => $error_event,
             })
+    };
+}
+
+/// Macro for parsing ODS WebSocket updates with standard error handling.
+///
+/// # Patterns
+///
+/// Pattern 1: Simple field update with `.into()` mapping
+/// ```ignore
+/// parse_ods_update!(model, json, OdsSystemInfo, system_info, "SystemInfo")
+/// ```
+///
+/// Pattern 2: Custom success handler
+/// ```ignore
+/// parse_ods_update!(model, json, OdsNetworkStatus, "NetworkStatus", |m, status| {
+///     m.network_status = Some(status.into());
+///     m.update_current_connection_adapter();
+///     crux_core::render::render()
+/// })
+/// ```
+#[macro_export]
+macro_rules! parse_ods_update {
+    // Pattern 1: Simple field update with .into()
+    ($model:expr, $json:expr, $ods_type:ty, $field:ident, $label:expr) => {
+        parse_ods_update!($model, $json, $ods_type, $label, |m, data| {
+            $crate::update_field!(m.$field, Some(data.into()))
+        })
+    };
+
+    // Pattern 2: Custom success handler
+    ($model:expr, $json:expr, $ods_type:ty, $label:expr, |$m:ident, $data:ident| $success_body:block) => {
+        match serde_json::from_str::<$ods_type>(&$json) {
+            Ok($data) => {
+                let $m = $model;
+                $success_body
+            }
+            Err(e) => {
+                log::error!("Failed to parse {}: {e}. JSON: {}", $label, $json);
+                $model.set_error_and_render(format!("Failed to parse {}: {e}", $label))
+            }
+        }
     };
 }
 

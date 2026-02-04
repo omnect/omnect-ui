@@ -4,7 +4,7 @@ use std::fmt;
 use crate::types::*;
 
 /// Authentication events
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum AuthEvent {
     Login {
         password: String,
@@ -86,12 +86,12 @@ pub enum DeviceEvent {
 pub enum WebSocketEvent {
     SubscribeToChannels,
     UnsubscribeFromChannels,
-    SystemInfoUpdated(SystemInfo),
-    NetworkStatusUpdated(NetworkStatus),
-    OnlineStatusUpdated(OnlineStatus),
-    FactoryResetUpdated(FactoryReset),
-    UpdateValidationStatusUpdated(UpdateValidationStatus),
-    TimeoutsUpdated(Timeouts),
+    SystemInfoUpdated(String),
+    NetworkStatusUpdated(String),
+    OnlineStatusUpdated(String),
+    FactoryResetUpdated(String),
+    UpdateValidationStatusUpdated(String),
+    TimeoutsUpdated(String),
     Connected,
     Disconnected,
 }
@@ -105,7 +105,7 @@ pub enum UiEvent {
 }
 
 /// Main event enum - wraps domain events
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum Event {
     Initialize,
     Auth(AuthEvent),

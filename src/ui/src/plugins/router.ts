@@ -27,7 +27,7 @@ const router = createRouter({
 router.beforeEach(async (to, _, next) => {
 	const { viewModel } = useCore()
 
-	if (to.meta.guestOnly && viewModel.is_authenticated) {
+	if (to.meta.guestOnly && viewModel.isAuthenticated) {
 		next("/")
 		return
 	}
@@ -40,7 +40,7 @@ router.beforeEach(async (to, _, next) => {
 	}
 	if (to.meta.requiresAuth) {
 		// Rely on the Core's authentication state as the single source of truth
-		if (!viewModel.is_authenticated) {
+		if (!viewModel.isAuthenticated) {
 			next("/login")
 			return
 		}

@@ -13,13 +13,13 @@ const emit = defineEmits<(e: "fileUploaded", filename: string) => void>()
 const updateFile = ref<File>()
 
 // Derived state from Core
-const uploadState = computed(() => viewModel.firmware_upload_state)
+const uploadState = computed(() => viewModel.firmwareUploadState)
 const isUploading = computed(() => uploadState.value?.type === 'uploading')
 
 watch(
-	() => viewModel.device_operation_state,
+	() => viewModel.deviceOperationState,
 	(state) => {
-		if (state.type === 'reconnection_successful' && state.operation === 'Update') {
+		if (state.type === 'reconnectionSuccessful' && state.operation === 'Update') {
 			updateFile.value = undefined
 		}
 	},
@@ -27,7 +27,7 @@ watch(
 )
 
 const uploadFile = async () => {
-	if (!viewModel.is_authenticated) {
+	if (!viewModel.isAuthenticated) {
 		router.push("/login")
 		return
 	}

@@ -191,13 +191,13 @@ export function startNewIpPolling(): void {
 
 	// Clear messages when starting polling so that arriving at new IP/re-login 
 	// doesn't have stale success/error state
-	viewModel.success_message = null
-	viewModel.error_message = null
+	viewModel.successMessage = null
+	viewModel.errorMessage = null
 
 	// Get timeout from viewModel (provided by backend)
-	const state = viewModel.network_change_state
-	if (!state || (state.type !== 'waiting_for_new_ip' && state.type !== 'waiting_for_old_ip')) {
-		console.warn('[useCore] startNewIpPolling called but state is not waiting_for_new_ip or waiting_for_old_ip:', state)
+	const state = viewModel.networkChangeState
+	if (!state || (state.type !== 'waitingForNewIp' && state.type !== 'waitingForOldIp')) {
+		console.warn('[useCore] startNewIpPolling called but state is not waitingForNewIp or waitingForOldIp:', state)
 		return
 	}
 
@@ -205,18 +205,18 @@ export function startNewIpPolling(): void {
 	let targetIp = ''
 	let switchingToDhcp = false
 
-	if (state.type === 'waiting_for_new_ip') {
+	if (state.type === 'waitingForNewIp') {
 		// Type casting for properties that exist on specific variants
 		const s = state as any
-		rollbackTimeout = s.rollback_timeout_seconds
-		targetIp = s.new_ip
-		switchingToDhcp = s.switching_to_dhcp
+		rollbackTimeout = s.rollbackTimeoutSeconds
+		targetIp = s.newIp
+		switchingToDhcp = s.switchingToDhcp
 	} else {
-		// waiting_for_old_ip
+		// waitingForOldIp
 		const s = state as any
 		// No rollback timeout in this state (we are already rolled back)
 		rollbackTimeout = 0
-		targetIp = s.old_ip
+		targetIp = s.oldIp
 		// We are polling the old IP, so we know it
 		switchingToDhcp = false
 	}
@@ -224,7 +224,7 @@ export function startNewIpPolling(): void {
 	const timeoutMs = rollbackTimeout * 1000 // Convert seconds to milliseconds
 
 	// Save to localStorage for page refresh resilience
-	// For waiting_for_old_ip, we might not need to save timeout, or save 0
+	// For waitingForOldIp, we might not need to save timeout, or save 0
 	saveNetworkChangeState(targetIp, rollbackTimeout)
 
 	// Set countdown deadline
@@ -248,7 +248,7 @@ export function startNewIpPolling(): void {
 		if (countdownDeadline !== null) {
 			const remainingMs = Math.max(0, countdownDeadline - Date.now())
 			const remainingSeconds = Math.ceil(remainingMs / 1000)
-			viewModel.overlay_spinner.countdown_seconds = remainingSeconds
+			viewModel.overlaySpinner.countdownSeconds = remainingSeconds
 		}
 
 		// Start countdown interval (every 1 second for UI countdown)
@@ -257,7 +257,7 @@ export function startNewIpPolling(): void {
 			if (countdownDeadline !== null) {
 				const remainingMs = Math.max(0, countdownDeadline - Date.now())
 				const remainingSeconds = Math.ceil(remainingMs / 1000)
-				viewModel.overlay_spinner.countdown_seconds = remainingSeconds
+				viewModel.overlaySpinner.countdownSeconds = remainingSeconds
 			}
 		}, 1000)
 
@@ -289,7 +289,7 @@ export function stopNewIpPolling(): void {
 		newIpTimeoutId = null
 	}
 	// Clear countdown seconds in viewModel
-	viewModel.overlay_spinner.countdown_seconds = null
+	viewModel.overlaySpinner.countdownSeconds = null
 	// Clear countdown deadline
 	countdownDeadline = null
 }
@@ -303,9 +303,9 @@ export function stopNewIpPolling(): void {
  * Call this once during module initialization
  */
 export function initializeTimerWatchers(): void {
-	// Watch device_operation_state for reconnection polling
+	// Watch deviceOperationState for reconnection polling
 	watch(
-		() => viewModel.device_operation_state,
+		() => viewModel.deviceOperationState,
 		(newState, oldState) => {
 			const newType = newState?.type
 			const oldType = oldState?.type
@@ -313,14 +313,14 @@ export function initializeTimerWatchers(): void {
 			// Only act on type transitions
 			if (newType === oldType) return
 
-			// Start polling when entering rebooting, factory_resetting, or updating state
-			if (newType === 'rebooting' || newType === 'factory_resetting' || newType === 'updating') {
-				startReconnectionPolling(newType === 'factory_resetting')
+			// Start polling when entering rebooting, factoryResetting, or updating state
+			if (newType === 'rebooting' || newType === 'factoryResetting' || newType === 'updating') {
+				startReconnectionPolling(newType === 'factoryResetting')
 			}
 			// Stop polling when leaving these states or entering terminal states
 			else if (
-				(oldType === 'rebooting' || oldType === 'factory_resetting' || oldType === 'updating' || oldType === 'waiting_reconnection') &&
-				(newType === 'idle' || newType === 'reconnection_successful' || newType === 'reconnection_failed')
+				(oldType === 'rebooting' || oldType === 'factoryResetting' || oldType === 'updating' || oldType === 'waitingReconnection') &&
+				(newType === 'idle' || newType === 'reconnectionSuccessful' || newType === 'reconnectionFailed')
 			) {
 				stopReconnectionPolling()
 			}
@@ -328,16 +328,16 @@ export function initializeTimerWatchers(): void {
 		{ deep: true }
 	)
 
-	// Watch network_change_state for new IP polling and redirect
+	// Watch networkChangeState for new IP polling and redirect
 	watch(
-		() => viewModel.network_change_state,
+		() => viewModel.networkChangeState,
 		(newState, oldState) => {
 			const newType = newState?.type
 			const oldType = oldState?.type
 
 			// Start polling when entering polling states
 			const isPollingState = (type: string | undefined) =>
-				type === 'waiting_for_new_ip' || type === 'waiting_for_old_ip'
+				type === 'waitingForNewIp' || type === 'waitingForOldIp'
 
 			if (isPollingState(newType) && !isPollingState(oldType)) {
 				startNewIpPolling()
@@ -346,7 +346,7 @@ export function initializeTimerWatchers(): void {
 			else if (isPollingState(oldType) && !isPollingState(newType)) {
 				stopNewIpPolling()
 			}
-			// If switching between polling states (e.g. new_ip -> old_ip), restart to update config/target
+			// If switching between polling states (e.g. newIp -> oldIp), restart to update config/target
 			else if (isPollingState(newType) && isPollingState(oldType) && newType !== oldType) {
 				startNewIpPolling()
 			}
@@ -354,19 +354,19 @@ export function initializeTimerWatchers(): void {
 			// Clear localStorage when entering terminal states (success, timeout, or idle)
 			if (
 				newType !== oldType &&
-				(newType === 'new_ip_reachable' || newType === 'new_ip_timeout' || newType === 'idle')
+				(newType === 'newIpReachable' || newType === 'newIpTimeout' || newType === 'idle')
 			) {
 				clearNetworkChangeState()
 			}
 
 			// Navigate to new IP when it's reachable
-			if (newState?.type === 'new_ip_reachable') {
-				console.log(`[useCore] Redirecting to new IP: ${newState.new_ip}:${newState.ui_port}`)
+			if (newState?.type === 'newIpReachable') {
+				console.log(`[useCore] Redirecting to new IP: ${newState.newIp}:${newState.uiPort}`)
 				// Clear messages before redirecting so they don't persist on arrival at new IP
-				viewModel.success_message = null
-				viewModel.error_message = null
+				viewModel.successMessage = null
+				viewModel.errorMessage = null
 				// Use HTTPS (server only listens on HTTPS)
-				window.location.href = `https://${newState.new_ip}:${newState.ui_port}`
+				window.location.href = `https://${newState.newIp}:${newState.uiPort}`
 			}
 		},
 		{ deep: true }
