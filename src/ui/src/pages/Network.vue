@@ -68,8 +68,8 @@ const cancelNavigation = () => {
 </script>
 
 <template>
-    <v-sheet :border="true" rounded class="m-20">
-        <div class="flex flex-col gap-y-16 m-8">
+    <v-sheet :border="true" rounded class="ma-4">
+        <div class="flex flex-col gap-y-16 ma-4">
             <DeviceNetworks></DeviceNetworks>
         </div>
     </v-sheet>

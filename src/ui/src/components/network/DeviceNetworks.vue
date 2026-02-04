@@ -79,11 +79,22 @@ const cancelTabChange = () => {
       <div class="text-h4 text-secondary">Network</div>
     </div>
     <div class="d-flex flex-row">
-      <v-tabs v-model="tab" color="primary" direction="vertical">
-        <v-tab v-for="networkAdapter in networkStatus?.networkStatus" :text="networkAdapter.name"
-          :value="networkAdapter.name"></v-tab>
+      <v-tabs v-model="tab" color="primary" direction="vertical" class="border-r">
+        <v-tab v-for="networkAdapter in networkStatus?.networkStatus" :value="networkAdapter.name" class="text-none">
+          <div class="d-flex align-center w-100 py-2">
+            <v-icon 
+              :icon="networkAdapter.online ? 'mdi-circle' : 'mdi-circle-outline'" 
+              :color="networkAdapter.online ? 'success' : 'grey-lighten-1'"
+              size="x-small" 
+              class="mr-3"
+            ></v-icon>
+            <span class="font-weight-medium">{{ networkAdapter.name }}</span>
+            <v-spacer></v-spacer>
+            <v-icon v-if="isCurrentConnection(networkAdapter)" icon="mdi-account-network" size="x-small" color="info" class="ml-3" title="Current Connection"></v-icon>
+          </div>
+        </v-tab>
       </v-tabs>
-      <v-window v-model="tab" class="w[20vw]" direction="vertical">
+      <v-window v-model="tab" class="flex-grow-1" direction="vertical">
         <v-window-item v-for="networkAdapter in networkStatus?.networkStatus" :key="networkAdapter.name" :value="networkAdapter.name">
           <NetworkSettings :networkAdapter="networkAdapter" :isCurrentConnection="isCurrentConnection(networkAdapter)" />
         </v-window-item>

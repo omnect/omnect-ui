@@ -140,7 +140,7 @@ const submitNetworkConfig = async (includeRollback: boolean) => {
         props.networkAdapter.ipv4?.addrs[0]?.addr !== ipAddress.value,
         props.networkAdapter.name,
         isDHCP.value,
-        ipAddress.value || null,
+        isDHCP.value ? null : (ipAddress.value || null),
         props.networkAdapter.ipv4?.addrs[0]?.addr || null,
         null, // netmask will be determined by Core
         gateways.value.split("\n").filter(g => g.trim()) || [],
@@ -217,61 +217,149 @@ const errors = computed(() => {
         </v-dialog>
 
         <v-form @submit.prevent="submit" class="ml-4">
-            <v-chip size="large" class="ma-2 mb-6" label
-                :color="props.networkAdapter.online ? 'light-green-darken-2' : 'red-darken-2'">
-                {{ props.networkAdapter.online ? "Online" : "Offline" }}{{ props.isCurrentConnection && props.networkAdapter.online ? " (current connection)" : "" }}
-            </v-chip>
+            <!-- Current Connection Warning -->
+            <v-alert v-if="props.isCurrentConnection" type="info" variant="tonal" class="mb-6" density="compact">
+                <template #prepend>
+                    <v-icon icon="mdi-account-network" size="small"></v-icon>
+                </template>
+                This is your <strong>current connection</strong>. Changing these settings will interrupt your session.
+            </v-alert>
+
+            <!-- Adapter Status and Mode -->
+            <div class="d-flex align-center flex-wrap gap-4 mb-8">
+                <v-chip size="large" label
+                    :color="props.networkAdapter.online ? 'light-green-darken-2' : 'red-darken-2'">
+                    <v-icon start :icon="props.networkAdapter.online ? 'mdi-check-circle' : 'mdi-alert-circle'"></v-icon>
+                    {{ props.networkAdapter.online ? "Online" : "Offline" }}
+                </v-chip>
+                
+                <v-chip v-if="props.isCurrentConnection" size="large" label color="info" variant="tonal">
+                    (current connection)
+                </v-chip>
+
+                <v-spacer></v-spacer>
+
+                <v-radio-group v-model="addressAssignment" inline label="Mode:" hide-details density="compact">
+                    <v-radio label="DHCP" value="dhcp" color="secondary"></v-radio>
+                    <v-radio label="Static" value="static" color="secondary"></v-radio>
+                </v-radio-group>
+            </div>
 
             <v-container fluid class="pa-0">
                 <v-row>
+                    <!-- Column 1: Core Connectivity -->
                     <v-col cols="12" md="6">
-                         <v-radio-group v-model="addressAssignment" inline label="Address Assignment" hide-details>
-                            <v-radio label="DHCP" value="dhcp"></v-radio>
-                            <v-radio label="Static" value="static"></v-radio>
-                        </v-radio-group>
-                    </v-col>
-                    <v-col cols="12" md="6">
+                        <div class="text-overline mb-2 text-primary font-weight-bold">Connectivity</div>
+                        
                         <v-text-field label="MAC Address" variant="outlined" readonly v-model="props.networkAdapter.mac"
+                            prepend-inner-icon="mdi-lan"
                             append-inner-icon="mdi-content-copy"
+                            class="mb-2 managed-field"
                             @click:append-inner="copy(props.networkAdapter.mac)"></v-text-field>
+
+                        <v-text-field :readonly="isDHCP" v-model="ipAddress" label="IP Address" :error-messages="errors?.ipAddress" variant="outlined"
+                            prepend-inner-icon="mdi-ip-network"
+                            :class="{ 'managed-field': isDHCP }"
+                            :hint="isDHCP ? 'Automatically assigned by DHCP' : ''"
+                            :persistent-hint="isDHCP"
+                            placeholder="0.0.0.0"
+                            @click:append-inner="copy(ipAddress)">
+                            <template #append-inner>
+                                <v-tooltip v-if="isDHCP" text="This field is managed by DHCP and cannot be manually edited." location="top">
+                                    <template #activator="{ props: tooltipProps }">
+                                        <v-icon v-bind="tooltipProps" icon="mdi-lock-outline" size="small" class="managed-icon mr-1"></v-icon>
+                                    </template>
+                                </v-tooltip>
+                                <v-icon icon="mdi-content-copy" size="small" @click.stop="copy(ipAddress)" class="cursor-pointer"></v-icon>
+                            </template>
+                        </v-text-field>
+
+                        <v-text-field :readonly="isDHCP" v-model="subnetMask" label="Subnet Mask" :error-messages="errors?.subnetMask" variant="outlined"
+                            prepend-inner-icon="mdi-server-network"
+                            :class="{ 'managed-field': isDHCP }"
+                            :hint="isDHCP ? 'Automatically assigned by DHCP' : 'e.g. 255.255.255.0'"
+                            :persistent-hint="isDHCP"
+                            placeholder="255.255.255.0"
+                            @click:append-inner="copy(subnetMask)">
+                            <template #append-inner>
+                                <v-tooltip v-if="isDHCP" text="This field is managed by DHCP and cannot be manually edited." location="top">
+                                    <template #activator="{ props: tooltipProps }">
+                                        <v-icon v-bind="tooltipProps" icon="mdi-lock-outline" size="small" class="managed-icon mr-1"></v-icon>
+                                    </template>
+                                </v-tooltip>
+                                <v-icon icon="mdi-content-copy" size="small" @click.stop="copy(subnetMask)" class="cursor-pointer"></v-icon>
+                            </template>
+                        </v-text-field>
                     </v-col>
 
+                    <!-- Column 2: Network Services -->
                     <v-col cols="12" md="6">
-                        <v-text-field :readonly="isDHCP" v-model="ipAddress" label="IP Address" :error-messages="errors?.ipAddress" outlined
-                            append-inner-icon="mdi-content-copy" @click:append-inner="copy(ipAddress)"></v-text-field>
-                    </v-col>
-                    <v-col cols="12" md="6">
-                        <v-text-field :readonly="isDHCP" v-model="subnetMask" label="Subnet Mask" :error-messages="errors?.subnetMask" outlined
-                            append-inner-icon="mdi-content-copy" @click:append-inner="copy(subnetMask)" hint="e.g. 255.255.255.0"></v-text-field>
-                    </v-col>
+                        <div class="text-overline mb-2 text-primary font-weight-bold">Network Services</div>
 
-                    <v-col cols="12" md="6">
                         <v-textarea :readonly="isDHCP" v-model="gateways" label="Gateways" variant="outlined" rows="3" no-resize
-                            append-inner-icon="mdi-content-copy" @click:append-inner="copy(gateways)"></v-textarea>
-                    </v-col>
-                    <v-col cols="12" md="6">
-                        <v-textarea v-model="dns" label="DNS" variant="outlined" rows="3" no-resize
+                            prepend-inner-icon="mdi-gateway"
+                            :class="{ 'managed-field': isDHCP }"
+                            :hint="isDHCP ? 'Automatically assigned by DHCP' : ''"
+                            :persistent-hint="isDHCP"
+                            placeholder="None"
+                            @click:append-inner="copy(gateways)">
+                            <template #append-inner>
+                                <v-tooltip v-if="isDHCP" text="This field is managed by DHCP and cannot be manually edited." location="top">
+                                    <template #activator="{ props: tooltipProps }">
+                                        <v-icon v-bind="tooltipProps" icon="mdi-lock-outline" size="small" class="managed-icon mr-1"></v-icon>
+                                    </template>
+                                </v-tooltip>
+                                <v-icon icon="mdi-content-copy" size="small" @click.stop="copy(gateways)" class="cursor-pointer"></v-icon>
+                            </template>
+                        </v-textarea>
+
+                        <v-textarea v-model="dns" label="DNS Servers" variant="outlined" rows="3" no-resize
+                            prepend-inner-icon="mdi-dns"
+                            hint="Enter one DNS server per line"
+                            persistent-hint
+                            placeholder="None"
                             append-inner-icon="mdi-content-copy" @click:append-inner="copy(dns)"></v-textarea>
                     </v-col>
                 </v-row>
             </v-container>
 
             <div class="sticky-footer bg-surface border-t py-4 d-flex gap-x-4 align-center mt-4">
-                <v-btn color="secondary" type="submit" variant="text" :loading="isSubmitting" :disabled="!viewModel.networkFormDirty" data-cy="network-apply-button">
+                <v-btn color="secondary" type="submit" variant="elevated" :loading="isSubmitting" :disabled="!viewModel.networkFormDirty" data-cy="network-apply-button">
                     Apply Changes
                 </v-btn>
-                <v-btn :disabled="isSubmitting || !viewModel.networkFormDirty" type="reset" variant="text" @click.prevent="restoreSettings" data-cy="network-discard-button">
+                <v-btn :disabled="isSubmitting || !viewModel.networkFormDirty" type="reset" variant="outlined" @click.prevent="restoreSettings" data-cy="network-discard-button">
                     Discard Changes
                 </v-btn>
+                <v-spacer></v-spacer>
+                <v-fade-transition>
+                    <div v-if="viewModel.networkFormDirty" class="text-caption text-medium-emphasis d-flex align-center">
+                        <v-icon icon="mdi-pencil-circle-outline" size="small" class="mr-1"></v-icon>
+                        You have unsaved changes
+                    </div>
+                </v-fade-transition>
             </div>
         </v-form>
     </div>
 </template>
 
 <style lang="css" scoped>
-.v-field:has(input[type="text"]:read-only),
+.v-field:has(input:read-only),
 .v-field:has(textarea:read-only) {
-    background-color: #f5f5f5 !important;
+    background-color: rgba(var(--v-theme-on-surface), 0.02) !important;
+}
+
+.managed-field :deep(.v-field__outline) {
+    opacity: 0.4;
+}
+
+.managed-field :deep(.v-field__input),
+.managed-field :deep(.v-label),
+.managed-field :deep(.v-field__prepend-inner) {
+    color: rgba(var(--v-theme-on-surface), 0.5) !important;
+}
+
+.managed-icon {
+    opacity: 0.5;
 }
 
 .sticky-footer {

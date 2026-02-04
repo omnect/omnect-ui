@@ -22,8 +22,8 @@ const loadUpdateData = (filename?: string) => {
 </script>
 
 <template>
-	<v-sheet :border="true" rounded class="m-20">
-		<v-row class="m-8">
+	<v-sheet :border="true" rounded class="ma-4">
+		<v-row class="ma-4">
 			<v-col sm="12" xl="6">
 				<UpdateFileUpload @file-uploaded="loadUpdateData" />
 			</v-col>

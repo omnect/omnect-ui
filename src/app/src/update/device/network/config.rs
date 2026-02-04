@@ -40,11 +40,8 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
                 model.network_change_state = NetworkChangeState::ApplyingConfig {
                     is_server_addr: true,
                     ip_changed: config_req.ip_changed || config_req.switching_to_dhcp,
-                    new_ip: config_req.ip.map(|ip| ip.to_string()).unwrap_or_default(),
-                    old_ip: config_req
-                        .previous_ip
-                        .map(|ip| ip.to_string())
-                        .unwrap_or_default(),
+                    new_ip: config_req.ip.clone().unwrap_or_default(),
+                    old_ip: config_req.previous_ip.clone().unwrap_or_default(),
                     switching_to_dhcp: config_req.switching_to_dhcp,
                 };
             }

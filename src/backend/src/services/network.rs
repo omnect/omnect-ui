@@ -401,7 +401,7 @@ impl NetworkConfigService {
         if network.dhcp {
             network_section.set("DHCP", "yes");
         } else {
-            let ip = network.ip.context("network ip missing")?;
+            let ip = network.ip.as_ref().context("network ip missing")?;
             let mask = network.netmask.context("network mask missing")?;
 
             network_section.set("Address", format!("{ip}/{mask}"));
@@ -458,7 +458,6 @@ impl NetworkConfigService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::Ipv4Addr;
 
     fn create_valid_dhcp_config() -> NetworkConfigRequest {
         NetworkConfigRequest {
@@ -466,7 +465,7 @@ mod tests {
             ip_changed: false,
             name: "eth0".to_string(),
             dhcp: true,
-            previous_ip: Some(Ipv4Addr::new(192, 168, 1, 100)),
+            previous_ip: Some("192.168.1.100".to_string()),
             ip: None,
             netmask: None,
             gateway: vec![],
@@ -482,11 +481,11 @@ mod tests {
             ip_changed: false,
             name: "eth0".to_string(),
             dhcp: false,
-            previous_ip: Some(Ipv4Addr::new(192, 168, 1, 100)),
-            ip: Some(Ipv4Addr::new(192, 168, 1, 101)),
+            previous_ip: Some("192.168.1.100".to_string()),
+            ip: Some("192.168.1.101".to_string()),
             netmask: Some(24),
-            gateway: vec![Ipv4Addr::new(192, 168, 1, 1)],
-            dns: vec![Ipv4Addr::new(8, 8, 8, 8), Ipv4Addr::new(8, 8, 4, 4)],
+            gateway: vec!["192.168.1.1".to_string()],
+            dns: vec!["8.8.8.8".to_string(), "8.8.4.4".to_string()],
             enable_rollback: None,
             switching_to_dhcp: false,
         }
@@ -548,7 +547,7 @@ mod tests {
                 ip_changed: false,
                 name: "eth0".to_string(),
                 dhcp: true,
-                previous_ip: Some(Ipv4Addr::new(192, 168, 1, 100)),
+                previous_ip: Some("192.168.1.100".to_string()),
                 ip: None,
                 netmask: None,
                 gateway: vec![],
@@ -583,11 +582,11 @@ mod tests {
                 ip_changed: false,
                 name: "eth0".to_string(),
                 dhcp: false,
-                previous_ip: Some(Ipv4Addr::new(192, 168, 1, 100)),
-                ip: Some(Ipv4Addr::new(192, 168, 1, 101)),
+                previous_ip: Some("192.168.1.100".to_string()),
+                ip: Some("192.168.1.101".to_string()),
                 netmask: Some(24),
-                gateway: vec![Ipv4Addr::new(192, 168, 1, 1)],
-                dns: vec![Ipv4Addr::new(8, 8, 8, 8), Ipv4Addr::new(8, 8, 4, 4)],
+                gateway: vec!["192.168.1.1".to_string()],
+                dns: vec!["8.8.8.8".to_string(), "8.8.4.4".to_string()],
                 enable_rollback: None,
                 switching_to_dhcp: false,
             };
@@ -598,7 +597,7 @@ mod tests {
                 .set("Name", &config.name);
             let mut network_section = ini.with_section(Some("Network").to_owned());
 
-            let ip = config.ip.expect("ip required for static");
+            let ip = config.ip.as_ref().expect("ip required for static");
             let mask = config.netmask.expect("mask required for static");
             network_section.set("Address", format!("{ip}/{mask}"));
 
@@ -699,7 +698,7 @@ mod tests {
 
             assert_eq!(config.name, "eth0");
             assert!(config.dhcp);
-            assert_eq!(config.previous_ip, Some(Ipv4Addr::new(192, 168, 1, 100)));
+            assert_eq!(config.previous_ip, Some("192.168.1.100".to_string()));
         }
 
         #[test]

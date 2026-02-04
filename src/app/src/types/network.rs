@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_valid::Validate;
-use std::{collections::HashMap, net::Ipv4Addr};
+use std::collections::HashMap;
 
 /// Validate IPv4 address format
 pub fn is_valid_ipv4(ip: &str) -> bool {
@@ -137,9 +137,14 @@ impl NetworkStatus {
         }
 
         // Special case: if we are on localhost, and an adapter has "localhost" IP, match it
-        if hostname == "localhost" {
+        if hostname == "localhost" || hostname == "127.0.0.1" {
             for adapter in &self.network_status {
-                if adapter.ipv4.addrs.iter().any(|ip| ip.addr == "localhost") {
+                if adapter
+                    .ipv4
+                    .addrs
+                    .iter()
+                    .any(|ip| ip.addr == "localhost" || ip.addr == "127.0.0.1")
+                {
                     return Some(adapter);
                 }
             }
@@ -160,13 +165,13 @@ pub struct NetworkConfigRequest {
     #[validate(min_length = 1)]
     pub name: String,
     pub dhcp: bool,
-    pub ip: Option<Ipv4Addr>,
-    pub previous_ip: Option<Ipv4Addr>,
+    pub ip: Option<String>,
+    pub previous_ip: Option<String>,
     #[validate(maximum = 32)]
     #[validate(minimum = 0)]
     pub netmask: Option<u32>,
-    pub gateway: Vec<Ipv4Addr>,
-    pub dns: Vec<Ipv4Addr>,
+    pub gateway: Vec<String>,
+    pub dns: Vec<String>,
     /// Whether to enable automatic rollback protection.
     /// Only applicable when is_server_addr=true AND ip_changed=true.
     #[serde(default)]
