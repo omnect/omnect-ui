@@ -118,8 +118,10 @@ omnect-ui/
 │   │       ├── types/            # Domain types
 │   │       │   ├── mod.rs
 │   │       │   ├── auth.rs       # Authentication types
+│   │       │   ├── common.rs     # Common shared types
 │   │       │   ├── device.rs     # Device information types
 │   │       │   ├── network.rs    # Network configuration types
+│   │       │   ├── ods.rs        # ODS-specific DTOs
 │   │       │   ├── factory_reset.rs
 │   │       │   └── update.rs     # Update validation types
 │   │       └── update/           # Domain-based event handlers
@@ -128,6 +130,10 @@ omnect-ui/
 │   │           ├── ui.rs         # UI state handlers
 │   │           ├── websocket.rs  # WebSocket state handlers
 │   │           └── device/       # Device domain handlers
+│   │               ├── mod.rs
+│   │               ├── operations.rs # Reboot/Factory Reset logic
+│   │               ├── reconnection.rs # Device reconnection polling
+│   │               └── network/    # Network configuration logic
 │   ├── backend/                  # Rust backend (Actix-web)
 │   │   ├── Cargo.toml
 │   │   ├── src/
@@ -140,10 +146,14 @@ omnect-ui/
 │   │   │   ├── omnect_device_service_client.rs
 │   │   │   └── services/         # Business logic services
 │   │   │       ├── mod.rs
-│   │   │       ├── auth/         # Auth logic
 │   │   │       ├── certificate.rs
 │   │   │       ├── firmware.rs
-│   │   │       └── network.rs
+│   │   │       ├── network.rs
+│   │   │       └── auth/         # Auth logic
+│   │   │           ├── mod.rs
+│   │   │           ├── authorization.rs # JWT/SSO validation
+│   │   │           ├── password.rs      # Password hashing/storage
+│   │   │           └── token.rs         # JWT generation
 │   │   └── tests/                # Integration tests
 │   ├── shared_types/             # TypeGen for TypeScript bindings
 │   │   ├── Cargo.toml
@@ -158,15 +168,37 @@ omnect-ui/
 │       │   ├── components/       # UI components
 │       │   ├── composables/      # Logic & WASM bridge
 │       │   │   ├── useCore.ts    # Main bridge + effect handlers
-│       │   │   └── useCentrifugo.ts
+│       │   │   ├── useCentrifugo.ts
+│       │   │   └── core/         # Modular Core integration
+│       │   │       ├── index.ts  # Main entry point
+│       │   │       ├── state.ts  # Singleton reactive state
+│       │   │       ├── types.ts  # TypeScript type conversions
+│       │   │       ├── effects.ts # Effect processing
+│       │   │       ├── http.ts   # HTTP capability
+│       │   │       ├── centrifugo.ts # WebSocket capability
+│       │   │       ├── timers.ts # Timer/Polling logic
+│       │   │       └── sync.ts   # ViewModel synchronization
 │       │   ├── pages/            # Route components
 │       │   │   ├── DeviceOverview.vue
 │       │   │   ├── DeviceUpdate.vue
 │       │   │   ├── Network.vue
-│       │   │   └── Login.vue
+│       │   │   ├── Login.vue
+│       │   │   ├── SetPassword.vue
+│       │   │   ├── UpdatePassword.vue
+│       │   │   └── Callback.vue
 │       │   ├── plugins/          # Router, Vuetify
 │       │   └── types/            # UI-specific types
 │       └── tests/                # Playwright E2E tests
+│           ├── auth.spec.ts
+│           ├── device.spec.ts
+│           ├── factory-reset.spec.ts
+│           ├── network-configuration.spec.ts
+│           ├── network-multi-adapter.spec.ts
+│           ├── reboot.spec.ts
+│           ├── smoke.spec.ts
+│           ├── update.spec.ts
+│           ├── version-mismatch.spec.ts
+│           └── fixtures/
 └── project-context.md            # This file
 ```
 
