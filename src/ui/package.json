@@ -23,6 +23,7 @@
 		"oidc-client-ts": "^3.3.0",
 		"vue": "^3.5.22",
 		"vue-imask": "^7.6.1",
+		"vue-router": "^5.0.2",
 		"vuetify": "^3.10.3"
 	},
 	"devDependencies": {
@@ -37,7 +38,6 @@
 		"unocss": "^66.5.2",
 		"vite": "^7.1.7",
 		"vite-plugin-vuetify": "^2.1.2",
-		"vue-router": "^4.5.1",
 		"vue-tsc": "^3.1.0"
 	}
 }
