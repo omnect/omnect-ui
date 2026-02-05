@@ -146,6 +146,13 @@ pub trait DeviceServiceClient {
     async fn shutdown(&self) -> Result<()>;
 }
 
+#[cfg(feature = "mock")]
+impl Clone for MockDeviceServiceClient {
+    fn clone(&self) -> Self {
+        Self::new()
+    }
+}
+
 impl OmnectDeviceServiceClient {
     const REQUIRED_CLIENT_VERSION: &str = ">=0.39.0";
 

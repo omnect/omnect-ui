@@ -143,9 +143,9 @@ impl NetworkConfigService {
     ///
     /// # Returns
     /// Result indicating success or failure
-    pub async fn process_pending_rollback<T>(service_client: &T) -> Result<()>
+    pub async fn process_pending_rollback<T>(service_client: T) -> Result<()>
     where
-        T: DeviceServiceClient,
+        T: DeviceServiceClient + Clone + Send + Sync + 'static,
     {
         if Self::rollback_exists() {
             // load rollback
@@ -665,6 +665,21 @@ mod tests {
             };
 
             assert!(!response.rollback_enabled);
+        }
+    }
+
+    mod rollback_processing {
+        use super::*;
+        use crate::omnect_device_service_client::MockDeviceServiceClient;
+
+        #[tokio::test]
+        async fn process_pending_rollback_returns_ok_when_no_rollback_exists() {
+            let service_client = MockDeviceServiceClient::new();
+            
+            // This verifies the function accepts an owned MockDeviceServiceClient
+            // and completes correctly when the rollback file is missing.
+            let result = NetworkConfigService::process_pending_rollback(service_client).await;
+            assert!(result.is_ok());
         }
     }
 

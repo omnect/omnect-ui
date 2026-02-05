@@ -216,9 +216,12 @@ async fn run_until_shutdown(
 
     let (server_handle, server_task) = run_server(service_client.clone()).await?;
 
-    if let Err(e) = NetworkConfigService::process_pending_rollback(service_client).await {
-        error!("failed to process pending rollback: {e:#}");
-    }
+    let service_client_clone = service_client.clone();
+    let rollback_task = tokio::spawn(async move {
+        if let Err(e) = NetworkConfigService::process_pending_rollback(service_client_clone).await {
+            error!("failed to process pending rollback: {e:#}");
+        }
+    });
 
     let reason = tokio::select! {
         _ = tokio::signal::ctrl_c() => {
@@ -247,6 +250,7 @@ async fn run_until_shutdown(
         }
     };
 
+    rollback_task.abort();
     info!("{reason}");
 
     server_handle.stop(true).await;
