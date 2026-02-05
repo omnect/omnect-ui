@@ -675,7 +675,7 @@ mod tests {
         #[tokio::test]
         async fn process_pending_rollback_returns_ok_when_no_rollback_exists() {
             let service_client = MockDeviceServiceClient::new();
-            
+
             // This verifies the function accepts an owned MockDeviceServiceClient
             // and completes correctly when the rollback file is missing.
             let result = NetworkConfigService::process_pending_rollback(service_client).await;

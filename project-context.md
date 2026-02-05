@@ -191,6 +191,7 @@ omnect-ui/
 │       └── tests/                # Playwright E2E tests
 │           ├── auth.spec.ts
 │           ├── device.spec.ts
+│           ├── error-handling.spec.ts
 │           ├── factory-reset.spec.ts
 │           ├── network-configuration.spec.ts
 │           ├── network-multi-adapter.spec.ts
