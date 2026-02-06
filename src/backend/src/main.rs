@@ -42,8 +42,8 @@ use tokio::{
     sync::broadcast,
 };
 
-const UPLOAD_LIMIT_BYTES: usize = 250 * 1024 * 1024;
-const MEMORY_LIMIT_BYTES: usize = 10 * 1024 * 1024;
+const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
+const MULTIPART_CHUNK_SIZE_BYTES: usize = 512 * 1024;
 
 // Cached common name (IP address) used for the current certificate
 static CACHED_COMMON_NAME: Mutex<Option<String>> = Mutex::new(None);
@@ -268,6 +268,21 @@ async fn run_until_shutdown(
     Ok(reason)
 }
 
+fn optimal_worker_count() -> usize {
+    const MIN_WORKERS: usize = 2;
+    const MAX_WORKERS: usize = 4;
+
+    let cpu_count = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(2);
+
+    // For I/O-bound workloads, use fewer workers than CPUs
+    let workers = (cpu_count / 2).max(MIN_WORKERS).min(MAX_WORKERS);
+
+    info!("configuring {} worker threads (detected {} CPUs)", workers, cpu_count);
+    workers
+}
+
 async fn run_server(
     service_client: OmnectDeviceServiceClient,
 ) -> Result<(
@@ -307,8 +322,9 @@ async fn run_server(
             .app_data(
                 MultipartFormConfig::default()
                     .total_limit(UPLOAD_LIMIT_BYTES)
-                    .memory_limit(MEMORY_LIMIT_BYTES),
+                    .memory_limit(MULTIPART_CHUNK_SIZE_BYTES),
             )
+            .app_data(web::PayloadConfig::new(UPLOAD_LIMIT_BYTES))
             .app_data(Data::new(token_manager.clone()))
             .app_data(Data::new(api.clone()))
             .app_data(Data::new(static_files()))
@@ -364,6 +380,7 @@ async fn run_server(
             .service(ResourceFiles::new("/static", static_files()))
             .default_service(web::route().to(UiApi::index))
     })
+    .workers(optimal_worker_count())
     .bind_rustls_0_23(format!("0.0.0.0:{ui_port}"), tls_config)
     .context("failed to bind server")?
     .disable_signals()

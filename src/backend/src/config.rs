@@ -79,7 +79,6 @@ pub struct PathConfig {
     pub password_file: PathBuf,
     pub host_update_file: PathBuf,
     pub local_update_file: PathBuf,
-    pub tmp_update_file: PathBuf,
 }
 
 impl AppConfig {
@@ -299,7 +298,6 @@ impl PathConfig {
         let password_file = config_dir.join("password");
         let host_update_file = host_data_dir.join("update.tar");
         let local_update_file = data_dir.join("update.tar");
-        let tmp_update_file = std::env::temp_dir().join("update.tar");
 
         Ok(Self {
             app_config_path,
@@ -307,7 +305,6 @@ impl PathConfig {
             password_file,
             host_update_file,
             local_update_file,
-            tmp_update_file,
         })
     }
 }
