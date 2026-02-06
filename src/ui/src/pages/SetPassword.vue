@@ -37,7 +37,7 @@ const handleSubmit = async (): Promise<void> => {
 </script>
 
 <template>
-	<v-sheet class="mx-auto pa-12 pb-8 m-t-16 flex flex-col gap-y-16" border elevation="0" max-width="448" rounded="lg">
+	<v-sheet class="mx-auto pa-8 m-t-16 flex flex-col gap-y-16" border elevation="0" max-width="448" rounded="lg">
 		<OmnectLogo></OmnectLogo>
 		<h1>Set Password</h1>
 		<v-form @submit.prevent @submit="handleSubmit">
@@ -50,7 +50,7 @@ const handleSubmit = async (): Promise<void> => {
 				label="Repeat password"
 			/>
 			<p style="color: rgb(var(--v-theme-error))">{{ errorMsg }}</p>
-			<v-btn class="mb-8" color="secondary" size="large" variant="text" type="submit" block>
+			<v-btn class="mb-8" color="primary" size="large" variant="flat" type="submit" block>
 				Set password
 			</v-btn>
 		</v-form>

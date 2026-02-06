@@ -206,10 +206,10 @@ const errors = computed(() => {
                 </v-card-text>
                 <v-card-actions>
                     <v-spacer></v-spacer>
-                    <v-btn color="secondary" variant="text" @click="cancelRollbackModal">
+                    <v-btn color="primary" variant="text" @click="cancelRollbackModal">
                         Cancel
                     </v-btn>
-                    <v-btn color="primary" variant="text" @click="submitNetworkConfig(true)" data-cy="network-confirm-apply-button">
+                    <v-btn color="primary" variant="flat" @click="submitNetworkConfig(true)" data-cy="network-confirm-apply-button">
                         Apply Changes
                     </v-btn>
                 </v-card-actions>
@@ -324,7 +324,7 @@ const errors = computed(() => {
             </v-container>
 
             <div class="sticky-footer bg-surface border-t py-4 d-flex gap-x-4 align-center mt-4">
-                <v-btn color="secondary" type="submit" variant="elevated" :loading="isSubmitting" :disabled="!viewModel.networkFormDirty" data-cy="network-apply-button">
+                <v-btn color="primary" type="submit" variant="flat" :loading="isSubmitting" :disabled="!viewModel.networkFormDirty" data-cy="network-apply-button">
                     Apply Changes
                 </v-btn>
                 <v-btn :disabled="isSubmitting || !viewModel.networkFormDirty" type="reset" variant="outlined" @click.prevent="restoreSettings" data-cy="network-discard-button">
