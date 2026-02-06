@@ -34,12 +34,11 @@ export function useMessageWatchers(options?: {
 
   // Watch for success messages
   watch(
-    () => viewModel.success_message,
+    () => viewModel.successMessage,
     (newMessage) => {
       if (newMessage) {
         showSuccess(newMessage)
         options?.onSuccess?.(newMessage)
-        // Clear the message in Core so subsequent identical messages trigger the watcher again
         clearSuccess()
       }
     }
@@ -47,7 +46,7 @@ export function useMessageWatchers(options?: {
 
   // Watch for error messages
   watch(
-    () => viewModel.error_message,
+    () => viewModel.errorMessage,
     (newMessage) => {
       if (newMessage) {
         showError(newMessage)

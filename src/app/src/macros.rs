@@ -19,16 +19,24 @@
 macro_rules! update_field {
     // Multiple field updates (must come first to match the pattern)
     ($($model_field:expr, $value:expr);+ $(;)?) => {{
+        let mut changed = false;
         $(
-            $model_field = $value;
+            let value = $value;
+            if $model_field != value {
+                $model_field = value;
+                changed = true;
+            }
         )+
-        crux_core::render::render()
+        if changed {
+            crux_core::render::render()
+        } else {
+            crux_core::Command::done()
+        }
     }};
 
     // Single field update
     ($model_field:expr, $value:expr) => {{
-        $model_field = $value;
-        crux_core::render::render()
+        update_field!($model_field, $value;)
     }};
 }
 
@@ -165,7 +173,7 @@ macro_rules! unauth_post {
 /// Used for login endpoint which requires Basic auth instead of Bearer token.
 /// Returns string body (e.g., auth token) on success, with optional conversion to target type.
 ///
-/// NOTE: URLs are prefixed with `https://relative` (dummy host) as a workaround.
+/// NOTE: URLs are prefixed with `https://relative`.
 /// `crux_http` requires absolute URLs and rejects relative paths.
 /// The UI shell (`http.ts`) strips this prefix before sending requests.
 ///
@@ -202,10 +210,9 @@ macro_rules! auth_post_basic {
 /// Macro for authenticated POST requests with standard error handling.
 /// Reduces boilerplate for POST requests that require authentication.
 ///
-/// NOTE: URLs are prefixed with `https://relative` (dummy host) as a workaround.
+/// NOTE: URLs are prefixed with `https://relative`.
 /// `crux_http` requires absolute URLs and rejects relative paths.
 /// The UI shell (`http.ts`) strips this prefix before sending requests.
-/// This workaround should be removed once `crux_http` supports relative URLs gracefully.
 ///
 /// # Patterns
 ///
@@ -228,7 +235,7 @@ macro_rules! auth_post_basic {
 /// )
 /// ```
 ///
-/// NOTE: The macro now requires a domain parameter to specify the event wrapper.
+/// NOTE: The macro requires a domain parameter to specify the event wrapper.
 /// Examples:
 /// - Auth domain: `auth_post!(Auth, AuthEvent, model, "/logout", LogoutResponse, "Logout")`
 /// - Device domain: `auth_post!(Device, DeviceEvent, model, "/reboot", RebootResponse, "Reboot")`
@@ -382,7 +389,6 @@ macro_rules! http_get {
 /// Silent HTTP GET - no loading state, custom success/error event handlers.
 ///
 /// Used for background polling where failures should not show errors to user.
-/// Does NOT check for shell hack header (since success returns custom event anyway).
 ///
 /// # Example
 /// ```ignore
@@ -401,6 +407,47 @@ macro_rules! http_get_silent {
                 Ok(response) if response.status().is_success() => $success_event,
                 _ => $error_event,
             })
+    };
+}
+
+/// Macro for parsing ODS WebSocket updates with standard error handling.
+///
+/// # Patterns
+///
+/// Pattern 1: Simple field update with `.into()` mapping
+/// ```ignore
+/// parse_ods_update!(model, json, OdsSystemInfo, system_info, "SystemInfo")
+/// ```
+///
+/// Pattern 2: Custom success handler
+/// ```ignore
+/// parse_ods_update!(model, json, OdsNetworkStatus, "NetworkStatus", |m, status| {
+///     m.network_status = Some(status.into());
+///     m.update_current_connection_adapter();
+///     crux_core::render::render()
+/// })
+/// ```
+#[macro_export]
+macro_rules! parse_ods_update {
+    // Pattern 1: Simple field update with .into()
+    ($model:expr, $json:expr, $ods_type:ty, $field:ident, $label:expr) => {
+        parse_ods_update!($model, $json, $ods_type, $label, |m, data| {
+            $crate::update_field!(m.$field, Some(data.into()))
+        })
+    };
+
+    // Pattern 2: Custom success handler
+    ($model:expr, $json:expr, $ods_type:ty, $label:expr, |$m:ident, $data:ident| $success_body:block) => {
+        match serde_json::from_str::<$ods_type>(&$json) {
+            Ok($data) => {
+                let $m = $model;
+                $success_body
+            }
+            Err(e) => {
+                log::error!("Failed to parse {}: {e}. JSON: {}", $label, $json);
+                $model.set_error_and_render(format!("Failed to parse {}: {e}", $label))
+            }
+        }
     };
 }
 

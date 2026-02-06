@@ -2,12 +2,14 @@ use serde::{Deserialize, Serialize};
 
 /// Update validation status from WebSocket
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateValidationStatus {
     pub status: String,
 }
 
 /// Version information for healthcheck
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct VersionInfo {
     pub required: String,
     pub current: String,
@@ -16,6 +18,7 @@ pub struct VersionInfo {
 
 /// Healthcheck response
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct HealthcheckInfo {
     pub version_info: VersionInfo,
     pub update_validation_status: UpdateValidationStatus,
@@ -66,6 +69,7 @@ pub struct UpdateManifest {
 
 /// State of the firmware upload
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub enum UploadState {
     #[default]
     Idle,

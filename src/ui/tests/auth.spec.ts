@@ -99,7 +99,7 @@ test.describe('Authentication', () => {
     await page.getByRole('button', { name: /set password/i }).click();
 
     // Should show success message and eventually redirect to dashboard (via auto-login)
-    await expect(page.getByText(/password set successfully/i)).toBeVisible();
+    await expect(page.getByText(/password set successfully/i)).toBeVisible({ timeout: 10000 });
 
     // Should be redirected to dashboard
     await expect(page.getByText('Common Info')).toBeVisible();

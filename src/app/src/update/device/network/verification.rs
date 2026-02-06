@@ -77,8 +77,7 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
             // If switching to DHCP, we don't know the new IP, so we can't poll it.
             // We just wait for the timeout (rollback) or for the user to manually navigate.
             if !*switching_to_dhcp {
-                // Try to reach the new IP (silent GET - no error shown on failure)
-                // Use HTTPS since the server only listens on HTTPS
+                // Try to reach the new IP
                 let url = format!("https://{new_ip}:{ui_port}/healthcheck");
                 http_get_silent!(
                     url,
@@ -124,7 +123,6 @@ pub fn handle_new_ip_check_timeout(model: &mut Model) -> Command<Effect, Event> 
         ..
     } = &model.network_change_state
     {
-        // If rollback was enabled (timeout > 0), we assume rollback happened on device
         if *rollback_timeout_seconds > 0 {
             model.network_change_state = NetworkChangeState::WaitingForOldIp {
                 old_ip: old_ip.clone(),
@@ -163,8 +161,6 @@ pub fn handle_ack_rollback(model: &mut Model) -> Command<Effect, Event> {
     }
 
     // Send POST request to backend to clear the marker file
-    // Note: Using unauth_post instead of auth_post because this may be called before login
-    // (the rollback notification appears in App.vue onMounted, before authentication)
     unauth_post!(
         Device,
         DeviceEvent,
@@ -199,7 +195,6 @@ mod tests {
 
             let _ = handle_new_ip_check_tick(&mut model);
 
-            // Verify attempt counter was incremented
             if let NetworkChangeState::WaitingForNewIp { attempt, .. } = model.network_change_state
             {
                 assert_eq!(attempt, 1);

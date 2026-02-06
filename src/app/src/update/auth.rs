@@ -208,7 +208,7 @@ mod tests {
                 &mut model,
             );
 
-            // Session should remain intact on logout failure
+            // Session remains intact on logout failure
             assert!(model.is_authenticated);
             assert!(model.auth_token.is_some());
             assert!(!model.is_loading);

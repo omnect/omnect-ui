@@ -53,6 +53,7 @@ pub struct Status {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateValidationStatus {
     pub status: String,
 }
@@ -88,6 +89,7 @@ pub struct Ipv4AddrInfo {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VersionInfo {
     pub required: String,
     pub current: String,
@@ -95,6 +97,7 @@ pub struct VersionInfo {
 }
 
 #[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct HealthcheckInfo {
     pub version_info: VersionInfo,
     pub update_validation_status: UpdateValidationStatus,
@@ -102,12 +105,14 @@ pub struct HealthcheckInfo {
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HeaderKeyValue {
     pub name: String,
     pub value: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PublishEndpoint {
     pub url: String,
     pub headers: Vec<HeaderKeyValue>,
@@ -139,6 +144,13 @@ pub trait DeviceServiceClient {
     async fn run_update(&self, run_update: RunUpdate) -> Result<()>;
     async fn healthcheck_info(&self) -> Result<HealthcheckInfo>;
     async fn shutdown(&self) -> Result<()>;
+}
+
+#[cfg(feature = "mock")]
+impl Clone for MockDeviceServiceClient {
+    fn clone(&self) -> Self {
+        Self::new()
+    }
 }
 
 impl OmnectDeviceServiceClient {
