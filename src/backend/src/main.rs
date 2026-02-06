@@ -277,9 +277,12 @@ fn optimal_worker_count() -> usize {
         .unwrap_or(2);
 
     // For I/O-bound workloads, use fewer workers than CPUs
-    let workers = (cpu_count / 2).max(MIN_WORKERS).min(MAX_WORKERS);
+    let workers = (cpu_count / 2).clamp(MIN_WORKERS, MAX_WORKERS);
 
-    info!("configuring {} worker threads (detected {} CPUs)", workers, cpu_count);
+    info!(
+        "configuring {} worker threads (detected {} CPUs)",
+        workers, cpu_count
+    );
     workers
 }
 

@@ -8,8 +8,6 @@ test.describe('Device Update', () => {
     await setupAndLogin(page);
 
     // Navigate to update page using sidebar to preserve WASM state
-    const sidebar = page.getByTestId('main-nav'); // I saw data-cy="main-nav" in BaseSideBar.vue
-    // If not found by testid, try role navigation
     // BaseSideBar has <v-list ... data-cy="main-nav">
     
     await expect(page.locator('[data-cy="main-nav"]')).toBeVisible();
@@ -17,8 +15,8 @@ test.describe('Device Update', () => {
     
     // Verify we are on update page
     await expect(page).toHaveURL(/.*\/update/);
-    await expect(page.getByRole('button', { name: 'Upload' })).toBeVisible();
-    await expect(page.getByText('Update Info', { exact: true })).toBeVisible();
+    // Auto-upload means no upload button initially
+    await expect(page.getByText('Update Details', { exact: true })).toBeVisible();
   });
 
   test('successfully uploads and installs firmware update', async ({ page }) => {
@@ -78,11 +76,7 @@ test.describe('Device Update', () => {
         buffer: Buffer.from('dummy content')
     });
 
-    // Click Upload button
-    const uploadBtn = page.getByRole('button', { name: 'Upload' });
-    await expect(uploadBtn).toBeEnabled();
-    await uploadBtn.click();
-
+    // Auto-upload triggers immediately
     // Verify Upload occurred
     await expect(async () => expect(uploadCalled).toBe(true)).toPass();
 
@@ -94,7 +88,8 @@ test.describe('Device Update', () => {
     await expect(page.getByText('raspberrypi4-64').first()).toBeVisible();
 
     // 5. Trigger Update
-    const installBtn = page.getByRole('button', { name: 'Install update' });
+    // Note: Button text changed to Title Case in redesign
+    const installBtn = page.getByRole('button', { name: 'Install Update' });
     await installBtn.click();
 
     // Verify Run occurred

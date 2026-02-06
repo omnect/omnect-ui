@@ -3,6 +3,7 @@
 //! Handles firmware file management and operations independent of HTTP concerns.
 
 #![allow(unused_imports)] // OpenOptionsExt needed for .mode() method
+#![allow(clippy::await_holding_lock)]
 
 use crate::{config::AppConfig, omnect_device_service_client::DeviceServiceClient};
 use actix_multipart::Field;

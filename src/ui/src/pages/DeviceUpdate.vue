@@ -24,10 +24,10 @@ const loadUpdateData = (filename?: string) => {
 <template>
 	<v-sheet :border="true" rounded class="ma-4">
 		<v-row class="ma-4">
-			<v-col sm="12" xl="6">
+			<v-col cols="12">
 				<UpdateFileUpload @file-uploaded="loadUpdateData" />
 			</v-col>
-			<v-col sm="12" xl="6">
+			<v-col cols="12">
 				<UpdateInfo :update-manifest="viewModel.updateManifest" :load-update-fetching="loadUpdateFetching"
 					:current-version="currentVersion" @reload-update-info="loadUpdateData" />
 			</v-col>
