@@ -10,20 +10,16 @@ use crate::{
     },
 };
 use actix_files::NamedFile;
-use actix_multipart::form::{MultipartForm, tempfile::TempFile};
+use actix_multipart::Multipart;
 use actix_session::Session;
 use actix_web::{HttpResponse, Responder, web};
 use anyhow::Result;
+use futures_util::StreamExt;
 use log::{debug, error};
 pub use omnect_ui_core::types::{SetPasswordRequest, UpdatePasswordRequest};
 use std::collections::HashMap;
 
 pub type StaticResources = HashMap<&'static str, static_files::Resource>;
-
-#[derive(MultipartForm)]
-pub struct UploadFormSingleFile {
-    file: TempFile,
-}
 
 #[derive(Clone)]
 pub struct Api<ServiceClient, SingleSignOn>
@@ -126,15 +122,24 @@ where
         HttpResponse::Ok().body(env!("CARGO_PKG_VERSION"))
     }
 
-    pub async fn upload_firmware_file(
-        MultipartForm(form): MultipartForm<UploadFormSingleFile>,
-    ) -> impl Responder {
+    pub async fn upload_firmware_file(mut payload: Multipart) -> impl Responder {
         debug!("upload_firmware_file() called");
 
-        handle_service_result(
-            FirmwareService::handle_uploaded_firmware(form.file),
-            "upload_firmware_file",
-        )
+        while let Some(item) = payload.next().await {
+            let field = match item {
+                Ok(field) => field,
+                Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
+            };
+
+            if field.name() == Some("file") {
+                return handle_service_result(
+                    FirmwareService::receive_firmware(field).await,
+                    "upload_firmware_file",
+                );
+            }
+        }
+
+        HttpResponse::BadRequest().body("Missing file field")
     }
 
     pub async fn load_update(api: web::Data<Self>) -> impl Responder {
