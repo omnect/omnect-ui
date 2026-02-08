@@ -65,6 +65,8 @@ pub enum DeviceEvent {
     NewIpCheckTick,
     NewIpCheckTimeout,
     AckRollback,
+    AckFactoryResetResult,
+    AckUpdateValidation,
     #[serde(skip)]
     RebootResponse(Result<(), String>),
     #[serde(skip)]
@@ -79,6 +81,10 @@ pub enum DeviceEvent {
     HealthcheckResponse(Result<HealthcheckInfo, String>),
     #[serde(skip)]
     AckRollbackResponse(Result<(), String>),
+    #[serde(skip)]
+    AckFactoryResetResultResponse(Result<(), String>),
+    #[serde(skip)]
+    AckUpdateValidationResponse(Result<(), String>),
 }
 
 /// WebSocket/Centrifugo events

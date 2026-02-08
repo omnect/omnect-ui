@@ -380,6 +380,14 @@ async fn run_server(
             .route("/healthcheck", web::get().to(UiApi::healthcheck))
             .route("/network", web::post().to(UiApi::set_network_config))
             .route("/ack-rollback", web::post().to(UiApi::ack_rollback))
+            .route(
+                "/ack-factory-reset-result",
+                web::post().to(UiApi::ack_factory_reset_result),
+            )
+            .route(
+                "/ack-update-validation",
+                web::post().to(UiApi::ack_update_validation),
+            )
             .service(ResourceFiles::new("/static", static_files()))
             .default_service(web::route().to(UiApi::index))
     })

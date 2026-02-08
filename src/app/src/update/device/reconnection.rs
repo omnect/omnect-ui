@@ -219,6 +219,7 @@ mod tests {
                 status: status.to_string(),
             },
             network_rollback_occurred: false,
+            ..Default::default()
         }
     }
 

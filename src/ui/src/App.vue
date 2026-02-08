@@ -16,7 +16,7 @@ import { useMessageWatchers } from "./composables/useMessageWatchers"
 axios.defaults.validateStatus = (_) => true
 
 const { snackbarState } = useSnackbar()
-const { viewModel, ackRollback, subscribeToChannels, unsubscribeFromChannels } = useCore()
+const { viewModel, ackRollback, ackFactoryResetResult, ackUpdateValidation, subscribeToChannels, unsubscribeFromChannels } = useCore()
 
 // Enable automatic message watchers
 useMessageWatchers()
@@ -27,6 +27,10 @@ const route = useRoute()
 const showSideBar: Ref<boolean> = ref(lgAndUp.value)
 const overlay: Ref<boolean> = ref(false)
 const showRollbackNotification: Ref<boolean> = ref(false)
+const showFactoryResetResultModal: Ref<boolean> = ref(false)
+const showUpdateValidationModal: Ref<boolean> = ref(false)
+const factoryResetAckedOnMount = ref(false)
+const updateValidationAckedOnMount = ref(false)
 const errorTitle = ref("")
 const errorMsg = ref("")
 
@@ -61,6 +65,20 @@ const acknowledgeRollback = () => {
 	showRollbackNotification.value = false
 }
 
+const acknowledgeFactoryResetResult = () => {
+	ackFactoryResetResult()
+	showFactoryResetResultModal.value = false
+}
+
+const acknowledgeUpdateValidation = () => {
+	ackUpdateValidation()
+	showUpdateValidationModal.value = false
+}
+
+const factoryResetIsSuccess = computed(() =>
+	viewModel.factoryReset?.result?.status === 'modeSupported'
+)
+
 // Watch authentication state to redirect to login if session is lost
 // This handles the case where the backend restarts (reboot/factory reset) and the session becomes invalid
 watch(
@@ -88,6 +106,26 @@ watch(
 	}
 )
 
+// Watch for factory reset result (arrives via WebSocket after republish)
+watch(
+	() => viewModel.factoryReset?.result,
+	(result) => {
+		if (result && result.status !== 'unknown' && !factoryResetAckedOnMount.value) {
+			showFactoryResetResultModal.value = true
+		}
+	}
+)
+
+// Watch for update validation status (arrives via WebSocket and healthcheck)
+watch(
+	() => viewModel.updateValidationStatus?.status,
+	(status) => {
+		if ((status === 'Succeeded' || status === 'Recovered') && !updateValidationAckedOnMount.value) {
+			showUpdateValidationModal.value = true
+		}
+	}
+)
+
 onMounted(async () => {
 	const res = await fetch("healthcheck", {
 		headers: {
@@ -99,6 +137,18 @@ onMounted(async () => {
 	const data = (await res.json()) as HealthcheckInfo
 	if (data.networkRollbackOccurred) {
 		showRollbackNotification.value = true
+	}
+
+	// Record acked state to suppress watcher-triggered modals for already-acked results
+	factoryResetAckedOnMount.value = (data as any).factoryResetResultAcked ?? false
+	updateValidationAckedOnMount.value = (data as any).updateValidationAcked ?? false
+
+	// Check update validation on mount (factory reset result arrives via WebSocket)
+	if (!updateValidationAckedOnMount.value) {
+		const status = data.updateValidationStatus?.status
+		if (status === 'Succeeded' || status === 'Recovered') {
+			showUpdateValidationModal.value = true
+		}
 	}
 
 	if (!res.ok) {
@@ -126,6 +176,51 @@ onMounted(async () => {
           </p>
           <div class="flex justify-end">
             <v-btn color="primary" @click="acknowledgeRollback">OK</v-btn>
+          </div>
+        </div>
+      </DialogContent>
+    </v-dialog>
+    <v-dialog v-model="showFactoryResetResultModal" max-width="500" persistent>
+      <DialogContent
+        :title="factoryResetIsSuccess ? 'Factory Reset Completed' : 'Factory Reset Failed'"
+        :dialog-type="factoryResetIsSuccess ? 'Success' : 'Error'"
+        :show-close="false">
+        <div class="flex flex-col gap-4 mb-4">
+          <template v-if="factoryResetIsSuccess">
+            <p>The factory reset completed successfully.</p>
+          </template>
+          <template v-else>
+            <p v-if="viewModel.factoryReset?.result?.error">
+              {{ viewModel.factoryReset.result.error }}
+            </p>
+            <p v-if="viewModel.factoryReset?.result?.context">
+              {{ viewModel.factoryReset.result.context }}
+            </p>
+          </template>
+          <div class="flex justify-end">
+            <v-btn color="primary" @click="acknowledgeFactoryResetResult">OK</v-btn>
+          </div>
+        </div>
+      </DialogContent>
+    </v-dialog>
+    <v-dialog v-model="showUpdateValidationModal" max-width="500" persistent>
+      <DialogContent
+        :title="viewModel.updateValidationStatus?.status === 'Recovered'
+          ? 'Update Rolled Back'
+          : 'Update Succeeded'"
+        :dialog-type="viewModel.updateValidationStatus?.status === 'Recovered'
+          ? 'Warning'
+          : 'Success'"
+        :show-close="false">
+        <div class="flex flex-col gap-4 mb-4">
+          <template v-if="viewModel.updateValidationStatus?.status === 'Succeeded'">
+            <p>The firmware update was applied and validated successfully.</p>
+          </template>
+          <template v-else>
+            <p>The firmware update could not be validated. The previous version has been restored.</p>
+          </template>
+          <div class="flex justify-end">
+            <v-btn color="primary" @click="acknowledgeUpdateValidation">OK</v-btn>
           </div>
         </div>
       </DialogContent>

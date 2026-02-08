@@ -1,4 +1,4 @@
-use crate::omnect_device_service_client::DeviceServiceClient;
+use crate::{omnect_device_service_client::DeviceServiceClient, services::marker};
 use anyhow::{Context, Result};
 use ini::Ini;
 use log::{debug, error, info};
@@ -38,12 +38,6 @@ macro_rules! network_backup_file {
 macro_rules! network_rollback_file {
     () => {
         Path::new("/tmp/network_rollback.json")
-    };
-}
-
-macro_rules! network_rollback_occurred_file {
-    () => {
-        Path::new("/tmp/network_rollback_occurred")
     };
 }
 
@@ -198,33 +192,10 @@ impl NetworkConfigService {
         network_rollback_file!().exists()
     }
 
-    /// Check if a rollback has occurred (and UI hasn't acknowledged it yet)
-    ///
-    /// # Returns
-    /// true if rollback occurred marker file exists, false otherwise
-    pub fn rollback_occurred() -> bool {
-        network_rollback_occurred_file!().exists()
-    }
-
-    /// Clear the rollback occurred marker (called when UI acknowledges it)
-    pub fn clear_rollback_occurred() {
-        let marker_file = network_rollback_occurred_file!();
-        info!("Attempting to clear rollback occurred marker at: {marker_file:?}");
-        match fs::remove_file(marker_file) {
-            Ok(()) => info!("Successfully removed rollback occurred marker file"),
-            Err(e) if e.kind() == ErrorKind::NotFound => {
-                info!("Rollback occurred marker file does not exist (already cleared)")
-            }
-            Err(e) => error!("Failed to remove rollback occurred marker file: {e}"),
-        }
-    }
-
-    /// Mark that a rollback has occurred (sets marker file)
     fn mark_rollback_occurred() -> Result<()> {
-        fs::write(network_rollback_occurred_file!(), "")
-            .context("failed to write rollback occurred marker")?;
-        info!("rollback occurred marker set");
-        Ok(())
+        marker::NETWORK_ROLLBACK_OCCURRED
+            .set()
+            .context("failed to write rollback occurred marker")
     }
 
     /// Rollback network configuration to the previous backup

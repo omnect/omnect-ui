@@ -24,6 +24,10 @@ pub struct HealthcheckInfo {
     pub update_validation_status: UpdateValidationStatus,
     #[serde(default)]
     pub network_rollback_occurred: bool,
+    #[serde(default)]
+    pub factory_reset_result_acked: bool,
+    #[serde(default)]
+    pub update_validation_acked: bool,
 }
 
 /// Request to load update manifest

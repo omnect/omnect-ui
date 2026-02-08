@@ -6,6 +6,7 @@ use crate::{
     services::{
         auth::{AuthorizationService, PasswordService, TokenManager},
         firmware::FirmwareService,
+        marker,
         network::{NetworkConfigRequest, NetworkConfigService},
     },
 };
@@ -91,6 +92,7 @@ where
     ) -> impl Responder {
         debug!("factory_reset() called: {body:?}");
 
+        marker::FACTORY_RESET_RESULT_ACKED.clear();
         let result = api.service_client.factory_reset(body.into_inner()).await;
 
         if result.is_ok() {
@@ -153,6 +155,7 @@ where
 
     pub async fn run_update(body: web::Json<RunUpdate>, api: web::Data<Self>) -> impl Responder {
         debug!("run_update() called with validate_iothub_connection: {body:?}");
+        marker::UPDATE_VALIDATION_ACKED.clear();
         handle_service_result(
             FirmwareService::run_update(&api.service_client, body.into_inner()).await,
             "run_update",
@@ -238,7 +241,19 @@ where
 
     pub async fn ack_rollback() -> impl Responder {
         debug!("ack_rollback() called");
-        NetworkConfigService::clear_rollback_occurred();
+        marker::NETWORK_ROLLBACK_OCCURRED.clear();
+        HttpResponse::Ok().finish()
+    }
+
+    pub async fn ack_factory_reset_result() -> impl Responder {
+        debug!("ack_factory_reset_result() called");
+        marker::FACTORY_RESET_RESULT_ACKED.set_or_log();
+        HttpResponse::Ok().finish()
+    }
+
+    pub async fn ack_update_validation() -> impl Responder {
+        debug!("ack_update_validation() called");
+        marker::UPDATE_VALIDATION_ACKED.set_or_log();
         HttpResponse::Ok().finish()
     }
 

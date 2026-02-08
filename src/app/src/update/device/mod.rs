@@ -3,9 +3,9 @@ mod operations;
 mod reconnection;
 
 pub use network::{
-    handle_ack_rollback, handle_network_form_start_edit, handle_network_form_update,
-    handle_new_ip_check_tick, handle_new_ip_check_timeout, handle_set_network_config,
-    handle_set_network_config_response,
+    handle_ack_factory_reset_result, handle_ack_rollback, handle_ack_update_validation,
+    handle_network_form_start_edit, handle_network_form_update, handle_new_ip_check_tick,
+    handle_new_ip_check_timeout, handle_set_network_config, handle_set_network_config_response,
 };
 pub use operations::handle_device_operation_response;
 pub use reconnection::{
@@ -173,8 +173,26 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
         DeviceEvent::NewIpCheckTick => handle_new_ip_check_tick(model),
         DeviceEvent::NewIpCheckTimeout => handle_new_ip_check_timeout(model),
 
-        // Acknowledge network rollback
+        // Acknowledge events
         DeviceEvent::AckRollback => handle_ack_rollback(model),
+        DeviceEvent::AckFactoryResetResult => handle_ack_factory_reset_result(model),
+        DeviceEvent::AckUpdateValidation => handle_ack_update_validation(model),
+
+        DeviceEvent::AckFactoryResetResultResponse(result) => {
+            model.stop_loading();
+            if let Err(e) = result {
+                model.set_error(e);
+            }
+            crux_core::render::render()
+        }
+
+        DeviceEvent::AckUpdateValidationResponse(result) => {
+            model.stop_loading();
+            if let Err(e) = result {
+                model.set_error(e);
+            }
+            crux_core::render::render()
+        }
 
         // Network form events
         DeviceEvent::NetworkFormStartEdit { adapter_name } => {

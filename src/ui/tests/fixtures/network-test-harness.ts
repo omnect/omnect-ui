@@ -220,6 +220,8 @@ export class NetworkTestHarness {
               status: 'valid',
             },
             networkRollbackOccurred: this.networkRollbackOccurred,
+            factoryResetResultAcked: true,
+            updateValidationAcked: true,
           }),
         });
       } else {
@@ -238,6 +240,36 @@ export class NetworkTestHarness {
     await page.route('**/ack-rollback', async (route) => {
       if (route.request().method() === 'POST') {
         this.networkRollbackOccurred = false;
+        await route.fulfill({
+          status: 200,
+        });
+      }
+    });
+  }
+
+  /**
+   * Mock the /ack-factory-reset-result endpoint.
+   *
+   * @param page - Playwright page instance
+   */
+  async mockAckFactoryResetResult(page: Page): Promise<void> {
+    await page.route('**/ack-factory-reset-result', async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 200,
+        });
+      }
+    });
+  }
+
+  /**
+   * Mock the /ack-update-validation endpoint.
+   *
+   * @param page - Playwright page instance
+   */
+  async mockAckUpdateValidation(page: Page): Promise<void> {
+    await page.route('**/ack-update-validation', async (route) => {
+      if (route.request().method() === 'POST') {
         await route.fulfill({
           status: 200,
         });
