@@ -59,12 +59,6 @@ import {
 	UploadStateVariantcompleted,
 	UploadStateVariantfailed,
 	DeviceNetwork,
-	OdsFactoryResetResultStatus,
-	OdsFactoryResetResultStatusVariantunknown,
-	OdsFactoryResetResultStatusVariantmode_supported,
-	OdsFactoryResetResultStatusVariantmode_unsupported,
-	OdsFactoryResetResultStatusVariantbackup_restore_error,
-	OdsFactoryResetResultStatusVariantconfiguration_error,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 
 // Re-export variant classes for external use
@@ -75,7 +69,6 @@ export {
 	FactoryResetStatus,
 	UploadState,
 	DeviceNetwork,
-	OdsFactoryResetResultStatus,
 }
 
 // ============================================================================

@@ -71,7 +71,9 @@ pub fn handle(event: WebSocketEvent, model: &mut Model) -> Command<Effect, Event
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{FactoryReset, OnlineStatus, OsInfo, SystemInfo, UpdateValidationStatus};
+    use crate::types::{
+        FactoryReset, FactoryResetStatus, OnlineStatus, OsInfo, SystemInfo, UpdateValidationStatus,
+    };
 
     mod system_info {
         use super::*;
@@ -131,6 +133,22 @@ mod tests {
             let _ = handle(WebSocketEvent::FactoryResetUpdated(json.into()), &mut model);
 
             assert_eq!(model.factory_reset, Some(expected_status));
+        }
+
+        #[test]
+        fn parses_integer_status_from_ods() {
+            let mut model = Model::default();
+
+            // ODS sends status as integer (serde_repr): 0=ModeSupported, 1=ModeUnsupported, etc.
+            let json = r#"{"keys":["network"],"result":{"status":0,"error":"0","paths":["/etc/systemd/network/"]}}"#;
+
+            let _ = handle(WebSocketEvent::FactoryResetUpdated(json.into()), &mut model);
+
+            let factory_reset = model.factory_reset.expect("factory_reset should be set");
+            let result = factory_reset.result.expect("result should be set");
+            assert_eq!(result.status, FactoryResetStatus::ModeSupported);
+            assert_eq!(result.error, "0");
+            assert_eq!(result.paths, vec!["/etc/systemd/network/"]);
         }
     }
 

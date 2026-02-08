@@ -12,6 +12,7 @@
 //!    before it enters the application's business logic.
 
 use serde::{Deserialize, Serialize};
+use serde_repr::Deserialize_repr;
 
 use crate::types::{
     DeviceNetwork, Duration, FactoryReset, FactoryResetResult, FactoryResetStatus,
@@ -167,21 +168,19 @@ impl From<OdsNetworkStatus> for NetworkStatus {
     }
 }
 
-/// Factory reset result status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+/// Factory reset result status — ODS sends numeric values (serde_repr)
+#[derive(Debug, Clone, Deserialize_repr, PartialEq, Eq)]
+#[repr(u8)]
 pub enum OdsFactoryResetResultStatus {
-    Unknown,
-    ModeSupported,
-    ModeUnsupported,
-    BackupRestoreError,
-    ConfigurationError,
+    ModeSupported = 0,
+    ModeUnsupported = 1,
+    BackupRestoreError = 2,
+    ConfigurationError = 3,
 }
 
 impl From<OdsFactoryResetResultStatus> for FactoryResetStatus {
     fn from(ods: OdsFactoryResetResultStatus) -> Self {
         match ods {
-            OdsFactoryResetResultStatus::Unknown => Self::Unknown,
             OdsFactoryResetResultStatus::ModeSupported => Self::ModeSupported,
             OdsFactoryResetResultStatus::ModeUnsupported => Self::ModeUnsupported,
             OdsFactoryResetResultStatus::BackupRestoreError => Self::BackupRestoreError,
@@ -191,8 +190,7 @@ impl From<OdsFactoryResetResultStatus> for FactoryResetStatus {
 }
 
 /// Factory reset result
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct OdsFactoryResetResult {
     pub status: OdsFactoryResetResultStatus,
     pub context: Option<String>,
@@ -212,8 +210,7 @@ impl From<OdsFactoryResetResult> for FactoryResetResult {
 }
 
 /// Factory reset status update from ODS
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct OdsFactoryReset {
     pub keys: Vec<String>,
     pub result: Option<OdsFactoryResetResult>,

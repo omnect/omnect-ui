@@ -38,7 +38,6 @@ fn main() -> Result<()> {
     gen.register_type::<omnect_ui_core::types::OdsTimeouts>()?;
     gen.register_type::<omnect_ui_core::types::OdsNetworkStatus>()?;
     gen.register_type::<omnect_ui_core::types::OdsFactoryReset>()?;
-    gen.register_type::<omnect_ui_core::types::OdsFactoryResetResultStatus>()?;
     gen.register_type::<omnect_ui_core::types::OdsUpdateValidationStatus>()?;
 
     let output_root = PathBuf::from("./generated");

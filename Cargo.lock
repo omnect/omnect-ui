@@ -2179,6 +2179,7 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+ "serde_repr",
  "serde_valid",
  "wasm-bindgen",
 ]
