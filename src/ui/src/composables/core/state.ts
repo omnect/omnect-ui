@@ -35,7 +35,6 @@ export const viewModel = reactive<ViewModel>({
 	// Device operation state
 	deviceOperationState: { type: 'idle' },
 	reconnectionAttempt: 0,
-	reconnectionTimeoutSeconds: 300, // 5 minutes default
 	// Network change state
 	networkChangeState: { type: 'idle' },
 	// Network form state

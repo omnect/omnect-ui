@@ -166,7 +166,6 @@ export interface ViewModel {
 	// Device operation state (reboot/factory reset reconnection)
 	deviceOperationState: DeviceOperationStateType
 	reconnectionAttempt: number
-	reconnectionTimeoutSeconds: number
 
 	// Network change state (IP change detection and polling)
 	networkChangeState: NetworkChangeStateType

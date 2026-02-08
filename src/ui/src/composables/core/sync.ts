@@ -146,10 +146,34 @@ export function updateViewModelFromCore(): void {
 		// Sync the ref with the view model
 		authToken.value = viewModel.authToken
 
+		// Overlay spinner state (synced BEFORE device/network state so watchers can read countdown)
+		// Preserve countdownSeconds if it's being actively managed by the Shell (countdown interval running)
+		const isNetworkChangeActive = viewModel.networkChangeState.type === 'waitingForNewIp'
+		const isDeviceOpActive = viewModel.deviceOperationState.type === 'rebooting'
+			|| viewModel.deviceOperationState.type === 'factoryResetting'
+			|| viewModel.deviceOperationState.type === 'updating'
+			|| viewModel.deviceOperationState.type === 'waitingReconnection'
+		const preserveCountdown = (isNetworkChangeActive || isDeviceOpActive)
+			&& viewModel.overlaySpinner.countdownSeconds !== null
+
+		viewModel.overlaySpinner = {
+			overlay: coreViewModel.overlaySpinner.overlay,
+			title: coreViewModel.overlaySpinner.title,
+			text: coreViewModel.overlaySpinner.text || null,
+			timedOut: coreViewModel.overlaySpinner.timedOut,
+			progress: coreViewModel.overlaySpinner.progress !== null && coreViewModel.overlaySpinner.progress !== undefined
+				? coreViewModel.overlaySpinner.progress
+				: null,
+			countdownSeconds: preserveCountdown
+				? viewModel.overlaySpinner.countdownSeconds // Keep Shell's calculated value
+				: (coreViewModel.overlaySpinner.countdownSeconds !== null && coreViewModel.overlaySpinner.countdownSeconds !== undefined
+					? coreViewModel.overlaySpinner.countdownSeconds
+					: null),
+		}
+
 		// Device operation state - convert bincode variant to typed object
 		viewModel.deviceOperationState = convertDeviceOperationState(coreViewModel.deviceOperationState)
 		viewModel.reconnectionAttempt = coreViewModel.reconnectionAttempt
-		viewModel.reconnectionTimeoutSeconds = coreViewModel.reconnectionTimeoutSeconds
 
 		// Network change state
 		viewModel.networkChangeState = convertNetworkChangeState(coreViewModel.networkChangeState)
@@ -173,26 +197,6 @@ export function updateViewModelFromCore(): void {
 
 		// Firmware upload state
 		viewModel.firmwareUploadState = convertUploadState(coreViewModel.firmwareUploadState)
-
-		// Overlay spinner state
-		// Preserve countdownSeconds if it's being actively managed by the Shell (network change polling)
-		const isNetworkChangeActive = viewModel.networkChangeState.type === 'waitingForNewIp'
-		const preserveCountdown = isNetworkChangeActive && viewModel.overlaySpinner.countdownSeconds !== null
-
-		viewModel.overlaySpinner = {
-			overlay: coreViewModel.overlaySpinner.overlay,
-			title: coreViewModel.overlaySpinner.title,
-			text: coreViewModel.overlaySpinner.text || null,
-			timedOut: coreViewModel.overlaySpinner.timedOut,
-			progress: coreViewModel.overlaySpinner.progress !== null && coreViewModel.overlaySpinner.progress !== undefined
-				? coreViewModel.overlaySpinner.progress
-				: null,
-			countdownSeconds: preserveCountdown
-				? viewModel.overlaySpinner.countdownSeconds // Keep Shell's calculated value
-				: (coreViewModel.overlaySpinner.countdownSeconds !== null && coreViewModel.overlaySpinner.countdownSeconds !== undefined
-					? coreViewModel.overlaySpinner.countdownSeconds
-					: null),
-		}
 
 		// Auto-subscribe logic based on authentication state transition
 		if (viewModel.isAuthenticated && !wasAuthenticated) {

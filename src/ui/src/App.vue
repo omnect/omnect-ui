@@ -36,19 +36,37 @@ const errorMsg = ref("")
 
 const overlaySpinnerState = computed(() => viewModel.overlaySpinner)
 
-// Build redirect URL from networkChangeState when waiting for new IP
+// Build redirect URL for overlay spinner button
 const redirectUrl = computed(() => {
-	const state = viewModel.networkChangeState
+	const networkState = viewModel.networkChangeState
 
-	// Show button for both waiting and timeout states (but NOT for DHCP or rollback verification)
-	if ((state.type === 'waitingForNewIp' || state.type === 'newIpTimeout')
-		&& 'newIp' in state
-		&& 'uiPort' in state
-		&& !('switchingToDhcp' in state && state.switchingToDhcp)) {
-		return `https://${state.newIp}:${state.uiPort}`
+	// Network change: show button for waiting and timeout states (but NOT for DHCP or rollback verification)
+	if ((networkState.type === 'waitingForNewIp' || networkState.type === 'newIpTimeout')
+		&& 'newIp' in networkState
+		&& 'uiPort' in networkState
+		&& !('switchingToDhcp' in networkState && networkState.switchingToDhcp)) {
+		return `https://${networkState.newIp}:${networkState.uiPort}`
 	}
 
-	// Don't show for waitingForOldIp - rollback in progress
+	// Device operations: show button on timeout (same address, for cert re-acceptance)
+	if (viewModel.deviceOperationState.type === 'reconnectionFailed') {
+		return window.location.href
+	}
+
+	return undefined
+})
+
+// Countdown label depends on context
+const countdownLabel = computed(() => {
+	const networkState = viewModel.networkChangeState
+	if (networkState.type !== 'idle') {
+		return 'Automatic rollback in:'
+	}
+	const deviceState = viewModel.deviceOperationState
+	if (deviceState.type === 'rebooting' || deviceState.type === 'factoryResetting'
+		|| deviceState.type === 'updating' || deviceState.type === 'waitingReconnection') {
+		return 'Timeout in:'
+	}
 	return undefined
 })
 
@@ -251,6 +269,7 @@ onMounted(async () => {
         :text="overlaySpinnerState.text || undefined" :timed-out="overlaySpinnerState.timedOut"
         :progress="overlaySpinnerState.progress || undefined"
         :countdown-seconds="overlaySpinnerState.countdownSeconds || undefined"
+        :countdown-label="countdownLabel"
         :redirect-url="redirectUrl" />
     </v-main>
   </v-app>

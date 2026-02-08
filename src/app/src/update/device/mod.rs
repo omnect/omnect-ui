@@ -145,7 +145,7 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
             let request = RunUpdateRequest {
                 validate_iothub_connection,
             };
-            model.overlay_spinner = OverlaySpinnerState::new("Requesting update...");
+            model.overlay_spinner = OverlaySpinnerState::new("Installing update...");
             auth_post!(Device, DeviceEvent, model, "/update/run", RunUpdateResponse, "Run update",
                 body_json: &request
             )
@@ -157,8 +157,8 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
             DeviceOperationState::Updating,
             "Update started",
             "Update started (connection lost)",
-            "Installing update",
-            Some("Please have some patience, the update may take some time.".to_string()),
+            "Rebooting to new firmware",
+            Some("The device is restarting with the updated firmware.".to_string()),
         ),
 
         DeviceEvent::HealthcheckResponse(result) => handle_healthcheck_response(result, model),
@@ -216,6 +216,7 @@ mod tests {
 
     mod reboot {
         use super::*;
+        use crate::update::device::operations::REBOOT_TIMEOUT_SECS;
 
         #[test]
         fn success_sets_rebooting_state() {
@@ -233,6 +234,10 @@ mod tests {
             );
             assert_eq!(model.success_message, Some("Reboot initiated".into()));
             assert!(model.overlay_spinner.is_visible());
+            assert_eq!(
+                model.overlay_spinner.countdown_seconds(),
+                Some(REBOOT_TIMEOUT_SECS)
+            );
         }
 
         #[test]

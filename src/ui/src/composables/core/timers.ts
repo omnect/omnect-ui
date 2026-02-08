@@ -33,9 +33,11 @@ export function setEventSender(callback: (event: Event) => Promise<void>): void 
 // ============================================================================
 
 const RECONNECTION_POLL_INTERVAL_MS = Number(import.meta.env.VITE_RECONNECTION_POLL_INTERVAL_MS) || 5000 // 5 seconds
-const REBOOT_TIMEOUT_MS = Number(import.meta.env.VITE_REBOOT_TIMEOUT_MS) || 300000 // 5 minutes
-const FACTORY_RESET_TIMEOUT_MS = Number(import.meta.env.VITE_FACTORY_RESET_TIMEOUT_MS) || 600000 // 10 minutes
 const NEW_IP_POLL_INTERVAL_MS = Number(import.meta.env.VITE_NEW_IP_POLL_INTERVAL_MS) || 5000 // 5 seconds
+
+// Optional test overrides for reconnection timeouts (production values come from Core)
+const REBOOT_TIMEOUT_OVERRIDE_MS = import.meta.env.VITE_REBOOT_TIMEOUT_MS ? Number(import.meta.env.VITE_REBOOT_TIMEOUT_MS) : null
+const FACTORY_RESET_TIMEOUT_OVERRIDE_MS = import.meta.env.VITE_FACTORY_RESET_TIMEOUT_MS ? Number(import.meta.env.VITE_FACTORY_RESET_TIMEOUT_MS) : null
 
 // ============================================================================
 // Timer IDs
@@ -43,11 +45,13 @@ const NEW_IP_POLL_INTERVAL_MS = Number(import.meta.env.VITE_NEW_IP_POLL_INTERVAL
 
 let reconnectionIntervalId: ReturnType<typeof setInterval> | null = null
 let reconnectionTimeoutId: ReturnType<typeof setTimeout> | null = null
+let reconnectionCountdownIntervalId: ReturnType<typeof setInterval> | null = null
+let reconnectionCountdownDeadline: number | null = null
 let newIpIntervalId: ReturnType<typeof setInterval> | null = null
 let newIpTimeoutId: ReturnType<typeof setTimeout> | null = null
 let newIpCountdownIntervalId: ReturnType<typeof setInterval> | null = null
 
-// Countdown deadline (Unix timestamp in milliseconds)
+// Countdown deadline for network changes (Unix timestamp in milliseconds)
 let countdownDeadline: number | null = null
 
 // ============================================================================
@@ -55,13 +59,31 @@ let countdownDeadline: number | null = null
 // ============================================================================
 
 /**
- * Start reconnection polling for reboot/factory reset
- * Sends ReconnectionCheckTick every 5 seconds and sets a timeout
+ * Start reconnection polling for reboot/factory reset/update
+ * Reads timeout from Core's overlay spinner countdown_seconds.
+ * Sends ReconnectionCheckTick every 5 seconds and sets a timeout with countdown.
  */
-export function startReconnectionPolling(isFactoryReset: boolean): void {
-	stopReconnectionPolling() // Clear any existing timers
+export function startReconnectionPolling(): void {
+	// Read timeout from Core's overlay spinner countdown BEFORE clearing (stop clears countdownSeconds)
+	const coreCountdownSeconds = viewModel.overlaySpinner.countdownSeconds
 
-	console.log(`[useCore] Starting reconnection polling (${isFactoryReset ? 'factory reset' : 'reboot'})`)
+	stopReconnectionPolling() // Clear any existing timers
+	if (!coreCountdownSeconds || coreCountdownSeconds <= 0) {
+		console.warn('[useCore] startReconnectionPolling: no countdown from Core, skipping timeout')
+		return
+	}
+
+	// Allow test env override for shorter timeouts
+	const isFactoryReset = viewModel.deviceOperationState.type === 'factoryResetting'
+	const overrideMs = isFactoryReset ? FACTORY_RESET_TIMEOUT_OVERRIDE_MS : REBOOT_TIMEOUT_OVERRIDE_MS
+	const timeoutMs = overrideMs ?? coreCountdownSeconds * 1000
+	const countdownSeconds = Math.ceil(timeoutMs / 1000)
+	// Update the displayed countdown to match effective timeout
+	viewModel.overlaySpinner.countdownSeconds = countdownSeconds
+	console.log(`[useCore] Starting reconnection polling (timeout: ${countdownSeconds}s)`)
+
+	// Set countdown deadline
+	reconnectionCountdownDeadline = Date.now() + timeoutMs
 
 	// Start polling interval
 	reconnectionIntervalId = setInterval(() => {
@@ -70,8 +92,16 @@ export function startReconnectionPolling(isFactoryReset: boolean): void {
 		}
 	}, RECONNECTION_POLL_INTERVAL_MS)
 
-	// Set timeout (factory reset uses longer timeout)
-	const timeoutMs = isFactoryReset ? FACTORY_RESET_TIMEOUT_MS : REBOOT_TIMEOUT_MS
+	// Start countdown interval (1 second for UI countdown)
+	reconnectionCountdownIntervalId = setInterval(() => {
+		if (reconnectionCountdownDeadline !== null) {
+			const remainingMs = Math.max(0, reconnectionCountdownDeadline - Date.now())
+			const remainingSeconds = Math.ceil(remainingMs / 1000)
+			viewModel.overlaySpinner.countdownSeconds = remainingSeconds
+		}
+	}, 1000)
+
+	// Set timeout
 	reconnectionTimeoutId = setTimeout(() => {
 		console.log('[useCore] Reconnection timeout reached')
 		if (isInitialized.value && wasmModule.value && sendEventCallback) {
@@ -93,6 +123,12 @@ export function stopReconnectionPolling(): void {
 		clearTimeout(reconnectionTimeoutId)
 		reconnectionTimeoutId = null
 	}
+	if (reconnectionCountdownIntervalId !== null) {
+		clearInterval(reconnectionCountdownIntervalId)
+		reconnectionCountdownIntervalId = null
+	}
+	reconnectionCountdownDeadline = null
+	viewModel.overlaySpinner.countdownSeconds = null
 }
 
 // ============================================================================
@@ -313,7 +349,7 @@ export function initializeTimerWatchers(): void {
 
 			// Start polling when entering rebooting, factoryResetting, or updating state
 			if (newType === 'rebooting' || newType === 'factoryResetting' || newType === 'updating') {
-				startReconnectionPolling(newType === 'factoryResetting')
+				startReconnectionPolling()
 			}
 			// Stop polling when leaving these states or entering terminal states
 			else if (

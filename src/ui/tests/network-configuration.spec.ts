@@ -263,14 +263,14 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page.locator('#overlay')).toBeVisible({ timeout: 10000 });
 
       // Verify button is shown (IP is known, not DHCP)
-      await expect(page.getByRole('button', { name: /Open new address in new tab/i })).toBeVisible();
+      await expect(page.getByRole('button', { name: /Open app in new tab/i })).toBeVisible();
 
       // Simulate unreachable new IP (polling continues indefinitely - no timeout when rollback disabled)
       await page.route('**/*192.168.1.150*/healthcheck', route => route.abort());
       await page.waitForTimeout(3000); // Wait a bit
 
       // Button remains visible (stays in waiting_for_new_ip state, no timeout)
-      await expect(page.getByRole('button', { name: /Open new address in new tab/i })).toBeVisible();
+      await expect(page.getByRole('button', { name: /Open app in new tab/i })).toBeVisible();
 
       // Verify text for no-rollback scenario
       await expect(page.locator('#overlay').getByText(/Network configuration applied/i)).toBeVisible();
@@ -300,7 +300,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page.locator('#overlay')).toBeVisible({ timeout: 10000 });
 
       // Button should NOT be shown (IP is unknown for DHCP)
-      await expect(page.getByRole('button', { name: /Open new address in new tab/i })).not.toBeVisible();
+      await expect(page.getByRole('button', { name: /Open app in new tab/i })).not.toBeVisible();
 
       // Verify DHCP-specific text
       await expect(page.locator('#overlay').getByText(/Find the new IP via DHCP server/i)).toBeVisible();
@@ -328,7 +328,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await page.locator('[data-cy=network-confirm-apply-button]').click();
 
       // Button should be visible initially during polling
-      await expect(page.getByRole('button', { name: /Open new address in new tab/i })).toBeVisible();
+      await expect(page.getByRole('button', { name: /Open app in new tab/i })).toBeVisible();
 
       // Wait for timeout to trigger rollback
       await harness.simulateRollbackTimeout();
@@ -337,7 +337,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Button should be HIDDEN during rollback verification (WaitingForOldIp state)
       await expect(page.locator('#overlay').getByText(/Rollback in progress/i)).toBeVisible({ timeout: 15000 });
-      await expect(page.getByRole('button', { name: /Open new address in new tab/i })).not.toBeVisible();
+      await expect(page.getByRole('button', { name: /Open app in new tab/i })).not.toBeVisible();
     });
   });
 

@@ -41,7 +41,6 @@ pub struct Model {
     // Device operation state (reboot/factory reset reconnection)
     pub device_operation_state: DeviceOperationState,
     pub reconnection_attempt: u32,
-    pub reconnection_timeout_seconds: u32,
     pub device_went_offline: bool,
 
     // Network change state (IP change detection and polling)
