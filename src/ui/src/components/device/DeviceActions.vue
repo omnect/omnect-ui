@@ -40,7 +40,7 @@ const handleFactoryReset = () => execute(async () => {
 					<v-card-actions>
 						<v-spacer></v-spacer>
 						<v-btn variant="text" color="primary" @click="dialogs.reboot = false">Cancel</v-btn>
-						<v-btn variant="text" color="warning" :loading="loading" :disabled="loading"
+						<v-btn variant="flat" color="error" :loading="loading" :disabled="loading"
 							@click="handleReboot">Reboot</v-btn>
 					</v-card-actions>
 				</v-card>
@@ -68,7 +68,7 @@ const handleFactoryReset = () => execute(async () => {
 					<v-card-actions>
 						<v-spacer></v-spacer>
 						<v-btn variant="text" color="primary" @click="dialogs.factoryReset = false">Cancel</v-btn>
-						<v-btn variant="text" color="error" :loading="loading" :disabled="loading"
+						<v-btn variant="flat" color="error" :loading="loading" :disabled="loading"
 							@click="handleFactoryReset">Reset</v-btn>
 					</v-card-actions>
 				</v-card>
