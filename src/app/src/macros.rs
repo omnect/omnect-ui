@@ -79,6 +79,13 @@ pub use crate::http_helpers::{
 ///     expect_json: bool
 /// )
 /// ```
+///
+/// Pattern 4: POST with JSON body, extract string response with map
+/// ```ignore
+/// unauth_post!(Auth, AuthEvent, model, "/set-password", SetPasswordResponse, "Set password",
+///     body_json: &request,
+///     map: |token| AuthToken { token })
+/// ```
 #[macro_export]
 macro_rules! unauth_post {
     // Pattern 0: Simple POST without body (status only)
@@ -148,7 +155,34 @@ macro_rules! unauth_post {
         }
     }};
 
-    // Pattern 3: GET expecting JSON response
+    // Pattern 4: POST with JSON body, extract string response with map
+    ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, body_json: $body:expr, map: $mapper:expr) => {{
+        $model.start_loading();
+        match $crate::HttpCmd::post($crate::build_url($endpoint))
+            .header("Content-Type", "application/json")
+            .body_json($body)
+        {
+            Ok(builder) => crux_core::Command::all([
+                crux_core::render::render(),
+                builder.build().then_send(|result| {
+                    let event_result = match result {
+                        Ok(mut response) => {
+                            $crate::extract_string_response($action, &mut response).map($mapper)
+                        }
+                        Err(e) => Err(e.to_string()),
+                    };
+                    $crate::events::Event::$domain($crate::events::$domain_event::$response_event(
+                        event_result,
+                    ))
+                }),
+            ]),
+            Err(e) => {
+                $model.set_error_and_render(format!("Failed to create {} request: {}", $action, e))
+            }
+        }
+    }};
+
+    // Pattern 5: GET expecting JSON response
     ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, method: get, expect_json: $response_type:ty) => {{
         $model.start_loading();
         crux_core::Command::all([

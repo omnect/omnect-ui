@@ -23,7 +23,7 @@ pub enum AuthEvent {
     #[serde(skip)]
     LogoutResponse(Result<(), String>),
     #[serde(skip)]
-    SetPasswordResponse(Result<(), String>),
+    SetPasswordResponse(Result<AuthToken, String>),
     #[serde(skip)]
     UpdatePasswordResponse(Result<(), String>),
     #[serde(skip)]
@@ -150,9 +150,16 @@ impl fmt::Debug for AuthEvent {
             AuthEvent::Logout => write!(f, "Logout"),
             AuthEvent::CheckRequiresPasswordSet => write!(f, "CheckRequiresPasswordSet"),
             AuthEvent::LogoutResponse(r) => f.debug_tuple("LogoutResponse").field(r).finish(),
-            AuthEvent::SetPasswordResponse(r) => {
-                f.debug_tuple("SetPasswordResponse").field(r).finish()
-            }
+            AuthEvent::SetPasswordResponse(result) => match result {
+                Ok(_) => f
+                    .debug_tuple("SetPasswordResponse")
+                    .field(&"Ok(<redacted token>)")
+                    .finish(),
+                Err(e) => f
+                    .debug_tuple("SetPasswordResponse")
+                    .field(&format!("Err({e})"))
+                    .finish(),
+            },
             AuthEvent::UpdatePasswordResponse(r) => {
                 f.debug_tuple("UpdatePasswordResponse").field(r).finish()
             }

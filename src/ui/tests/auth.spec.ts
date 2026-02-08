@@ -92,17 +92,39 @@ test.describe('Authentication', () => {
 
     await page.goto('/');
 
+    // Wait for redirect chain (/ → /login → /set-password) to complete
+    await expect(page.getByRole('heading', { name: /set password/i })).toBeVisible();
+
     // Fill set-password form
-    // Using nth(0) for first password field as Vuetify labels might match multiple elements
     await page.locator('input[type="password"]').nth(0).fill('new-password');
     await page.locator('input[type="password"]').nth(1).fill('new-password');
     await page.getByRole('button', { name: /set password/i }).click();
 
-    // Should show success message and eventually redirect to dashboard (via auto-login)
-    await expect(page.getByText(/password set successfully/i)).toBeVisible({ timeout: 10000 });
+    // SetPasswordResponse now authenticates directly (token in response body),
+    // so useAuthNavigation redirects to dashboard immediately.
+    await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
+  });
 
-    // Should be redirected to dashboard
-    await expect(page.getByText('Common Info')).toBeVisible();
+  test('auto-authenticates after setting password via direct navigation', async ({ page }) => {
+    // Simulates the real Keycloak flow: after OIDC redirect, the user lands
+    // directly on /set-password without going through Login.vue.
+    // This means CheckRequiresPasswordSet is never called, so
+    // requires_password_set is never set to true in the Core model.
+    await mockPortalAuth(page);
+    await mockSetPasswordSuccess(page);
+
+    // Navigate directly to /set-password (bypasses Login.vue entirely)
+    await page.goto('/set-password');
+
+    await expect(page.getByRole('heading', { name: /set password/i })).toBeVisible();
+
+    // Fill and submit
+    await page.locator('input[type="password"]').nth(0).fill('new-password');
+    await page.locator('input[type="password"]').nth(1).fill('new-password');
+    await page.getByRole('button', { name: /set password/i }).click();
+
+    // Should auto-authenticate via token in response and redirect to dashboard
+    await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
   });
 
   test('can update password successfully', async ({ page }) => {

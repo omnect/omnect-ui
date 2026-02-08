@@ -46,12 +46,17 @@ export async function mockRequireSetPassword(page: Page) {
 }
 
 export async function mockSetPasswordSuccess(page: Page) {
+  const token = jwt.sign({ sub: 'user123' }, 'secret', { expiresIn: '1h' });
   await page.route('**/set-password', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({}),
-    });
+    if (route.request().method() === 'POST') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/plain',
+        body: token,
+      });
+    } else {
+      await route.continue();
+    }
   });
 }
 
