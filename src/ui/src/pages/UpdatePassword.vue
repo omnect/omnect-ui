@@ -1,29 +1,32 @@
 <script setup lang="ts">
-import { ref } from "vue"
+import { ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import PasswordField from "../components/common/PasswordField.vue"
 import { useCore } from "../composables/useCore"
-import { useMessageWatchers } from "../composables/useMessageWatchers"
 import { usePasswordForm } from "../composables/usePasswordForm"
-import { useAuthNavigation } from "../composables/useAuthNavigation"
 
 const router = useRouter()
-const { updatePassword, login } = useCore()
+const { viewModel, updatePassword } = useCore()
 const currentPassword = ref<string>("")
 const { password, repeatPassword, errorMsg, validatePasswords } = usePasswordForm()
 
-useAuthNavigation()
-
-useMessageWatchers({
-	onSuccess: async () => {
-		// Automatically log in with the new password
-		await login(password.value)
-		await router.push("/")
+// flush: 'sync' fires inline during the reactive assignment, before App.vue's
+// global useMessageWatchers (flush: 'pre') can clearSuccess() and erase the value.
+watch(
+	() => viewModel.successMessage,
+	(msg) => {
+		if (msg) router.push("/")
 	},
-	onError: (message) => {
-		errorMsg.value = message
-	}
-})
+	{ flush: 'sync' }
+)
+
+watch(
+	() => viewModel.errorMessage,
+	(msg) => {
+		if (msg) errorMsg.value = msg
+	},
+	{ flush: 'sync' }
+)
 
 const handleSubmit = async (): Promise<void> => {
 	if (!validatePasswords()) return

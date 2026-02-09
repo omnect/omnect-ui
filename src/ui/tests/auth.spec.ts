@@ -151,7 +151,8 @@ test.describe('Authentication', () => {
 
     await page.getByRole('button', { name: /set new password/i }).click();
 
-    // Verify success message
+    // Verify success message and redirect to dashboard
     await expect(page.getByText(/password updated successfully/i)).toBeVisible();
+    await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
   });
 });
