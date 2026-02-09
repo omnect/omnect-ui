@@ -18,7 +18,7 @@ RUN mkdir -p /tmp/bin && \
     echo '#!/bin/sh' > /tmp/bin/pnpm && \
     echo 'exit 0' >> /tmp/bin/pnpm && \
     chmod +x /tmp/bin/pnpm && \
-    PATH="/tmp/bin:$PATH" COREPACK_ENABLE_DOWNLOAD_PROMPT=0 cargo build --release -p shared_types
+    PATH="/tmp/bin:$PATH" cargo build --release -p shared_types
 
 # Stage 2: Build Crux WASM core (parallel with typegen)
 FROM --platform=$BUILDPLATFORM ${BUILD_IMAGE} AS wasm-build
