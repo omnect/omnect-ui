@@ -133,7 +133,7 @@ pub fn process_json_response<T: serde::de::DeserializeOwned>(
     }
 }
 
-fn map_http_error(action: &str, e: HttpError) -> String {
+pub fn map_http_error(action: &str, e: HttpError) -> String {
     match e {
         HttpError::Http {
             body: Some(ref body),

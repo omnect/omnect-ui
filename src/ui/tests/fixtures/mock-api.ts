@@ -94,6 +94,40 @@ export async function mockPortalAuth(page: Page) {
   }, { key, user });
 }
 
+export async function mockLoginFailure(page: Page, message = 'invalid credentials') {
+  await page.route('**/token/login', async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: 'text/plain',
+      body: message,
+    });
+  });
+}
+
+export async function mockSetPasswordFailure(page: Page, message = 'failed to set password') {
+  await page.route('**/set-password', async (route) => {
+    if (route.request().method() === 'POST') {
+      await route.fulfill({
+        status: 400,
+        contentType: 'text/plain',
+        body: message,
+      });
+    } else {
+      await route.continue();
+    }
+  });
+}
+
+export async function mockUpdatePasswordFailure(page: Page, message = 'current password is not correct') {
+  await page.route('**/update-password', async (route) => {
+    await route.fulfill({
+      status: 400,
+      contentType: 'text/plain',
+      body: message,
+    });
+  });
+}
+
 export async function mockNetworkConfig(page: Page) {
   // Mock the network configuration endpoint
   await page.route('**/network', async (route) => {

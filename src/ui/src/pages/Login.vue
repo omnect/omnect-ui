@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { onMounted, ref, watch } from "vue"
 import OmnectLogo from "../components/branding/OmnectLogo.vue"
 import { useCore } from "../composables/useCore"
 import { useAuthNavigation } from "../composables/useAuthNavigation"
@@ -9,13 +9,21 @@ const { viewModel, login, checkRequiresPasswordSet, initialize } = useCore()
 const password = ref("")
 const visible = ref(false)
 const isCheckingPasswordSetNeeded = ref(false)
+const errorMsg = ref("")
 
 useAuthNavigation()
 
-const errorMsg = computed(() => viewModel.errorMessage || "")
+watch(
+	() => viewModel.errorMessage,
+	(msg) => {
+		if (msg) errorMsg.value = msg
+	},
+	{ flush: 'sync' }
+)
 
 const doLogin = async (e: Event) => {
 	e.preventDefault()
+	errorMsg.value = ""
 	await login(password.value)
 }
 

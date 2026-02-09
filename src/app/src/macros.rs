@@ -43,8 +43,8 @@ macro_rules! update_field {
 // Re-export http_helpers functions for macro use
 pub use crate::http_helpers::{
     build_url, check_response_status, extract_error_message, extract_string_response,
-    handle_auth_error, handle_request_error, is_response_success, parse_json_response,
-    process_json_response, process_status_response, BASE_URL,
+    handle_auth_error, handle_request_error, is_response_success, map_http_error,
+    parse_json_response, process_json_response, process_status_response, BASE_URL,
 };
 
 /// Macro for unauthenticated POST requests with standard error handling.
@@ -117,7 +117,7 @@ macro_rules! unauth_post {
                 builder.build().then_send(|result| {
                     let event_result: Result<$response_type, String> = match result {
                         Ok(mut response) => $crate::parse_json_response($action, &mut response),
-                        Err(e) => Err(e.to_string()),
+                        Err(e) => Err($crate::map_http_error($action, e)),
                     };
                     $crate::events::Event::$domain($crate::events::$domain_event::$response_event(
                         event_result,
@@ -142,7 +142,7 @@ macro_rules! unauth_post {
                 builder.build().then_send(|result| {
                     let event_result = match result {
                         Ok(mut response) => $crate::check_response_status($action, &mut response),
-                        Err(e) => Err(e.to_string()),
+                        Err(e) => Err($crate::map_http_error($action, e)),
                     };
                     $crate::events::Event::$domain($crate::events::$domain_event::$response_event(
                         event_result,
@@ -169,7 +169,7 @@ macro_rules! unauth_post {
                         Ok(mut response) => {
                             $crate::extract_string_response($action, &mut response).map($mapper)
                         }
-                        Err(e) => Err(e.to_string()),
+                        Err(e) => Err($crate::map_http_error($action, e)),
                     };
                     $crate::events::Event::$domain($crate::events::$domain_event::$response_event(
                         event_result,
@@ -192,7 +192,7 @@ macro_rules! unauth_post {
                 .then_send(|result| {
                     let event_result: Result<$response_type, String> = match result {
                         Ok(mut response) => $crate::parse_json_response($action, &mut response),
-                        Err(e) => Err(e.to_string()),
+                        Err(e) => Err($crate::map_http_error($action, e)),
                     };
                     $crate::events::Event::$domain($crate::events::$domain_event::$response_event(
                         event_result,
@@ -231,7 +231,7 @@ macro_rules! auth_post_basic {
                         Ok(mut response) => {
                             $crate::extract_string_response($action, &mut response).map($mapper)
                         }
-                        Err(e) => Err(e.to_string()),
+                        Err(e) => Err($crate::map_http_error($action, e)),
                     };
                     $crate::events::Event::$domain($crate::events::$domain_event::$response_event(
                         event_result,

@@ -48,8 +48,7 @@ pub fn handle_device_operation_response(
         model.device_operation_state = operation;
         model.reconnection_attempt = 0;
         model.device_went_offline = false;
-        let mut spinner = OverlaySpinnerState::new(overlay_title)
-            .with_countdown(timeout_secs);
+        let mut spinner = OverlaySpinnerState::new(overlay_title).with_countdown(timeout_secs);
         if let Some(text) = overlay_text {
             spinner = spinner.with_text(text);
         }

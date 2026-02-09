@@ -18,8 +18,10 @@ axios.defaults.validateStatus = (_) => true
 const { snackbarState } = useSnackbar()
 const { viewModel, ackRollback, ackFactoryResetResult, ackUpdateValidation, subscribeToChannels, unsubscribeFromChannels } = useCore()
 
-// Enable automatic message watchers
-useMessageWatchers()
+// Enable automatic message watchers — suppress error toasts on pages that show errors inline
+useMessageWatchers({
+	suppressErrorToast: () => route.meta.inlineErrors === true
+})
 
 const { lgAndUp } = useDisplay()
 const router = useRouter()

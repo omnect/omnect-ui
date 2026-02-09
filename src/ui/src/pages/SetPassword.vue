@@ -1,13 +1,13 @@
 <script setup lang="ts">
+import { watch } from "vue"
 import OmnectLogo from "../components/branding/OmnectLogo.vue"
 import PasswordField from "../components/common/PasswordField.vue"
 import { useCore } from "../composables/useCore"
 import { useCoreInitialization } from "../composables/useCoreInitialization"
-import { useMessageWatchers } from "../composables/useMessageWatchers"
 import { usePasswordForm } from "../composables/usePasswordForm"
 import { useAuthNavigation } from "../composables/useAuthNavigation"
 
-const { setPassword } = useCore()
+const { viewModel, setPassword } = useCore()
 const { password, repeatPassword, errorMsg, validatePasswords } = usePasswordForm()
 
 useCoreInitialization()
@@ -15,11 +15,13 @@ useCoreInitialization()
 // so useAuthNavigation's isAuthenticated watcher handles the redirect to home.
 useAuthNavigation()
 
-useMessageWatchers({
-	onError: (message) => {
-		errorMsg.value = message
-	}
-})
+watch(
+	() => viewModel.errorMessage,
+	(msg) => {
+		if (msg) errorMsg.value = msg
+	},
+	{ flush: 'sync' }
+)
 
 const handleSubmit = async (): Promise<void> => {
 	if (!validatePasswords()) return

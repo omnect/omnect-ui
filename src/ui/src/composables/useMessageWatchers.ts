@@ -28,6 +28,7 @@ import { useCore } from './useCore'
 export function useMessageWatchers(options?: {
   onSuccess?: (message: string) => void
   onError?: (message: string) => void
+  suppressErrorToast?: () => boolean
 }): void {
   const { viewModel, clearSuccess, clearError } = useCore()
   const { showSuccess, showError } = useSnackbar()
@@ -49,9 +50,10 @@ export function useMessageWatchers(options?: {
     () => viewModel.errorMessage,
     (newMessage) => {
       if (newMessage) {
-        showError(newMessage)
+        if (!options?.suppressErrorToast?.()) {
+          showError(newMessage)
+        }
         options?.onError?.(newMessage)
-        // Clear the error in Core
         clearError()
       }
     }

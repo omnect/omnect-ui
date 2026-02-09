@@ -13,9 +13,9 @@ const routes = [
 	{ path: "/", component: DeviceOverview, meta: { text: "Device", requiresAuth: true, showMenu: true } },
 	{ path: "/network", component: Network, meta: { text: "Network", requiresAuth: true, showMenu: true } },
 	{ path: "/update", component: DeviceUpdate, meta: { text: "Update", requiresAuth: true, showMenu: true } },
-	{ path: "/login", component: Login, meta: { showMenu: false, guestOnly: true } },
-	{ path: "/set-password", component: SetPassword, meta: { requiresPortalAuth: true, showMenu: false } },
-	{ path: "/update-password", component: UpdatePassword, meta: { requiresAuth: true, showMenu: true } },
+	{ path: "/login", component: Login, meta: { showMenu: false, guestOnly: true, inlineErrors: true } },
+	{ path: "/set-password", component: SetPassword, meta: { requiresPortalAuth: true, showMenu: false, inlineErrors: true } },
+	{ path: "/update-password", component: UpdatePassword, meta: { requiresAuth: true, showMenu: true, inlineErrors: true } },
 	{ path: "/auth-callback", component: Callback, meta: { showMenu: false } }
 ]
 
