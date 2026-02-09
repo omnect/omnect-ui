@@ -42,7 +42,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
         },
       });
 
-      await expect(page.getByText('(current connection)')).toBeVisible();
+      await expect(page.getByText('This is your current connection')).toBeVisible();
 
       // Change IP address
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
@@ -216,7 +216,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       ], 'eth1');
 
       // Verify it's not the current connection
-      await expect(page.getByText('(current connection)')).not.toBeVisible();
+      await expect(page.getByText('This is your current connection')).not.toBeVisible();
 
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.102'); // Change static IP
@@ -247,7 +247,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
         },
       });
 
-      await expect(page.getByText('(current connection)')).toBeVisible();
+      await expect(page.getByText('This is your current connection')).toBeVisible();
 
       // Change IP address
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
@@ -285,7 +285,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
         },
       });
 
-      await expect(page.getByText('(current connection)')).toBeVisible();
+      await expect(page.getByText('This is your current connection')).toBeVisible();
 
       // Switch to DHCP
       await page.getByLabel('DHCP').click({ force: true });
@@ -705,7 +705,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
         },
       });
 
-      await expect(page.getByText('(current connection)')).toBeVisible();
+      await expect(page.getByText('This is your current connection')).toBeVisible();
 
       const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
@@ -994,9 +994,9 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       const testMac = '00:11:22:33:44:55';
       await harness.setup(page, { mac: testMac });
 
-      // Find the MAC Address input container using filter to be specific
-      const macContainer = page.locator('.v-input').filter({ hasText: 'MAC Address' });
-      await macContainer.locator('.mdi-content-copy').click();
+      // MAC address is in a plain text-field in the status bar
+      const macField = page.locator('.mac-field');
+      await macField.locator('.mdi-content-copy').click();
       
       const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
       expect(clipboardText).toBe(testMac);
@@ -1143,7 +1143,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
         },
       });
 
-      await expect(page.getByText('(current connection)')).toBeVisible();
+      await expect(page.getByText('This is your current connection')).toBeVisible();
     });
 
     test('current connection detection - hostname not matching any IP', async ({ page }) => {
@@ -1152,10 +1152,10 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
         { name: 'eth1', mac: '00:11:22:33:44:56', ipv4: { addrs: [{ addr: '192.168.1.101', dhcp: false, prefix_len: 24 }] } }
       ], 'eth0');
 
-      await expect(page.getByText('(current connection)')).not.toBeVisible();
+      await expect(page.getByText('This is your current connection')).not.toBeVisible();
 
       await harness.navigateToAdapter(page, 'eth1');
-      await expect(page.getByText('(current connection)')).not.toBeVisible();
+      await expect(page.getByText('This is your current connection')).not.toBeVisible();
     });
   });
 });

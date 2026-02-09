@@ -79,7 +79,7 @@ const cancelTabChange = () => {
       <div class="text-h4 text-secondary">Network</div>
     </div>
     <div class="d-flex flex-row">
-      <v-tabs v-model="tab" color="primary" direction="vertical" class="border-r">
+      <v-tabs v-model="tab" color="primary" direction="vertical" class="border-r network-tabs">
         <v-tab v-for="networkAdapter in networkStatus?.networkStatus" :value="networkAdapter.name" class="text-none">
           <div class="d-flex align-center w-100 py-2">
             <v-icon 
@@ -117,3 +117,9 @@ const cancelTabChange = () => {
     </v-dialog>
   </div>
 </template>
+
+<style scoped>
+.network-tabs {
+  min-width: 180px;
+}
+</style>

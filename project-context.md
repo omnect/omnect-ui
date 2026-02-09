@@ -92,6 +92,49 @@ cargo test --features mock
  ./scripts/run-e2e-tests.sh my-tests.spec.ts
 ```
 
+## UX Guidelines
+
+### Page Layout
+
+- Every page wraps content in `<v-sheet :border="true" rounded class="ma-4">`.
+- No page-level padding beyond `ma-4` on the sheet; inner spacing is handled per component.
+
+### Typography Hierarchy
+
+| Level | Class | Usage |
+| ----- | ----- | ----- |
+| Page section header | `text-h4 text-secondary border-b` | Top-level section titles ("Common Info", "Network") |
+| Sub-section header | `text-h5 text-secondary font-weight-bold border-b pb-2` | Secondary sections ("Commands", "Update Details") |
+| Category label | `text-subtitle-2 text-medium-emphasis mb-1` | Column/group labels ("Connectivity", "Version", "Provider") |
+
+### Data Display
+
+- Read-only data uses plain `<dt>`/`<dd>` pairs or the `KeyValuePair` component — no form fields, no icons.
+- Form fields that become read-only (e.g., DHCP-managed network fields) switch to `variant="plain"` to visually distinguish them from editable fields (`variant="outlined"`).
+
+### Icons
+
+- Do not add decorative icons to form field labels or data displays. Labels are self-explanatory.
+- Icons are reserved for **functional actions** (copy-to-clipboard, status indicators, navigation).
+
+### Buttons
+
+| Role | Variant | Color |
+| ---- | ------- | ----- |
+| Primary action | `variant="flat"` | `color="primary"` |
+| Destructive confirm | `variant="flat"` | `color="error"` |
+| Secondary / Cancel | `variant="text"` | `color="primary"` |
+
+### Dialogs
+
+- Confirmation dialogs use `v-card` with `v-card-title` (`text-h5`), `v-card-text`, and `v-card-actions`.
+- Actions are right-aligned (`<v-spacer>` before buttons).
+- Cancel is always `variant="text"`, confirm uses `variant="flat"`.
+
+### Redundancy
+
+- Do not display the same information twice in different components. Choose the most informative presentation and remove the redundant one.
+
 ## Project Structure
 
 ```text

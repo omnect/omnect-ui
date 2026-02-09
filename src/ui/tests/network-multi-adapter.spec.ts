@@ -48,7 +48,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
       // Part 1: Test current connection adapter (eth0) - SHOULD show rollback modal
       await page.getByRole('tab', { name: 'eth0' }).click();
-      await expect(page.getByText('(current connection)')).toBeVisible();
+      await expect(page.getByText('This is your current connection')).toBeVisible();
 
       const eth0IpInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await expect(eth0IpInput).toHaveValue('localhost');
@@ -72,7 +72,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
       // Part 2: Test non-current adapter (wlan0) - should NOT show rollback modal
       await page.getByRole('tab', { name: 'wlan0' }).click();
-      await expect(page.getByText('(current connection)')).not.toBeVisible();
+      await expect(page.getByText('This is your current connection')).not.toBeVisible();
 
       // Wait for tab to fully activate and NetworkFormStartEdit to be called
       await page.waitForTimeout(500);
@@ -210,7 +210,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
       // Test 1: eth0 (current connection) - SHOULD show rollback modal
       await page.getByRole('tab', { name: 'eth0' }).click();
-      await expect(page.getByText('(current connection)')).toBeVisible();
+      await expect(page.getByText('This is your current connection')).toBeVisible();
 
       let ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
@@ -224,7 +224,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
       // Test 2: wlan0 (not current) - should NOT show rollback modal
       await page.getByRole('tab', { name: 'wlan0' }).click();
-      await expect(page.getByText('(current connection)')).not.toBeVisible();
+      await expect(page.getByText('This is your current connection')).not.toBeVisible();
 
       ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('192.168.2.100');
@@ -246,7 +246,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
       // Test 3: eth1 (not current) - should NOT show rollback modal
       await page.getByRole('tab', { name: 'eth1' }).click();
-      await expect(page.getByText('(current connection)')).not.toBeVisible();
+      await expect(page.getByText('This is your current connection')).not.toBeVisible();
 
       ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('10.0.0.50');
@@ -479,7 +479,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
       // Verify eth0 is marked as current connection
       await page.getByRole('tab', { name: 'eth0' }).click();
-      await expect(page.getByText('(current connection)')).toBeVisible();
+      await expect(page.getByText('This is your current connection')).toBeVisible();
 
       // Edit eth0, verify rollback modal appears
       let ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
@@ -493,7 +493,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
       // Verify wlan0 is NOT marked as current connection (even though it has same IP)
       await page.getByRole('tab', { name: 'wlan0' }).click();
-      await expect(page.getByText('(current connection)')).not.toBeVisible();
+      await expect(page.getByText('This is your current connection')).not.toBeVisible();
 
       // Edit wlan0, verify rollback modal does NOT appear
       ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
@@ -513,7 +513,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
       // Verify eth1 also does NOT show rollback modal
       await page.getByRole('tab', { name: 'eth1' }).click();
-      await expect(page.getByText('(current connection)')).not.toBeVisible();
+      await expect(page.getByText('This is your current connection')).not.toBeVisible();
 
       ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('10.0.0.50');
