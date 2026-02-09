@@ -13,10 +13,6 @@ import {
 
 test.describe('Authentication', () => {
   test.beforeEach(async ({ page }) => {
-    // Listen for console logs
-    page.on('console', msg => console.log(`BROWSER LOG: ${msg.text()}`));
-    page.on('pageerror', err => console.log(`BROWSER ERROR: ${err}`));
-
     await mockConfig(page);
     await mockLoginSuccess(page);
 

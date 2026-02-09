@@ -484,7 +484,6 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
           // @ts-ignore
           window.WebSocket = function(url, protocols) {
               if (typeof url === 'string' && url.includes('192.168.1.150')) {
-                  console.log(`[Shim] Redirecting WebSocket ${url} to localhost`);
                   url = url.replace('192.168.1.150', 'localhost');
               }
               return new OriginalWebSocket(url, protocols);
@@ -524,8 +523,6 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
           const originalProtocol = new URL(originalUrl).protocol;
 
           const newUrl = `${originalProtocol}//localhost:${originalPort}${url.pathname}${url.search}`;
-
-          console.log(`Redirecting ${url.href} to ${newUrl}`);
 
           try {
               const response = await page.request.fetch(newUrl, {

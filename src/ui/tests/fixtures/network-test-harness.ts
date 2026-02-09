@@ -492,10 +492,6 @@ export class NetworkTestHarness {
     try {
       await expect(tab).toBeVisible({ timeout: 10000 });
     } catch (e) {
-      console.error(`[Harness] Tab ${adapterName} NOT VISIBLE. Current URL: ${page.url()}`);
-      // Log some info about available tabs
-      const tabs = await page.locator('.v-tab').allTextContents();
-      console.log(`[Harness] Available tabs: ${tabs.join(', ')}`);
       throw e;
     }
 
