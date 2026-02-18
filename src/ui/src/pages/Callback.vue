@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
-import { getUser, handleRedirectCallback } from "../auth/auth-service"
+import { getUser, handleRedirectCallback, removeUser } from "../auth/auth-service"
 import OmnectLogo from "../components/branding/OmnectLogo.vue"
 
 const router = useRouter()
@@ -25,6 +25,7 @@ onMounted(async () => {
 			if (res.ok) {
 				router.replace("/set-password")
 			} else {
+				await removeUser()
 				errorMsg.value = "You are not authorized."
 			}
 
