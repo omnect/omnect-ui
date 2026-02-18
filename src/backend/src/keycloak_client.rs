@@ -78,7 +78,9 @@ impl SingleSignOnProvider for KeycloakProvider {
         // Keycloak tokens usually have these, but we don't strictly require them here
         // as we only care about the custom claims if the token is valid.
         validation.validate_exp = true;
-        validation.required_spec_claims.remove("iss"); // issuer might vary
+        validation.validate_aud = false;
+        validation.required_spec_claims.remove("iss");
+        validation.required_spec_claims.remove("aud");
 
         let claims = decode::<TokenClaims>(token, &pub_key, &validation)?;
         Ok(claims.claims)
@@ -178,7 +180,9 @@ Y0282ogmR+NZiE25/g1ZBLkIDBuXU52hE2yKsO1VHf7ixbkxozNCt45XfzfNes9rH9swg4+sZWJ\
             .expect("key should parse");
         let mut validation = Validation::new(Algorithm::RS256);
         validation.validate_exp = true;
+        validation.validate_aud = false;
         validation.required_spec_claims.remove("iss");
+        validation.required_spec_claims.remove("aud");
 
         let decoded = decode::<TokenClaims>(&token, &pub_key, &validation);
         assert!(decoded.is_ok(), "signature verification should succeed");
