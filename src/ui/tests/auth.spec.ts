@@ -126,6 +126,32 @@ test.describe('Authentication', () => {
     await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
   });
 
+  test('rejects set-password without portal token validation', async ({ page }) => {
+    // Simulate: OIDC user exists in localStorage (router guard passes)
+    // but backend rejects because portal_validated session flag is missing
+    await mockPortalAuth(page);
+    await page.route('**/set-password', async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 401,
+          contentType: 'text/plain',
+          body: 'portal authentication required',
+        });
+      } else {
+        await route.fallback();
+      }
+    });
+
+    await page.goto('/set-password');
+    await expect(page.getByRole('heading', { name: /set password/i })).toBeVisible();
+
+    await page.locator('input[type="password"]').nth(0).fill('new-password');
+    await page.locator('input[type="password"]').nth(1).fill('new-password');
+    await page.getByRole('button', { name: /set password/i }).click();
+
+    await expect(page.getByText('portal authentication required')).toBeVisible();
+  });
+
   test('can update password successfully', async ({ page }) => {
     await mockRequireSetPassword(page);
     await mockUpdatePasswordSuccess(page);
