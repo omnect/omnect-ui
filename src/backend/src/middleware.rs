@@ -80,29 +80,30 @@ where
 
             let mut payload = req.take_payload().take();
 
-            // Check Authorization header to decide which auth scheme to try
-            let auth_header = req.headers().get(actix_web::http::header::AUTHORIZATION);
-
-            if let Some(header_value) = auth_header
-                && let Ok(header_str) = header_value.to_str()
+            let is_authorized = match req
+                .headers()
+                .get(actix_web::http::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok())
             {
-                if header_str.starts_with("Bearer ") {
-                    // 2. Check Bearer Token
-                    if let Ok(auth) = BearerAuth::from_request(req.request(), &mut payload).await
-                        && token_manager.verify_token(auth.token())
-                    {
-                        let res = service.call(req).await?;
-                        return Ok(res.map_into_left_body());
-                    }
-                } else if header_str.starts_with("Basic ") {
-                    // 3. Check Basic Auth
-                    if let Ok(auth) = BasicAuth::from_request(req.request(), &mut payload).await
-                        && verify_user(auth)
-                    {
-                        let res = service.call(req).await?;
-                        return Ok(res.map_into_left_body());
-                    }
+                // 2. Check Bearer Token
+                Some(h) if h.starts_with("Bearer ") => {
+                    BearerAuth::from_request(req.request(), &mut payload)
+                        .await
+                        .is_ok_and(|auth| token_manager.verify_token(auth.token()))
                 }
+                // 3. Check Basic Auth
+                Some(h) if h.starts_with("Basic ") => {
+                    BasicAuth::from_request(req.request(), &mut payload)
+                        .await
+                        .is_ok_and(|auth| verify_user(auth))
+                }
+                _ => false,
+            };
+
+            if is_authorized {
+                req.set_payload(payload.into());
+                let res = service.call(req).await?;
+                return Ok(res.map_into_left_body());
             }
 
             Ok(unauthorized_error(req).map_into_right_body())
@@ -217,6 +218,10 @@ pub mod tests {
         HttpResponse::Ok().body("Success")
     }
 
+    async fn echo_json(body: web::Json<serde_json::Value>) -> impl Responder {
+        HttpResponse::Ok().json(body.into_inner())
+    }
+
     const SESSION_SECRET: [u8; 64] = [
         0xb2, 0x64, 0x83, 0x0, 0xf5, 0xcb, 0xf6, 0x1d, 0x5c, 0x83, 0xc0, 0x90, 0x6b, 0xb2, 0xe4,
         0x26, 0x14, 0x9, 0x2b, 0xa1, 0xc4, 0xc5, 0x37, 0xe7, 0xc9, 0x20, 0x8e, 0xbc, 0xee, 0x2,
@@ -246,7 +251,8 @@ pub mod tests {
             App::new()
                 .app_data(web::Data::new(token_manager))
                 .wrap(session_middleware)
-                .route("/", web::get().to(index).wrap(AuthMw)),
+                .route("/", web::get().to(index).wrap(AuthMw))
+                .route("/echo", web::post().to(echo_json).wrap(AuthMw)),
         )
         .await
     }
@@ -422,6 +428,56 @@ pub mod tests {
         let resp = test::call_service(&app, req).await;
 
         assert!(resp.status().is_success());
+    }
+
+    #[tokio::test]
+    async fn middleware_bearer_auth_preserves_request_body() {
+        let claim = generate_valid_claim();
+        let token = generate_token(claim);
+
+        let app = create_service().await;
+
+        let payload = serde_json::json!({"mode": 1, "preserve": ["certificates"]});
+
+        let req = test::TestRequest::post()
+            .uri("/echo")
+            .insert_header(ContentType::json())
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .set_json(&payload)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert!(resp.status().is_success());
+
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body, payload);
+    }
+
+    #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
+    async fn middleware_basic_auth_preserves_request_body() {
+        let _lock = PasswordService::lock_for_test();
+
+        let password = "some-password";
+        setup_password_file(password);
+
+        let app = create_service().await;
+
+        let payload = serde_json::json!({"mode": 1, "preserve": ["network"]});
+        let encoded_password = BASE64_STANDARD.encode(format!(":{password}"));
+
+        let req = test::TestRequest::post()
+            .uri("/echo")
+            .insert_header(ContentType::json())
+            .insert_header(("Authorization", format!("Basic {encoded_password}")))
+            .set_json(&payload)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+
+        assert!(resp.status().is_success());
+
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body, payload);
     }
 
     #[tokio::test]
