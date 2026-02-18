@@ -175,6 +175,14 @@ where
                 .finish();
         }
 
+        let portal_validated = session
+            .get::<bool>("portal_validated")
+            .unwrap_or(None)
+            .unwrap_or(false);
+        if !portal_validated {
+            return HttpResponse::Unauthorized().body("portal authentication required");
+        }
+
         if let Err(e) = PasswordService::store_or_update_password(&body.password) {
             error!("set_password failed: {e:#}");
             return HttpResponse::InternalServerError().body(e.to_string());
@@ -210,7 +218,11 @@ where
         HttpResponse::Ok().json(!password_exists)
     }
 
-    pub async fn validate_portal_token(body: String, api: web::Data<Self>) -> impl Responder {
+    pub async fn validate_portal_token(
+        body: String,
+        api: web::Data<Self>,
+        session: Session,
+    ) -> impl Responder {
         debug!("validate_portal_token() called");
 
         if let Err(e) = AuthorizationService::validate_token_and_claims(
@@ -224,6 +236,7 @@ where
             return HttpResponse::Unauthorized().finish();
         }
 
+        session.insert("portal_validated", true).ok();
         HttpResponse::Ok().finish()
     }
 
