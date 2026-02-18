@@ -95,13 +95,13 @@ where
                 Some(h) if h.starts_with("Basic ") => {
                     BasicAuth::from_request(req.request(), &mut payload)
                         .await
-                        .is_ok_and(|auth| verify_user(auth))
+                        .is_ok_and(verify_user)
                 }
                 _ => false,
             };
 
             if is_authorized {
-                req.set_payload(payload.into());
+                req.set_payload(payload);
                 let res = service.call(req).await?;
                 return Ok(res.map_into_left_body());
             }

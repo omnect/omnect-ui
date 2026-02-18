@@ -65,9 +65,7 @@ impl KeycloakProvider {
 /// Parse base64-encoded SPKI public key (as returned by Keycloak's realm endpoint)
 /// into a DecodingKey for JWT verification.
 fn decoding_key_from_keycloak(base64_spki: &str) -> Result<DecodingKey> {
-    let pem = format!(
-        "-----BEGIN PUBLIC KEY-----\n{base64_spki}\n-----END PUBLIC KEY-----"
-    );
+    let pem = format!("-----BEGIN PUBLIC KEY-----\n{base64_spki}\n-----END PUBLIC KEY-----");
     DecodingKey::from_rsa_pem(pem.as_bytes()).context("failed to parse public key from PEM")
 }
 
@@ -176,8 +174,8 @@ Y0282ogmR+NZiE25/g1ZBLkIDBuXU52hE2yKsO1VHf7ixbkxozNCt45XfzfNes9rH9swg4+sZWJ\
         let token = sign_test_token(&claims);
 
         // Verify using the same code path as production
-        let pub_key = decoding_key_from_keycloak(TEST_KEYCLOAK_PUBLIC_KEY)
-            .expect("key should parse");
+        let pub_key =
+            decoding_key_from_keycloak(TEST_KEYCLOAK_PUBLIC_KEY).expect("key should parse");
         let mut validation = Validation::new(Algorithm::RS256);
         validation.validate_exp = true;
         validation.validate_aud = false;
