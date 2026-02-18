@@ -4,6 +4,12 @@ ARG DISTROLESS_IMAGE=gcr.io/distroless/base-debian12:nonroot
 
 FROM ${DISTROLESS_IMAGE} AS distroless
 
+# Extract git revision from source (runs on host arch, instant)
+FROM --platform=$BUILDPLATFORM ${BUILD_IMAGE} AS git-info
+COPY .git /work/.git
+WORKDIR /work
+RUN git rev-parse --short HEAD > /git-short-rev
+
 # Stage 1: Generate TypeScript types on host architecture (fast, no emulation)
 FROM --platform=$BUILDPLATFORM ${BUILD_IMAGE} AS typegen
 
@@ -66,7 +72,6 @@ RUN apt-get update && \
 
 ARG TARGETARCH
 ARG OMNECT_UI_BUILD_ARG=""
-ARG GIT_SHORT_REV="unknown"
 WORKDIR "/work"
 
 ARG CENTRIFUGO_VERSION=v6.6.0
@@ -84,12 +89,14 @@ COPY src/backend ./src/backend
 # Copy built Vue frontend for embedding into the Rust binary
 COPY --from=vue-build /usr/src/app/dist ./src/ui/dist
 
+# Copy git revision extracted in the git-info stage
+COPY --from=git-info /git-short-rev /tmp/git-short-rev
+
 # Build omnect-ui for target architecture with embedded frontend
 # Cache mounts persist compiled dependencies across builds
-# Pass GIT_SHORT_REV as environment variable to avoid copying .git directory
 RUN --mount=type=cache,target=/usr/local/cargo/registry,id=cargo-registry-${TARGETARCH} \
     --mount=type=cache,target=/work/build,id=cargo-build-${TARGETARCH} \
-    GIT_SHORT_REV=${GIT_SHORT_REV} cargo auditable build ${OMNECT_UI_BUILD_ARG} --release -p omnect-ui --target-dir ./build && \
+    GIT_SHORT_REV=$(cat /tmp/git-short-rev) cargo auditable build ${OMNECT_UI_BUILD_ARG} --release -p omnect-ui --target-dir ./build && \
     cp ./build/release/omnect-ui /work/omnect-ui-bin
 
 SHELL ["/bin/bash", "-c"]
