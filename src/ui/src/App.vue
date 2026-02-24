@@ -31,8 +31,8 @@ const overlay: Ref<boolean> = ref(false)
 const showRollbackNotification: Ref<boolean> = ref(false)
 const showFactoryResetResultModal: Ref<boolean> = ref(false)
 const showUpdateValidationModal: Ref<boolean> = ref(false)
-const factoryResetAckedOnMount = ref(false)
-const updateValidationAckedOnMount = ref(false)
+const factoryResetAckedOnMount = ref(true)
+const updateValidationAckedOnMount = ref(true)
 const errorTitle = ref("")
 const errorMsg = ref("")
 
@@ -95,9 +95,7 @@ const acknowledgeUpdateValidation = () => {
 	showUpdateValidationModal.value = false
 }
 
-const factoryResetIsSuccess = computed(() =>
-	viewModel.factoryReset?.result?.status === 'modeSupported'
-)
+const factoryResetModalSuccess = ref(false)
 
 // Watch authentication state to redirect to login if session is lost
 // This handles the case where the backend restarts (reboot/factory reset) and the session becomes invalid
@@ -131,6 +129,7 @@ watch(
 	() => viewModel.factoryReset?.result,
 	(result) => {
 		if (result && result.status !== 'unknown' && !factoryResetAckedOnMount.value) {
+			factoryResetModalSuccess.value = result.status === 'modeSupported'
 			showFactoryResetResultModal.value = true
 		}
 	}
@@ -160,10 +159,15 @@ onMounted(async () => {
 	}
 
 	// Record acked state to suppress watcher-triggered modals for already-acked results
-	factoryResetAckedOnMount.value = (data as any).factoryResetResultAcked ?? false
-	updateValidationAckedOnMount.value = (data as any).updateValidationAcked ?? false
+	factoryResetAckedOnMount.value = (data as any).factoryResetResultAcked ?? true
+	updateValidationAckedOnMount.value = (data as any).updateValidationAcked ?? true
 
-	// Check update validation on mount (factory reset result arrives via WebSocket)
+	// Check if we should show modals on mount based on initial state
+	if (!factoryResetAckedOnMount.value && viewModel.factoryReset?.result && viewModel.factoryReset.result.status !== 'unknown') {
+		factoryResetModalSuccess.value = viewModel.factoryReset.result.status === 'modeSupported'
+		showFactoryResetResultModal.value = true
+	}
+
 	if (!updateValidationAckedOnMount.value) {
 		const status = data.updateValidationStatus?.status
 		if (status === 'Succeeded' || status === 'Recovered') {
@@ -202,11 +206,11 @@ onMounted(async () => {
     </v-dialog>
     <v-dialog v-model="showFactoryResetResultModal" max-width="500" persistent>
       <DialogContent
-        :title="factoryResetIsSuccess ? 'Factory Reset Completed' : 'Factory Reset Failed'"
-        :dialog-type="factoryResetIsSuccess ? 'Success' : 'Error'"
+        :title="factoryResetModalSuccess ? 'Factory Reset Completed' : 'Factory Reset Failed'"
+        :dialog-type="factoryResetModalSuccess ? 'Success' : 'Error'"
         :show-close="false">
         <div class="flex flex-col gap-4 mb-4">
-          <template v-if="factoryResetIsSuccess">
+          <template v-if="factoryResetModalSuccess">
             <p>The factory reset completed successfully.</p>
           </template>
           <template v-else>
