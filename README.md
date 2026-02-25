@@ -4,6 +4,17 @@ Product page: <www.omnect.io>
 
 This module implements a web frontend and backend to provide omnect specific features in a local environment, where the device might not be connected to the azure cloud. In that case the device cannot be remotely controlled by [omnect-portal](https://cp.omnect.conplement.cloud/) and omnect UI might be the alternative.
 
+## Features
+
+omnect UI provides the following main features:
+
+- **Device Status Monitoring**: Real-time visualization of device health, system information, and connectivity status.
+- **Network Management**: Configuration of network adapters with support for DHCP and Static IP.
+- **Automatic Network Rollback**: Safety mechanism that reverts failed network configurations to prevent device isolation.
+- **Firmware Updates**: Local trigger and monitoring of atomic A/B partition updates.
+- **Device Control**: Administrative actions like rebooting or factory resetting the device.
+- **Secure Access**: Integrated user authentication to protect device settings.
+
 ## Architecture
 
 omnect UI follows a full-stack Single Page Application (SPA) architecture:
@@ -43,16 +54,7 @@ To access the UI without security warnings, you must **import the device's root 
     *   **Host Network Mode**: While using `network_mode: host` would allow binding to specific interfaces, it exposes all container ports to the host network interface directly. This would require opening the device firewall to allow traffic, which is security restrictive.
     *   **Bridge Mode (Required)**: We use Docker bridge mode to maintain isolation and control over exposed ports, but this necessitates the certificate limitations described above.
 
-Login with the configured password<br>
-![login](docu/login.png)<br>
-Watch device status<br>
-![login](docu/main.png)<br>
-Reset device and choose options to keep<br>
-![factory-reset](docu/factory-reset.png)<br>
-Update your device<br>
-![update](docu/update.png)
-
-## Features
+## Feature Details
 
 ### Network Configuration
 

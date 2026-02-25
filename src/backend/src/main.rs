@@ -121,11 +121,7 @@ fn initialize() -> Result<()> {
 
     builder.target(Target::Stdout).init();
 
-    info!(
-        "module version: {} ({})",
-        env!("CARGO_PKG_VERSION"),
-        env!("GIT_SHORT_REV")
-    );
+    info!("module version: {}", env!("CARGO_PKG_VERSION"));
 
     CryptoProvider::install_default(default_provider())
         .map_err(|_| anyhow::anyhow!("crypto provider already installed"))?;
