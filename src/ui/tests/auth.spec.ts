@@ -126,30 +126,63 @@ test.describe('Authentication', () => {
     await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
   });
 
-  test('rejects set-password without portal token validation', async ({ page }) => {
-    // Simulate: OIDC user exists in localStorage (router guard passes)
-    // but backend rejects because portal_validated session flag is missing
+  test('re-triggers OIDC login when backend session is stale', async ({ page }) => {
+    // Simulate: OIDC user exists in localStorage but token/validate fails because
+    // the backend session was wiped (e.g. after factory reset). The router guard
+    // now detects this before showing the form and redirects to Keycloak.
     await mockPortalAuth(page);
-    await page.route('**/set-password', async (route) => {
-      if (route.request().method() === 'POST') {
-        await route.fulfill({
-          status: 401,
-          contentType: 'text/plain',
-          body: 'portal authentication required',
-        });
+    // Override the 200 mock from mockPortalAuth to simulate a stale session.
+    await page.route('**/token/validate', async (route) => {
+      await route.fulfill({ status: 401 });
+    });
+
+    // Intercept the redirect to Keycloak (mocked authority) to verify it's attempted.
+    // We expect a navigation away from the app to the Keycloak URL.
+    const redirectPromise = page.waitForRequest(req => req.url().includes('localhost:8080'));
+
+    await page.goto('/set-password');
+
+    // Wait for the redirect to be triggered
+    await redirectPromise;
+  });
+
+  test('no auth errors on set-password page when WiFi is available', async ({ page }) => {
+    await mockPortalAuth(page);
+    await page.route('**/require-set-password', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: 'true' });
+    });
+
+    // WiFi hardware is available — CheckAvailability (unauthenticated) succeeds
+    await page.route('**/wifi/available', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ available: true, interfaceName: 'wlan0' }),
+      });
+    });
+
+    // Authenticated WiFi endpoints should NOT be called before login.
+    // If they are, they return 401 which would surface as an error.
+    await page.route('**/wifi/status', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ status: 401, contentType: 'text/plain', body: 'Not authenticated' });
       } else {
-        await route.fallback();
+        await route.continue();
+      }
+    });
+    await page.route('**/wifi/networks', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ status: 401, contentType: 'text/plain', body: 'Not authenticated' });
+      } else {
+        await route.continue();
       }
     });
 
-    await page.goto('/set-password');
+    await page.goto('/');
     await expect(page.getByRole('heading', { name: /set password/i })).toBeVisible();
 
-    await page.locator('input[type="password"]').nth(0).fill('new-password');
-    await page.locator('input[type="password"]').nth(1).fill('new-password');
-    await page.getByRole('button', { name: /set password/i }).click();
-
-    await expect(page.getByText('portal authentication required')).toBeVisible();
+    // No auth error should be displayed
+    await expect(page.getByText(/not authenticated/i)).not.toBeVisible();
   });
 
   test('can update password successfully', async ({ page }) => {

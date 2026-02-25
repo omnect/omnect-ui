@@ -1,22 +1,30 @@
 import { Page, expect } from '@playwright/test';
 import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './mock-api';
 
-export async function setupAndLogin(page: Page) {
+interface SetupOptions {
+  // When false, App.vue will not suppress the factory-reset result modal watcher.
+  // Defaults to true so that most tests never accidentally show the modal.
+  factoryResetResultAcked?: boolean;
+}
+
+export async function setupAndLogin(page: Page, options: SetupOptions = {}) {
+  const { factoryResetResultAcked = true } = options;
+
   await mockConfig(page);
   await mockLoginSuccess(page);
   await mockRequireSetPassword(page);
-  
+
   // Mock healthcheck to avoid errors on app load
   await page.route('**/healthcheck', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-          version_info: { current: '1.0.0', required: '1.0.0', mismatch: false },
-          update_validation_status: { status: 'NoUpdate' },
-          network_rollback_occurred: false,
-          factory_reset_result_acked: true,
-          update_validation_acked: true
+          versionInfo: { current: '1.0.0', required: '1.0.0', mismatch: false },
+          updateValidationStatus: { status: 'NoUpdate' },
+          networkRollbackOccurred: false,
+          factoryResetResultAcked,
+          updateValidationAcked: true
       })
     });
   });

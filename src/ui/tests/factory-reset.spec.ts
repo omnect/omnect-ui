@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { setupAndLogin } from './fixtures/test-setup';
+import { mockPortalAuth, mockSetPasswordSuccess } from './fixtures/mock-api';
+import { publishToCentrifugo } from './fixtures/centrifugo';
 
 test.describe('Device Factory Reset', () => {
   test.beforeEach(async ({ page }) => {
@@ -78,11 +80,124 @@ test.describe('Device Factory Reset', () => {
     // Verify initial state
     await expect(page.getByText('The device is resetting')).toBeVisible();
 
-    // Wait for timeout
-    // Wait for timeout (countdown comes from Core's overlay spinner)
-    await page.waitForTimeout(1000);
+    // Wait for timeout (VITE_FACTORY_RESET_TIMEOUT_MS=2000ms, poll=500ms, allow buffer)
+    await expect(page.getByText('Device did not come back online. You may need to re-accept the security certificate.')).toBeVisible({ timeout: 4000 });
+  });
+});
 
-    // Verify timeout message
-    await expect(page.getByText('Device did not come back online. You may need to re-accept the security certificate.')).toBeVisible();
+test.describe('Device Factory Reset - Reconnection', () => {
+  test('device returns online after factory reset, prompts set-password, and shows success modal', async ({ page }) => {
+    // factoryResetResultAcked: false on initial load so App.vue's watcher is not suppressed
+    // and the "Factory Reset Completed" modal can fire after the WebSocket message arrives.
+    // mockPortalAuth must be called before setupAndLogin so its addInitScript populates
+    // localStorage on page.goto('/'), satisfying the requiresPortalAuth guard on /set-password.
+    await mockPortalAuth(page);
+    await setupAndLogin(page, { factoryResetResultAcked: false });
+
+    await page.route('**/factory-reset', async (route) => {
+      await route.fulfill({ status: 200, body: '' });
+    });
+
+    // After factory reset the password is cleared → require-set-password returns true.
+    await page.route('**/require-set-password', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: 'true' });
+    });
+
+    // Stateful healthcheck: first call fails (device offline), subsequent succeed (back online).
+    // factoryResetResultAcked remains false so the modal watcher stays active.
+    let healthcheckCount = 0;
+    await page.route('**/healthcheck', async (route) => {
+      if (route.request().method() !== 'GET') { await route.continue(); return; }
+      healthcheckCount++;
+      if (healthcheckCount <= 1) {
+        await route.abort('failed');
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            versionInfo: { current: '1.0.0', required: '1.0.0', mismatch: false },
+            updateValidationStatus: { status: 'NoUpdate' },
+            networkRollbackOccurred: false,
+            factoryResetResultAcked: false,
+            updateValidationAcked: true
+          })
+        });
+      }
+    });
+
+    // Mock set-password so the user can authenticate after resetting.
+    await mockSetPasswordSuccess(page);
+
+    // Mock ack-factory-reset-result (called when user dismisses the modal).
+    await page.route('**/ack-factory-reset-result', async (route) => {
+      await route.fulfill({ status: 200 });
+    });
+
+    await page.getByRole('button', { name: 'Factory Reset' }).first().click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Reset' }).click();
+
+    await expect(page.getByText('The device is resetting')).toBeVisible({ timeout: 10000 });
+
+    // Session invalidated → /login → requiresPasswordSet=true → /set-password.
+    await expect(page).toHaveURL(/\/set-password/, { timeout: 15000 });
+    await expect(page.getByRole('heading', { name: 'Set Password' })).toBeVisible({ timeout: 5000 });
+
+    // Set new password → authenticate → dashboard.
+    await page.locator('input[type="password"]').nth(0).fill('new-password');
+    await page.locator('input[type="password"]').nth(1).fill('new-password');
+    await page.getByRole('button', { name: /set password/i }).click();
+    await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
+
+    // ODS publishes the factory reset result via Centrifugo after republishing.
+    // status=0 maps to OdsFactoryResetResultStatus::ModeSupported → factoryResetIsSuccess=true.
+    await publishToCentrifugo('FactoryResetV1', {
+      keys: ['network'],
+      result: { status: 0, error: '0', paths: ['/etc/systemd/network/'] },
+    });
+
+    await expect(page.getByText('Factory Reset Completed', { exact: true })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('The factory reset completed successfully.')).toBeVisible();
+
+    await page.getByRole('button', { name: 'OK' }).click();
+    await expect(page.getByText('Factory Reset Completed', { exact: true })).not.toBeVisible();
+  });
+
+  test('success modal title does not flash to error state when dismissed', async ({ page }) => {
+    await mockPortalAuth(page);
+    await setupAndLogin(page, { factoryResetResultAcked: false });
+
+    await page.route('**/ack-factory-reset-result', async (route) => {
+      await route.fulfill({ status: 200 });
+    });
+
+    // Trigger the factory reset success modal via WebSocket (status: 0 = ModeSupported)
+    await publishToCentrifugo('FactoryResetV1', {
+      keys: ['network'],
+      result: { status: 0, error: '0', paths: ['/etc/systemd/network/'] },
+    });
+
+    await expect(page.getByText('Factory Reset Completed', { exact: true })).toBeVisible({ timeout: 5000 });
+
+    // Install mutation observer BEFORE clicking OK to catch the flash during close animation
+    await page.evaluate(() => {
+      (window as any).__factoryResetErrorFlash = false;
+      const observer = new MutationObserver(() => {
+        if (document.body.textContent?.includes('Factory Reset Failed')) {
+          (window as any).__factoryResetErrorFlash = true;
+        }
+      });
+      observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+      (window as any).__factoryResetObserver = observer;
+    });
+
+    await page.getByRole('button', { name: 'OK' }).click();
+    await expect(page.getByText('Factory Reset Completed', { exact: true })).not.toBeVisible({ timeout: 5000 });
+
+    const flashDetected = await page.evaluate(() => {
+      (window as any).__factoryResetObserver?.disconnect();
+      return (window as any).__factoryResetErrorFlash;
+    });
+    expect(flashDetected).toBe(false);
   });
 });

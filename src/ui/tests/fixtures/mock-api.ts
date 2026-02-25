@@ -88,10 +88,16 @@ export async function mockPortalAuth(page: Page) {
   };
 
   const key = 'oidc.user:http://localhost:8080:omnect-ui';
-  
+
   await page.addInitScript(({ key, user }) => {
     window.localStorage.setItem(key, JSON.stringify(user));
   }, { key, user });
+
+  // The requiresPortalAuth router guard calls token/validate to establish the
+  // backend session flag. Mock it to succeed so tests can reach /set-password.
+  await page.route('**/token/validate', async (route) => {
+    await route.fulfill({ status: 200 });
+  });
 }
 
 export async function mockLoginFailure(page: Page, message = 'invalid credentials') {
