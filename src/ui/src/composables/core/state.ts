@@ -52,6 +52,8 @@ export const viewModel = reactive<ViewModel>({
 	firmwareUploadState: { type: 'idle' },
 	// Overlay spinner state
 	overlaySpinner: { overlay: false, title: '', text: null, timedOut: false, progress: null, countdownSeconds: null },
+	// WiFi state
+	wifiState: { type: 'unavailable' },
 })
 
 /**

@@ -12,6 +12,7 @@ import {
 	convertNetworkChangeState,
 	convertNetworkFormState,
 	convertUploadState,
+	convertWifiState,
 } from './types'
 import { setViewModelUpdater } from './effects'
 import { Model as GeneratedViewModel } from '../../../../shared_types/generated/typescript/types/shared_types'
@@ -198,6 +199,9 @@ export function updateViewModelFromCore(): void {
 
 		// Firmware upload state
 		viewModel.firmwareUploadState = convertUploadState(coreViewModel.firmwareUploadState)
+
+		// WiFi state
+		viewModel.wifiState = convertWifiState(coreViewModel.wifiState)
 
 		// Auto-subscribe logic based on authentication state transition
 		if (viewModel.isAuthenticated && !wasAuthenticated) {

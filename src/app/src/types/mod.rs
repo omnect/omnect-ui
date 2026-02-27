@@ -18,6 +18,7 @@ pub mod factory_reset;
 pub mod network;
 pub mod ods;
 pub mod update;
+pub mod wifi;
 
 // Re-export all types for backward compatibility
 pub use auth::*;
@@ -27,3 +28,4 @@ pub use factory_reset::*;
 pub use network::*;
 pub use ods::*;
 pub use update::*;
+pub use wifi::*;

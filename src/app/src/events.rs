@@ -102,6 +102,122 @@ pub enum WebSocketEvent {
     Disconnected,
 }
 
+/// WiFi management events
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub enum WifiEvent {
+    // User actions
+    CheckAvailability,
+    Scan,
+    Connect {
+        ssid: String,
+        password: String,
+    },
+    Disconnect,
+    GetStatus,
+    GetSavedNetworks,
+    ForgetNetwork {
+        ssid: String,
+    },
+    // Timer ticks (driven by Shell)
+    ScanPollTick,
+    ConnectPollTick,
+    // Responses from HTTP effects
+    #[serde(skip)]
+    CheckAvailabilityResponse(Result<WifiAvailability, String>),
+    #[serde(skip)]
+    ScanResponse(Result<(), String>),
+    #[serde(skip)]
+    ScanResultsResponse(Result<WifiScanResultsApiResponse, String>),
+    #[serde(skip)]
+    ConnectResponse(Result<(), String>),
+    #[serde(skip)]
+    DisconnectResponse(Result<(), String>),
+    #[serde(skip)]
+    StatusResponse(Result<WifiStatusApiResponse, String>),
+    #[serde(skip)]
+    SavedNetworksResponse(Result<WifiSavedNetworksApiResponse, String>),
+    #[serde(skip)]
+    ForgetNetworkResponse(Result<(), String>),
+}
+
+/// API response types for WiFi (match backend JSON shapes)
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WifiScanResultsApiResponse {
+    pub status: String,
+    pub state: String,
+    pub networks: Vec<WifiNetworkApiResponse>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WifiNetworkApiResponse {
+    pub ssid: String,
+    pub mac: String,
+    pub ch: u16,
+    pub rssi: i16,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WifiStatusApiResponse {
+    pub status: String,
+    pub state: String,
+    pub ssid: Option<String>,
+    pub ip_address: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WifiSavedNetworksApiResponse {
+    pub status: String,
+    pub networks: Vec<WifiSavedNetworkApiResponse>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WifiSavedNetworkApiResponse {
+    pub ssid: String,
+    pub flags: String,
+}
+
+/// Custom Debug for WifiEvent to redact password
+impl fmt::Debug for WifiEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WifiEvent::Connect { ssid, .. } => f
+                .debug_struct("Connect")
+                .field("ssid", ssid)
+                .field("password", &"<redacted>")
+                .finish(),
+            WifiEvent::CheckAvailability => write!(f, "CheckAvailability"),
+            WifiEvent::Scan => write!(f, "Scan"),
+            WifiEvent::Disconnect => write!(f, "Disconnect"),
+            WifiEvent::GetStatus => write!(f, "GetStatus"),
+            WifiEvent::GetSavedNetworks => write!(f, "GetSavedNetworks"),
+            WifiEvent::ForgetNetwork { ssid } => {
+                f.debug_struct("ForgetNetwork").field("ssid", ssid).finish()
+            }
+            WifiEvent::ScanPollTick => write!(f, "ScanPollTick"),
+            WifiEvent::ConnectPollTick => write!(f, "ConnectPollTick"),
+            WifiEvent::CheckAvailabilityResponse(r) => {
+                f.debug_tuple("CheckAvailabilityResponse").field(r).finish()
+            }
+            WifiEvent::ScanResponse(r) => f.debug_tuple("ScanResponse").field(r).finish(),
+            WifiEvent::ScanResultsResponse(r) => {
+                f.debug_tuple("ScanResultsResponse").field(r).finish()
+            }
+            WifiEvent::ConnectResponse(r) => f.debug_tuple("ConnectResponse").field(r).finish(),
+            WifiEvent::DisconnectResponse(r) => {
+                f.debug_tuple("DisconnectResponse").field(r).finish()
+            }
+            WifiEvent::StatusResponse(r) => f.debug_tuple("StatusResponse").field(r).finish(),
+            WifiEvent::SavedNetworksResponse(r) => {
+                f.debug_tuple("SavedNetworksResponse").field(r).finish()
+            }
+            WifiEvent::ForgetNetworkResponse(r) => {
+                f.debug_tuple("ForgetNetworkResponse").field(r).finish()
+            }
+        }
+    }
+}
+
 /// UI action events
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum UiEvent {
@@ -118,6 +234,7 @@ pub enum Event {
     Device(DeviceEvent),
     WebSocket(WebSocketEvent),
     Ui(UiEvent),
+    Wifi(WifiEvent),
 }
 
 /// Custom Debug implementation for AuthEvent to redact sensitive data
@@ -180,6 +297,7 @@ impl fmt::Debug for Event {
             Event::Device(e) => write!(f, "Device({e:?})"),
             Event::WebSocket(e) => write!(f, "WebSocket({e:?})"),
             Event::Ui(e) => write!(f, "Ui({e:?})"),
+            Event::Wifi(e) => write!(f, "Wifi({e:?})"),
         }
     }
 }

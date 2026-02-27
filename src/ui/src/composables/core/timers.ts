@@ -12,10 +12,13 @@ import { viewModel, isInitialized, wasmModule } from './state'
 import type { Event } from '../../../../shared_types/generated/typescript/types/shared_types'
 import {
 	EventVariantDevice,
+	EventVariantWifi,
 	DeviceEventVariantReconnectionCheckTick,
 	DeviceEventVariantReconnectionTimeout,
 	DeviceEventVariantNewIpCheckTick,
 	DeviceEventVariantNewIpCheckTimeout,
+	WifiEventVariantScanPollTick,
+	WifiEventVariantConnectPollTick,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 
 // Timer callback type - will be set by index.ts to avoid circular dependency
@@ -34,6 +37,8 @@ export function setEventSender(callback: (event: Event) => Promise<void>): void 
 
 const RECONNECTION_POLL_INTERVAL_MS = Number(import.meta.env.VITE_RECONNECTION_POLL_INTERVAL_MS) || 5000 // 5 seconds
 const NEW_IP_POLL_INTERVAL_MS = Number(import.meta.env.VITE_NEW_IP_POLL_INTERVAL_MS) || 5000 // 5 seconds
+const WIFI_SCAN_POLL_INTERVAL_MS = 500
+const WIFI_CONNECT_POLL_INTERVAL_MS = 1000
 
 // Optional test overrides for reconnection timeouts (production values come from Core)
 const REBOOT_TIMEOUT_OVERRIDE_MS = import.meta.env.VITE_REBOOT_TIMEOUT_MS ? Number(import.meta.env.VITE_REBOOT_TIMEOUT_MS) : null
@@ -51,6 +56,8 @@ let reconnectionCountdownDeadline: number | null = null
 let newIpIntervalId: ReturnType<typeof setInterval> | null = null
 let newIpTimeoutId: ReturnType<typeof setTimeout> | null = null
 let newIpCountdownIntervalId: ReturnType<typeof setInterval> | null = null
+let wifiScanPollIntervalId: ReturnType<typeof setInterval> | null = null
+let wifiConnectPollIntervalId: ReturnType<typeof setInterval> | null = null
 
 // Countdown deadline for network changes (Unix timestamp in milliseconds)
 let countdownDeadline: number | null = null
@@ -408,5 +415,53 @@ export function initializeTimerWatchers(): void {
 			}
 		},
 		{ deep: true }
+	)
+
+	// Watch WiFi scan state for scan polling
+	watch(
+		() => viewModel.wifiState.type === 'ready' ? (viewModel.wifiState as any).scanState?.type : null,
+		(newType, oldType) => {
+			if (newType === oldType) return
+
+			if (newType === 'scanning') {
+				// Start scan poll interval
+				if (wifiScanPollIntervalId !== null) clearInterval(wifiScanPollIntervalId)
+				wifiScanPollIntervalId = setInterval(() => {
+					if (isInitialized.value && wasmModule.value && sendEventCallback) {
+						sendEventCallback(new EventVariantWifi(new WifiEventVariantScanPollTick()))
+					}
+				}, WIFI_SCAN_POLL_INTERVAL_MS)
+			} else {
+				// Stop scan poll interval
+				if (wifiScanPollIntervalId !== null) {
+					clearInterval(wifiScanPollIntervalId)
+					wifiScanPollIntervalId = null
+				}
+			}
+		}
+	)
+
+	// Watch WiFi connection state for connect polling
+	watch(
+		() => viewModel.wifiState.type === 'ready' ? (viewModel.wifiState as any).status?.state?.type : null,
+		(newType, oldType) => {
+			if (newType === oldType) return
+
+			if (newType === 'connecting') {
+				// Start connect poll interval
+				if (wifiConnectPollIntervalId !== null) clearInterval(wifiConnectPollIntervalId)
+				wifiConnectPollIntervalId = setInterval(() => {
+					if (isInitialized.value && wasmModule.value && sendEventCallback) {
+						sendEventCallback(new EventVariantWifi(new WifiEventVariantConnectPollTick()))
+					}
+				}, WIFI_CONNECT_POLL_INTERVAL_MS)
+			} else {
+				// Stop connect poll interval
+				if (wifiConnectPollIntervalId !== null) {
+					clearInterval(wifiConnectPollIntervalId)
+					wifiConnectPollIntervalId = null
+				}
+			}
+		}
 	)
 }
