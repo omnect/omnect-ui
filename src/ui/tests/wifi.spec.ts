@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './fixtures/mock-api';
+import { mockHealthcheck } from './fixtures/test-setup';
 import { publishToCentrifugo } from './fixtures/centrifugo';
 
 // Run all tests in this file serially to avoid state interference
@@ -123,21 +124,6 @@ async function mockWifiForget(page: Page) {
   });
 }
 
-async function mockHealthcheck(page: Page) {
-  await page.route('**/healthcheck', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        versionInfo: { current: '1.0.0', required: '1.0.0', mismatch: false },
-        updateValidationStatus: { status: 'NoUpdate' },
-        networkRollbackOccurred: false,
-        factoryResetResultAcked: true,
-        updateValidationAcked: true,
-      }),
-    });
-  });
-}
 
 const defaultAdapters = [
   {
@@ -167,6 +153,10 @@ const savedNetworks = [
 
 /** Set up all route mocks before navigation */
 async function setupMocks(page: Page, wifiAvailable = true) {
+  await page.addInitScript(() => {
+    sessionStorage.setItem('factoryResetResultAcked', 'true')
+    sessionStorage.setItem('updateValidationAcked', 'true')
+  });
   await mockConfig(page);
   await mockLoginSuccess(page);
   await mockRequireSetPassword(page);
@@ -176,15 +166,15 @@ async function setupMocks(page: Page, wifiAvailable = true) {
   await mockWifiSavedNetworks(page, []);
 }
 
-/** Login, publish network data via Centrifugo, navigate to Network page */
-async function loginAndNavigate(page: Page) {
+/** Login, publish network adapters via Centrifugo, navigate to Network page */
+async function loginAndNavigateWith(page: Page, adapters = defaultAdapters) {
   await page.goto('/');
   await page.getByPlaceholder(/enter your password/i).fill('password');
   await page.getByRole('button', { name: /log in/i }).click();
   await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
 
   // Publish network adapter data via Centrifugo (after login so WebSocket is subscribed)
-  await publishToCentrifugo('NetworkStatusV1', { network_status: defaultAdapters });
+  await publishToCentrifugo('NetworkStatusV1', { network_status: adapters });
 
   // Navigate to network page
   await page.getByRole('link', { name: /network/i }).click();
@@ -240,35 +230,12 @@ async function mockNetworkConfigSuccess(page: Page) {
   });
 }
 
-/** Login, publish custom adapters, navigate to Network page */
-async function loginAndNavigateWith(page: Page, adapters: any[]) {
-  await page.goto('/');
-  await page.getByPlaceholder(/enter your password/i).fill('password');
-  await page.getByRole('button', { name: /log in/i }).click();
-  await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
-
-  await publishToCentrifugo('NetworkStatusV1', { network_status: adapters });
-
-  await page.getByRole('link', { name: /network/i }).click();
-  await expect(page.locator('.text-h4', { hasText: 'Network' })).toBeVisible({ timeout: 5000 });
-  await expect(page.getByRole('tab', { name: /eth0/i })).toBeVisible({ timeout: 10000 });
-}
 
 test.describe('WiFi Management', () => {
   test('WiFi unavailable - no WiFi panel shown', async ({ page }) => {
     await setupMocks(page, false);
+    await loginAndNavigateWith(page);
 
-    await page.goto('/');
-    await page.getByPlaceholder(/enter your password/i).fill('password');
-    await page.getByRole('button', { name: /log in/i }).click();
-    await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
-
-    await publishToCentrifugo('NetworkStatusV1', { network_status: defaultAdapters });
-
-    await page.getByRole('link', { name: /network/i }).click();
-    await expect(page.getByRole('tab', { name: /wlan0/i })).toBeVisible({ timeout: 10000 });
-
-    // Click wlan0 tab
     await page.getByRole('tab', { name: /wlan0/i }).click();
 
     // WiFi panel should NOT be visible
@@ -277,7 +244,7 @@ test.describe('WiFi Management', () => {
 
   test('WiFi panel visible on WiFi adapter tab only', async ({ page }) => {
     await setupMocks(page);
-    await loginAndNavigate(page);
+    await loginAndNavigateWith(page);
 
     // eth0 tab should not show WiFi panel
     await page.getByRole('tab', { name: /eth0/i }).click();
@@ -292,7 +259,7 @@ test.describe('WiFi Management', () => {
 
   test('WiFi icon shown on WiFi adapter tab', async ({ page }) => {
     await setupMocks(page);
-    await loginAndNavigate(page);
+    await loginAndNavigateWith(page);
 
     // wlan0 tab should have WiFi icon
     const wlan0Tab = page.getByRole('tab', { name: /wlan0/i });
@@ -307,7 +274,7 @@ test.describe('WiFi Management', () => {
     await setupMocks(page);
     await mockWifiScanStart(page);
     await mockWifiScanResults(page, 'finished', scanNetworks);
-    await loginAndNavigate(page);
+    await loginAndNavigateWith(page);
 
     await page.getByRole('tab', { name: /wlan0/i }).click();
     await expect(page.getByText('WiFi Connection')).toBeVisible();
@@ -326,7 +293,7 @@ test.describe('WiFi Management', () => {
     await mockWifiScanStart(page);
     await mockWifiScanResults(page, 'finished', scanNetworks);
     await mockWifiConnect(page);
-    await loginAndNavigate(page);
+    await loginAndNavigateWith(page);
 
     await page.getByRole('tab', { name: /wlan0/i }).click();
 
@@ -357,7 +324,7 @@ test.describe('WiFi Management', () => {
     await page.unroute('**/wifi/status');
     await mockWifiStatus(page, 'connected', 'HomeNetwork', '192.168.1.100');
     await mockWifiDisconnect(page);
-    await loginAndNavigate(page);
+    await loginAndNavigateWith(page);
 
     await page.getByRole('tab', { name: /wlan0/i }).click();
 
@@ -380,7 +347,7 @@ test.describe('WiFi Management', () => {
     await page.unroute('**/wifi/networks');
     await mockWifiSavedNetworks(page, savedNetworks);
     await mockWifiForget(page);
-    await loginAndNavigate(page);
+    await loginAndNavigateWith(page);
 
     await page.getByRole('tab', { name: /wlan0/i }).click();
 

@@ -48,6 +48,9 @@ export const viewModel = reactive<ViewModel>({
 	// Network rollback modal state
 	shouldShowRollbackModal: false,
 	defaultRollbackEnabled: true,
+	// Version mismatch state
+	versionMismatch: false,
+	versionMismatchMessage: null,
 	// Firmware upload state
 	firmwareUploadState: { type: 'idle' },
 	// Overlay spinner state

@@ -18,6 +18,9 @@ use std::sync::{LazyLock, Mutex, MutexGuard};
 #[allow(dead_code)]
 static PASSWORD_FILE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
+const MAX_RETRIES: u32 = 3;
+const RETRY_DELAY_MS: u64 = 100;
+
 /// Service for password management operations
 pub struct PasswordService;
 
@@ -75,6 +78,24 @@ impl PasswordService {
             .context("failed to hash password")
     }
 
+    /// Atomically write a password hash to file and verify it can be read back.
+    ///
+    /// Writes to a `.tmp` file first, then renames to replace the target atomically.
+    fn write_password_hash_atomic(
+        password_file: &std::path::Path,
+        hash: &str,
+        password: &str,
+    ) -> Result<()> {
+        let temp_path = password_file.with_extension("tmp");
+        let mut file = File::create(&temp_path).context("failed to create temp password file")?;
+        file.write_all(hash.as_bytes())
+            .context("failed to write password file")?;
+        file.sync_all().context("failed to sync password file")?;
+        std::fs::rename(&temp_path, password_file).context("failed to replace password file")?;
+        // Verify that the password can be read back and validated
+        Self::validate_password(password).context("failed to verify stored password")
+    }
+
     /// Store or update a password
     ///
     /// # Arguments
@@ -87,35 +108,15 @@ impl PasswordService {
 
         let password_file = &AppConfig::get().paths.password_file;
         let hash = Self::hash_password(password)?;
-
-        let max_retries = 3;
         let mut last_error = anyhow!("Unknown error");
 
-        for i in 0..max_retries {
-            let temp_file_path = password_file.with_extension("tmp");
-
-            let result = (|| -> Result<()> {
-                let mut file =
-                    File::create(&temp_file_path).context("failed to create temp password file")?;
-
-                file.write_all(hash.as_bytes())
-                    .context("failed to write password file")?;
-
-                file.sync_all().context("failed to sync password file")?;
-
-                std::fs::rename(&temp_file_path, password_file)
-                    .context("failed to replace password file")?;
-
-                // Verify that the password can be read back and validated
-                Self::validate_password(password).context("failed to verify stored password")
-            })();
-
-            match result {
-                Ok(_) => return Ok(()),
+        for i in 0..MAX_RETRIES {
+            match Self::write_password_hash_atomic(password_file, &hash, password) {
+                Ok(()) => return Ok(()),
                 Err(e) => {
                     log::warn!("store_or_update_password attempt {} failed: {:#}", i + 1, e);
                     last_error = e;
-                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    std::thread::sleep(std::time::Duration::from_millis(RETRY_DELAY_MS));
                 }
             }
         }

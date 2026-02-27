@@ -71,21 +71,39 @@ pub fn handle_healthcheck_response(
     result: Result<crate::types::HealthcheckInfo, String>,
     model: &mut Model,
 ) -> Command<Effect, Event> {
-    // Update healthcheck info if success
     if let Ok(info) = &result {
         model.healthcheck = Some(info.clone());
+        update_version_info(info, model);
     }
+    advance_device_operation_state(&result, model);
+    advance_network_change_state(&result, model);
+    crux_core::render::render()
+}
 
-    // Handle reconnection state machine
+fn update_version_info(info: &crate::types::HealthcheckInfo, model: &mut Model) {
+    model.version_mismatch = info.version_info.mismatch;
+    model.version_mismatch_message = if info.version_info.mismatch {
+        Some(format!(
+            "Current version: {}. Required version {}. Please consider to update omnect Secure OS.",
+            info.version_info.current, info.version_info.required,
+        ))
+    } else {
+        None
+    };
+}
+
+fn advance_device_operation_state(
+    result: &Result<crate::types::HealthcheckInfo, String>,
+    model: &mut Model,
+) {
     match &model.device_operation_state {
         DeviceOperationState::Rebooting
         | DeviceOperationState::FactoryResetting
         | DeviceOperationState::Updating => {
-            // First check - if it fails, mark as "waiting"
             let is_updating =
                 matches!(model.device_operation_state, DeviceOperationState::Updating);
 
-            // For updates, we also check the status field
+            // For updates, completion requires a terminal status field (not just reachability)
             let update_done = if is_updating {
                 result.as_ref().ok().is_some_and(is_update_complete)
             } else {
@@ -93,24 +111,18 @@ pub fn handle_healthcheck_response(
             };
 
             if result.is_err() {
-                // Device went offline - mark it
                 model.device_went_offline = true;
-                // Transition to waiting
                 let operation = model.device_operation_state.operation_name();
                 model.device_operation_state = DeviceOperationState::WaitingReconnection {
                     operation,
                     attempt: model.reconnection_attempt,
                 };
             } else if (update_done || !is_updating) && model.device_went_offline {
-                // Device came back online after going offline - reconnection successful
                 let operation = model.device_operation_state.operation_name();
                 model.device_operation_state =
                     DeviceOperationState::ReconnectionSuccessful { operation };
-
                 // Invalidate session as backend restart clears tokens
                 model.invalidate_session();
-
-                // Clear overlay spinner
                 model.overlay_spinner.clear();
 
                 // Clear stale firmware page state so the update page is fresh on re-login.
@@ -124,21 +136,19 @@ pub fn handle_healthcheck_response(
                     }
                 }
             }
-            // else: healthcheck succeeded but device never went offline - keep checking
+            // else: device never went offline - keep checking
         }
         DeviceOperationState::WaitingReconnection { operation, .. } => {
             let is_update = operation == "Update";
 
             if result.is_err() {
-                // Still offline - mark it
                 model.device_went_offline = true;
-                // Update attempt count
                 model.device_operation_state = DeviceOperationState::WaitingReconnection {
                     operation: operation.clone(),
                     attempt: model.reconnection_attempt,
                 };
             } else {
-                // Consider update done when status is Succeeded, Recovered, or NoUpdate
+                // For updates, completion requires a terminal status field
                 let update_done = if is_update {
                     result.as_ref().ok().is_some_and(is_update_complete)
                 } else {
@@ -146,15 +156,11 @@ pub fn handle_healthcheck_response(
                 };
 
                 if update_done && model.device_went_offline {
-                    // Success! Device is back online (or update finished) AND it went offline
                     model.device_operation_state = DeviceOperationState::ReconnectionSuccessful {
                         operation: operation.clone(),
                     };
-
                     // Invalidate session as backend restart clears tokens
                     model.invalidate_session();
-
-                    // Clear overlay spinner
                     model.overlay_spinner.clear();
 
                     // Clear stale firmware page state so the update page is fresh on re-login.
@@ -168,13 +174,17 @@ pub fn handle_healthcheck_response(
                         }
                     }
                 }
-                // else: healthcheck succeeded but device never went offline - keep checking
+                // else: device never went offline - keep checking
             }
         }
-        _ => {} // Do nothing for other states
+        _ => {}
     }
+}
 
-    // Handle network change state machine for IP change polling
+fn advance_network_change_state(
+    result: &Result<crate::types::HealthcheckInfo, String>,
+    model: &mut Model,
+) {
     match &model.network_change_state {
         NetworkChangeState::WaitingForNewIp {
             new_ip, ui_port, ..
@@ -183,36 +193,30 @@ pub fn handle_healthcheck_response(
                 // Clone values before reassigning state to avoid borrow conflict
                 let new_ip = new_ip.clone();
                 let port = *ui_port;
-                // New IP is reachable
                 model.network_change_state = NetworkChangeState::NewIpReachable {
                     new_ip: new_ip.clone(),
                     ui_port: port,
                 };
-                // Clear any leftover messages
                 model.success_message = None;
                 model.error_message = None;
-                // Update overlay for redirect
                 model.overlay_spinner = OverlaySpinnerState::new("Network settings applied")
                     .with_text(format!("Redirecting to new IP: {new_ip}:{port}"));
             }
         }
         NetworkChangeState::WaitingForOldIp { .. } => {
             if result.is_ok() {
-                // Old IP is reachable - Rollback successful
+                // Old IP is reachable — rollback successful.
+                // No success message here: the "Network Settings Rolled Back" modal
+                // is triggered by the `network_rollback_occurred` flag in the healthcheck response.
                 model.network_change_state = NetworkChangeState::Idle;
                 model.overlay_spinner.clear();
                 model.invalidate_session();
-                // Clear any leftover messages
                 model.success_message = None;
                 model.error_message = None;
-                // Do not show success message here. The "Network Settings Rolled Back" modal
-                // will be triggered by the `network_rollback_occurred` flag in the healthcheck response.
             }
         }
         _ => {}
     }
-
-    crux_core::render::render()
 }
 
 #[cfg(test)]
@@ -646,7 +650,10 @@ mod tests {
                 );
 
                 assert_eq!(model.update_manifest, Some(manifest));
-                assert_eq!(model.firmware_upload_state, crate::types::UploadState::Completed);
+                assert_eq!(
+                    model.firmware_upload_state,
+                    crate::types::UploadState::Completed
+                );
             }
         }
 
@@ -810,7 +817,10 @@ mod tests {
                 );
 
                 assert_eq!(model.update_manifest, Some(manifest));
-                assert_eq!(model.firmware_upload_state, crate::types::UploadState::Completed);
+                assert_eq!(
+                    model.firmware_upload_state,
+                    crate::types::UploadState::Completed
+                );
             }
         }
 
@@ -868,6 +878,59 @@ mod tests {
                     model.network_change_state,
                     NetworkChangeState::WaitingForNewIp { .. }
                 ));
+            }
+        }
+
+        mod derived_state {
+            use super::*;
+
+            #[test]
+            fn version_mismatch_sets_model_fields() {
+                let mut model = Model::default();
+                let info = HealthcheckInfo {
+                    version_info: VersionInfo {
+                        required: ">=1.0.0".to_string(),
+                        current: "0.9.0".to_string(),
+                        mismatch: true,
+                    },
+                    ..Default::default()
+                };
+
+                let _ = handle_healthcheck_response(Ok(info), &mut model);
+
+                assert!(model.version_mismatch);
+                let msg = model.version_mismatch_message.unwrap();
+                assert!(msg.contains("0.9.0"));
+                assert!(msg.contains(">=1.0.0"));
+            }
+
+            #[test]
+            fn no_version_mismatch_clears_fields() {
+                let mut model = Model {
+                    version_mismatch: true,
+                    version_mismatch_message: Some("old".to_string()),
+                    ..Default::default()
+                };
+
+                let _ =
+                    handle_healthcheck_response(Ok(create_healthcheck("valid", false)), &mut model);
+
+                assert!(!model.version_mismatch);
+                assert!(model.version_mismatch_message.is_none());
+            }
+
+            #[test]
+            fn error_response_does_not_change_derived_state() {
+                let mut model = Model {
+                    version_mismatch: true,
+                    ..Default::default()
+                };
+
+                let _ =
+                    handle_healthcheck_response(Err("Connection failed".to_string()), &mut model);
+
+                // Derived state unchanged on error
+                assert!(model.version_mismatch);
             }
         }
     }

@@ -62,6 +62,7 @@ import {
 	DeviceEventVariantNetworkFormStartEdit,
 	DeviceEventVariantNetworkFormUpdate,
 	DeviceEventVariantNetworkFormReset,
+	DeviceEventVariantFetchInitialHealthcheck,
 	DeviceEventVariantAckRollback,
 	DeviceEventVariantAckFactoryResetResult,
 	DeviceEventVariantAckUpdateValidation,
@@ -204,6 +205,9 @@ async function initializeCore(): Promise<void> {
 			const hostname = window.location.hostname
 			await sendEventToCore(new EventVariantUi(new UiEventVariantSetBrowserHostname(hostname)))
 
+			// Fetch initial healthcheck (version mismatch detection, acked flags)
+			await sendEventToCore(new EventVariantDevice(new DeviceEventVariantFetchInitialHealthcheck()))
+
 			// Expose for E2E tests to spoof hostname
 			;(window as any).setBrowserHostname = (h: string) => {
 				console.log(`[useCore] Spoofing browser hostname: ${h}`)
@@ -304,6 +308,8 @@ export function useCore() {
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantNetworkFormUpdate(formDataJson))),
 		networkFormReset: (adapterName: string) =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantNetworkFormReset(adapterName))),
+		fetchInitialHealthcheck: () =>
+			sendEventToCore(new EventVariantDevice(new DeviceEventVariantFetchInitialHealthcheck())),
 		ackRollback: () =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAckRollback())),
 		ackFactoryResetResult: () =>

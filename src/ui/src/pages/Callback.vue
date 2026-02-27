@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue"
 import { useRouter } from "vue-router"
-import { getUser, handleRedirectCallback, removeUser } from "../auth/auth-service"
+import { handleRedirectCallback } from "../auth/auth-service"
+import { validatePortalToken } from "../auth/validate-portal-token"
 import OmnectLogo from "../components/branding/OmnectLogo.vue"
 
 const router = useRouter()
@@ -11,28 +12,14 @@ const errorMsg = ref("")
 onMounted(async () => {
 	try {
 		await handleRedirectCallback()
-		const user = await getUser()
-		if (user) {
-			loading.value = true
-			const res = await fetch("token/validate", {
-				method: "POST",
-				headers: {
-					"Content-Type": "plain/text"
-				},
-				body: user.access_token
-			})
-
-			if (res.ok) {
-				router.replace("/set-password")
-			} else {
-				await removeUser()
-				errorMsg.value = "You are not authorized."
-			}
-
-			loading.value = false
+		loading.value = true
+		const valid = await validatePortalToken()
+		if (valid) {
+			router.replace("/set-password")
 		} else {
 			errorMsg.value = "You are not authorized."
 		}
+		loading.value = false
 	} catch (e) {
 		errorMsg.value = "An error occurred while checking permissions. Please try again."
 	}
