@@ -9,6 +9,9 @@ use crate::{
         marker,
         network::{NetworkConfigRequest, NetworkConfigService},
     },
+    wifi_commissioning_client::{
+        WifiAvailability, WifiCommissioningClient, WifiConnectRequest, WifiForgetRequest,
+    },
 };
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
@@ -286,4 +289,97 @@ where
 
         HttpResponse::Ok().body(token)
     }
+}
+
+// --- WiFi API handlers ---
+// Stored as separate web::Data resources to avoid changing the Api generic structure.
+
+use crate::wifi_commissioning_client::WifiCommissioningServiceClient;
+
+type WifiClient = Option<WifiCommissioningServiceClient>;
+
+pub async fn wifi_available(availability: web::Data<WifiAvailability>) -> impl Responder {
+    debug!("wifi_available() called");
+    HttpResponse::Ok().json(availability.as_ref())
+}
+
+macro_rules! wifi_client_or_404 {
+    ($wifi:expr) => {
+        match $wifi.as_ref().as_ref() {
+            Some(client) => client,
+            None => return HttpResponse::NotFound().body("WiFi service unavailable"),
+        }
+    };
+}
+
+pub async fn wifi_scan(wifi: web::Data<WifiClient>) -> impl Responder {
+    debug!("wifi_scan() called");
+    let client = wifi_client_or_404!(wifi);
+    handle_service_result(client.scan().await.map(|_| ()), "wifi_scan")
+}
+
+pub async fn wifi_scan_results(wifi: web::Data<WifiClient>) -> impl Responder {
+    debug!("wifi_scan_results() called");
+    let client = wifi_client_or_404!(wifi);
+    match client.scan_results().await {
+        Ok(results) => HttpResponse::Ok().json(&results),
+        Err(e) => {
+            error!("wifi_scan_results failed: {e:#}");
+            HttpResponse::InternalServerError().body(e.to_string())
+        }
+    }
+}
+
+pub async fn wifi_connect(
+    body: web::Json<WifiConnectRequest>,
+    wifi: web::Data<WifiClient>,
+) -> impl Responder {
+    debug!("wifi_connect() called");
+    let client = wifi_client_or_404!(wifi);
+    handle_service_result(
+        client.connect(body.into_inner()).await.map(|_| ()),
+        "wifi_connect",
+    )
+}
+
+pub async fn wifi_disconnect(wifi: web::Data<WifiClient>) -> impl Responder {
+    debug!("wifi_disconnect() called");
+    let client = wifi_client_or_404!(wifi);
+    handle_service_result(client.disconnect().await.map(|_| ()), "wifi_disconnect")
+}
+
+pub async fn wifi_status(wifi: web::Data<WifiClient>) -> impl Responder {
+    debug!("wifi_status() called");
+    let client = wifi_client_or_404!(wifi);
+    match client.status().await {
+        Ok(status) => HttpResponse::Ok().json(&status),
+        Err(e) => {
+            error!("wifi_status failed: {e:#}");
+            HttpResponse::InternalServerError().body(e.to_string())
+        }
+    }
+}
+
+pub async fn wifi_saved_networks(wifi: web::Data<WifiClient>) -> impl Responder {
+    debug!("wifi_saved_networks() called");
+    let client = wifi_client_or_404!(wifi);
+    match client.saved_networks().await {
+        Ok(networks) => HttpResponse::Ok().json(&networks),
+        Err(e) => {
+            error!("wifi_saved_networks failed: {e:#}");
+            HttpResponse::InternalServerError().body(e.to_string())
+        }
+    }
+}
+
+pub async fn wifi_forget_network(
+    body: web::Json<WifiForgetRequest>,
+    wifi: web::Data<WifiClient>,
+) -> impl Responder {
+    debug!("wifi_forget_network() called");
+    let client = wifi_client_or_404!(wifi);
+    handle_service_result(
+        client.forget_network(body.into_inner()).await.map(|_| ()),
+        "wifi_forget_network",
+    )
 }

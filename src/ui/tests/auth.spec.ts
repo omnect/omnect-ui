@@ -146,6 +146,56 @@ test.describe('Authentication', () => {
     await redirectPromise;
   });
 
+  test('re-triggers OIDC login when session expires during submission', async ({ page }) => {
+    // Simulate: OIDC user exists in localStorage (router guard passes)
+    // but backend rejects because portal_validated session flag is missing.
+    // The frontend should clear the stale OIDC user and redirect to Keycloak.
+    await mockPortalAuth(page);
+    await page.route('**/set-password', async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 401,
+          contentType: 'text/plain',
+          body: 'portal authentication required',
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    // Mock OIDC discovery so signinRedirect() can proceed
+    await page.route('**/.well-known/openid-configuration', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          issuer: 'http://localhost:8080',
+          authorization_endpoint: 'http://localhost:8080/auth',
+          token_endpoint: 'http://localhost:8080/token',
+          jwks_uri: 'http://localhost:8080/certs',
+          response_types_supported: ['code'],
+          subject_types_supported: ['public'],
+          id_token_signing_alg_values_supported: ['RS256'],
+        }),
+      });
+    });
+
+    await page.goto('/set-password');
+    await expect(page.getByRole('heading', { name: /set password/i })).toBeVisible();
+
+    // Intercept the Keycloak redirect to verify it happens
+    const oidcRedirect = page.waitForURL(/localhost:8080/, { timeout: 5000 }).catch(() => null);
+
+    await page.locator('input[type="password"]').nth(0).fill('new-password');
+    await page.locator('input[type="password"]').nth(1).fill('new-password');
+    await page.getByRole('button', { name: /set password/i }).click();
+
+    // Should redirect to Keycloak for re-authentication
+    await oidcRedirect;
+    // Page navigated away from the app — either to Keycloak or chrome-error (no real Keycloak)
+    await expect(page).not.toHaveURL(/localhost:5173/, { timeout: 5000 });
+  });
+
   test('no auth errors on set-password page when WiFi is available', async ({ page }) => {
     await mockPortalAuth(page);
     await page.route('**/require-set-password', async (route) => {

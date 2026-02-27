@@ -1546,6 +1546,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
 name = "hkdf"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2224,7 +2230,7 @@ dependencies = [
 
 [[package]]
 name = "omnect-ui"
-version = "1.1.2"
+version = "1.2.0"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -2266,7 +2272,7 @@ dependencies = [
 
 [[package]]
 name = "omnect-ui-core"
-version = "1.1.2"
+version = "1.2.0"
 dependencies = [
  "base64 0.22.1",
  "console_log",
@@ -2274,12 +2280,16 @@ dependencies = [
  "crux_http",
  "crux_macros",
  "getrandom 0.3.4",
+ "hex",
+ "hmac",
  "lazy_static",
  "log",
+ "pbkdf2",
  "serde",
  "serde_json",
  "serde_repr",
  "serde_valid",
+ "sha1",
  "wasm-bindgen",
 ]
 
@@ -2407,6 +2417,16 @@ name = "path-slash"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
+
+[[package]]
+name = "pbkdf2"
+version = "0.12.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8ed6a7761f76e3b9f92dfb0a60a6a6477c61024b775147ff0973a02653abaf2"
+dependencies = [
+ "digest",
+ "hmac",
+]
 
 [[package]]
 name = "pem"
@@ -3287,6 +3307,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3bf829a2d51ab4a5ddf1352d8470c140cadc8301b2ae1789db023f01cedd6ba"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "digest",
+]
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3299,7 +3330,7 @@ dependencies = [
 
 [[package]]
 name = "shared_types"
-version = "1.1.2"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "crux_core",

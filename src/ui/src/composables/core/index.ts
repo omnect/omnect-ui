@@ -48,6 +48,7 @@ import {
 	EventVariantDevice,
 	EventVariantWebSocket,
 	EventVariantUi,
+	EventVariantWifi,
 	AuthEventVariantLogin,
 	AuthEventVariantLogout,
 	AuthEventVariantSetPassword,
@@ -69,6 +70,14 @@ import {
 	UiEventVariantClearError,
 	UiEventVariantClearSuccess,
 	UiEventVariantSetBrowserHostname,
+	WifiEventVariantScan,
+	WifiEventVariantConnect,
+	WifiEventVariantDisconnect,
+	WifiEventVariantGetStatus,
+	WifiEventVariantGetSavedNetworks,
+	WifiEventVariantForgetNetwork,
+	WifiEventVariantScanPollTick,
+	WifiEventVariantConnectPollTick,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 
 // Re-export types for external use
@@ -80,6 +89,12 @@ export type {
 	NetworkFormDataType,
 	OverlaySpinnerStateType,
 	FactoryResetStatusString,
+	WifiStateType,
+	WifiNetworkType,
+	WifiSavedNetworkType,
+	WifiConnectionStatusType,
+	WifiScanStateType,
+	WifiConnectionStateType,
 	SystemInfo,
 	NetworkStatus,
 	OnlineStatus,
@@ -295,5 +310,16 @@ export function useCore() {
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAckFactoryResetResult())),
 		ackUpdateValidation: () =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAckUpdateValidation())),
+
+		// WiFi management
+		wifiScan: () => sendEventToCore(new EventVariantWifi(new WifiEventVariantScan())),
+		wifiConnect: (ssid: string, password: string) =>
+			sendEventToCore(new EventVariantWifi(new WifiEventVariantConnect(ssid, password))),
+		wifiDisconnect: () => sendEventToCore(new EventVariantWifi(new WifiEventVariantDisconnect())),
+		wifiGetStatus: () => sendEventToCore(new EventVariantWifi(new WifiEventVariantGetStatus())),
+		wifiGetSavedNetworks: () =>
+			sendEventToCore(new EventVariantWifi(new WifiEventVariantGetSavedNetworks())),
+		wifiForgetNetwork: (ssid: string) =>
+			sendEventToCore(new EventVariantWifi(new WifiEventVariantForgetNetwork(ssid))),
 	}
 }

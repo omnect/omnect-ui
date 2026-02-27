@@ -5,6 +5,7 @@ mod keycloak_client;
 mod middleware;
 mod omnect_device_service_client;
 mod services;
+mod wifi_commissioning_client;
 
 use crate::{
     api::Api,
@@ -15,6 +16,9 @@ use crate::{
         auth::TokenManager,
         certificate::{CertificateService, CreateCertPayload},
         network::NetworkConfigService,
+    },
+    wifi_commissioning_client::{
+        WifiAvailability, WifiCommissioningClient, WifiCommissioningServiceClient,
     },
 };
 use actix_cors::Cors;
@@ -282,6 +286,35 @@ fn optimal_worker_count() -> usize {
     workers
 }
 
+async fn initialize_wifi_client() -> (Option<WifiCommissioningServiceClient>, WifiAvailability) {
+    let unavailable = WifiAvailability {
+        available: false,
+        interface_name: None,
+    };
+
+    let config = &AppConfig::get().wifi;
+
+    let Some(client) = WifiCommissioningServiceClient::try_new(&config.socket_path) else {
+        return (None, unavailable);
+    };
+
+    // Probe the service to discover the WiFi interface name
+    match client.status().await {
+        Ok(status) => {
+            let availability = WifiAvailability {
+                available: true,
+                interface_name: status.interface_name,
+            };
+            info!("WiFi service available: {availability:?}");
+            (Some(client), availability)
+        }
+        Err(e) => {
+            log::error!("WiFi service probe failed: {e:#}");
+            (None, unavailable)
+        }
+    }
+}
+
 async fn run_server(
     service_client: OmnectDeviceServiceClient,
 ) -> Result<(
@@ -291,6 +324,10 @@ async fn run_server(
     let api = UiApi::new(service_client.clone(), Default::default())
         .await
         .context("failed to create api")?;
+
+    let (wifi_client, wifi_availability) = initialize_wifi_client().await;
+    let wifi_data: Data<Option<WifiCommissioningServiceClient>> = Data::new(wifi_client);
+    let wifi_availability_data = Data::new(wifi_availability);
 
     let tls_config = load_tls_config().context("failed to load tls config")?;
     let config = &AppConfig::get();
@@ -327,6 +364,8 @@ async fn run_server(
             .app_data(Data::new(token_manager.clone()))
             .app_data(Data::new(api.clone()))
             .app_data(Data::new(static_files()))
+            .app_data(wifi_data.clone())
+            .app_data(wifi_availability_data.clone())
             .route("/", web::get().to(UiApi::index))
             .route("/config.js", web::get().to(UiApi::config))
             .route(
@@ -383,6 +422,44 @@ async fn run_server(
             .route(
                 "/ack-update-validation",
                 web::post().to(UiApi::ack_update_validation),
+            )
+            // WiFi management routes
+            .route("/wifi/available", web::get().to(api::wifi_available))
+            .route(
+                "/wifi/scan",
+                web::post().to(api::wifi_scan).wrap(middleware::AuthMw),
+            )
+            .route(
+                "/wifi/scan/results",
+                web::get()
+                    .to(api::wifi_scan_results)
+                    .wrap(middleware::AuthMw),
+            )
+            .route(
+                "/wifi/connect",
+                web::post().to(api::wifi_connect).wrap(middleware::AuthMw),
+            )
+            .route(
+                "/wifi/disconnect",
+                web::post()
+                    .to(api::wifi_disconnect)
+                    .wrap(middleware::AuthMw),
+            )
+            .route(
+                "/wifi/status",
+                web::get().to(api::wifi_status).wrap(middleware::AuthMw),
+            )
+            .route(
+                "/wifi/networks",
+                web::get()
+                    .to(api::wifi_saved_networks)
+                    .wrap(middleware::AuthMw),
+            )
+            .route(
+                "/wifi/networks/forget",
+                web::post()
+                    .to(api::wifi_forget_network)
+                    .wrap(middleware::AuthMw),
             )
             .service(ResourceFiles::new("/static", static_files()))
             .default_service(web::route().to(UiApi::index))

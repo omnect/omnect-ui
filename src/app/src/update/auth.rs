@@ -1,12 +1,12 @@
 use base64::prelude::*;
-use crux_core::Command;
+use crux_core::{render::render, Command};
 
 use crate::{
     auth_post, auth_post_basic,
-    events::{AuthEvent, Event},
+    events::{AuthEvent, Event, WifiEvent},
     handle_response,
     model::Model,
-    types::{AuthToken, SetPasswordRequest, UpdatePasswordRequest},
+    types::{AuthToken, SetPasswordRequest, UpdatePasswordRequest, WifiState},
     unauth_post, Effect,
 };
 
@@ -20,12 +20,20 @@ pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
                 map: |token| AuthToken { token })
         }
 
-        AuthEvent::LoginResponse(result) => handle_response!(model, result, {
-            on_success: |model, auth| {
-                model.auth_token = Some(auth.token);
-                model.is_authenticated = true;
-            },
-        }),
+        AuthEvent::LoginResponse(result) => {
+            model.stop_loading();
+            match result {
+                Ok(auth) => {
+                    model.auth_token = Some(auth.token);
+                    model.is_authenticated = true;
+                    post_auth_commands(model)
+                }
+                Err(e) => {
+                    model.set_error(e);
+                    render()
+                }
+            }
+        }
 
         AuthEvent::Logout => {
             auth_post!(Auth, AuthEvent, model, "/logout", LogoutResponse, "Logout")
@@ -44,13 +52,21 @@ pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
                 map: |token| AuthToken { token })
         }
 
-        AuthEvent::SetPasswordResponse(result) => handle_response!(model, result, {
-            on_success: |model, auth| {
-                model.requires_password_set = false;
-                model.auth_token = Some(auth.token);
-                model.is_authenticated = true;
-            },
-        }),
+        AuthEvent::SetPasswordResponse(result) => {
+            model.stop_loading();
+            match result {
+                Ok(auth) => {
+                    model.requires_password_set = false;
+                    model.auth_token = Some(auth.token);
+                    model.is_authenticated = true;
+                    post_auth_commands(model)
+                }
+                Err(e) => {
+                    model.set_error(e);
+                    render()
+                }
+            }
+        }
 
         AuthEvent::UpdatePassword {
             current_password,
@@ -82,6 +98,19 @@ pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
                 model.requires_password_set = requires;
             },
         }),
+    }
+}
+
+/// After successful authentication, fetch WiFi data if WiFi is available
+fn post_auth_commands(model: &mut Model) -> Command<Effect, Event> {
+    if matches!(model.wifi_state, WifiState::Ready { .. }) {
+        Command::all([
+            render(),
+            super::wifi::handle(WifiEvent::GetStatus, model),
+            super::wifi::handle(WifiEvent::GetSavedNetworks, model),
+        ])
+    } else {
+        render()
     }
 }
 

@@ -67,6 +67,9 @@ pub struct Model {
 
     // Overlay spinner state
     pub overlay_spinner: OverlaySpinnerState,
+
+    // WiFi state
+    pub wifi_state: WifiState,
 }
 
 impl Model {
