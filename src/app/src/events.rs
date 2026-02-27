@@ -60,6 +60,7 @@ pub enum DeviceEvent {
     RunUpdate {
         validate_iothub_connection: bool,
     },
+    FetchInitialHealthcheck,
     ReconnectionCheckTick,
     ReconnectionTimeout,
     NewIpCheckTick,

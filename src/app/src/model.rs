@@ -62,6 +62,10 @@ pub struct Model {
     pub should_show_rollback_modal: bool,
     pub default_rollback_enabled: bool,
 
+    // Version mismatch state (derived from healthcheck)
+    pub version_mismatch: bool,
+    pub version_mismatch_message: Option<String>,
+
     // Firmware upload state
     pub firmware_upload_state: UploadState,
 

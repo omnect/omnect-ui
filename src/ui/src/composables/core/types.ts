@@ -247,6 +247,10 @@ export interface ViewModel {
 	shouldShowRollbackModal: boolean
 	defaultRollbackEnabled: boolean
 
+	// Version mismatch state (derived from healthcheck)
+	versionMismatch: boolean
+	versionMismatchMessage: string | null
+
 	// Firmware upload state
 	firmwareUploadState: UploadStateType
 

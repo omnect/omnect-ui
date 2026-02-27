@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router"
-import { getUser, login, removeUser } from "../auth/auth-service"
+import { login } from "../auth/auth-service"
+import { validatePortalToken } from "../auth/validate-portal-token"
 import { useCore } from "../composables/useCore"
 import Callback from "../pages/Callback.vue"
 import DeviceOverview from "../pages/DeviceOverview.vue"
@@ -37,30 +38,13 @@ router.beforeEach(async (to) => {
 	}
 
 	if (to.meta.requiresPortalAuth) {
-		const user = await getUser()
-		if (!user || user.expired) {
-			await login()
-			return false
-		}
 		// Validate the portal token against the backend to establish the server-side
 		// session flag (portal_validated). Normally Callback.vue does this after the
 		// OIDC redirect, but after a factory reset the OIDC user persists in
 		// localStorage while the backend session is fresh — so Callback.vue is
 		// bypassed and the flag is never set.
-		try {
-			const res = await fetch("/token/validate", {
-				method: "POST",
-				headers: { "Content-Type": "text/plain" },
-				body: user.access_token,
-			})
-			if (!res.ok) {
-				await removeUser()
-				await login()
-				return false
-			}
-		} catch (error) {
-			console.error("Portal token validation fetch failed:", error)
-			await removeUser()
+		const valid = await validatePortalToken()
+		if (!valid) {
 			await login()
 			return false
 		}

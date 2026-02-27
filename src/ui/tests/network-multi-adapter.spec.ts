@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './fixtures/mock-api';
 import { NetworkTestHarness } from './fixtures/network-test-harness';
 
 test.describe('Network Multi-Adapter Rollback Modal', () => {
@@ -7,17 +6,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
   test.beforeEach(async ({ page }) => {
     harness = new NetworkTestHarness();
-    await mockConfig(page);
-    await mockLoginSuccess(page);
-    await mockRequireSetPassword(page);
-    await harness.mockNetworkConfig(page);
-    await harness.mockHealthcheck(page);
-    await harness.mockAckRollback(page);
-
-    await page.goto('/');
-    await page.getByPlaceholder(/enter your password/i).fill('password');
-    await page.getByRole('button', { name: /log in/i }).click();
-    await expect(page.getByText('Common Info')).toBeVisible();
+    await harness.setupWithLogin(page);
   });
 
   test.afterEach(() => {
@@ -25,70 +14,74 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
   });
 
   test.describe('2-Adapter Scenarios', () => {
-    test('rollback modal only appears for current connection adapter', async ({ page }) => {
-      // Setup two adapters: eth0 (current connection) and wlan0 (not current)
+    test('rollback modal appears for current connection adapter', async ({ page }) => {
       await harness.setup(page, [
         {
           name: 'eth0',
           ipv4: {
             addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
             dns: ['8.8.8.8'],
-            gateways: ['192.168.1.1']
-          }
+            gateways: ['192.168.1.1'],
+          },
         },
         {
           name: 'wlan0',
           ipv4: {
             addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }],
             dns: ['8.8.8.8'],
-            gateways: ['192.168.2.1']
-          }
-        }
+            gateways: ['192.168.2.1'],
+          },
+        },
       ]);
 
-      // Part 1: Test current connection adapter (eth0) - SHOULD show rollback modal
       await page.getByRole('tab', { name: 'eth0' }).click();
       await expect(page.getByText('This is your current connection')).toBeVisible();
 
-      const eth0IpInput = page.getByRole('textbox', { name: /IP Address/i }).first();
-      await expect(eth0IpInput).toHaveValue('localhost');
-
-      await eth0IpInput.fill('192.168.1.150');
+      const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      await expect(ipInput).toHaveValue('localhost');
+      await ipInput.fill('192.168.1.150');
       await page.waitForTimeout(300);
 
       await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
-      // Rollback modal SHOULD appear for current connection adapter
-      const rollbackModal = page.getByText('Confirm Network Configuration Change');
-      await expect(rollbackModal).toBeVisible({ timeout: 3000 });
+      await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 3000 });
 
-      // Cancel the modal
+      // Clean up to leave the harness in a neutral state
       await page.getByRole('button', { name: /cancel/i }).click();
-      await expect(rollbackModal).not.toBeVisible();
-
-      // Reset the form
       await page.locator('.v-window-item--active [data-cy=network-discard-button]').click();
-      await page.waitForTimeout(300);
+    });
 
-      // Part 2: Test non-current adapter (wlan0) - should NOT show rollback modal
-      await page.getByRole('tab', { name: 'wlan0' }).click();
+    test('rollback modal does not appear for non-current adapter (background update)', async ({ page }) => {
+      // Navigate to wlan0 directly; verify background updates to eth0 don't trigger rollback modal
+      await harness.setup(page, [
+        {
+          name: 'eth0',
+          ipv4: {
+            addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
+            dns: ['8.8.8.8'],
+            gateways: ['192.168.1.1'],
+          },
+        },
+        {
+          name: 'wlan0',
+          ipv4: {
+            addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }],
+            dns: ['8.8.8.8'],
+            gateways: ['192.168.2.1'],
+          },
+        },
+      ], 'wlan0');
+
       await expect(page.getByText('This is your current connection')).not.toBeVisible();
+      await page.waitForTimeout(500); // Wait for NetworkFormStartEdit to be processed
 
-      // Wait for tab to fully activate and NetworkFormStartEdit to be called
-      await page.waitForTimeout(500);
-
-      // Trigger a WebSocket update to the hidden adapter
-      // This simulates what happens in production when network status changes
+      // Simulate eth0 going offline while the user is on the wlan0 tab
       await harness.publishNetworkStatus([
         {
           name: 'eth0',
           mac: '00:11:22:33:44:55',
-          online: false, // Changed from true to false
-          ipv4: {
-            addrs: [], // Empty because offline
-            dns: [],
-            gateways: []
-          }
+          online: false,
+          ipv4: { addrs: [], dns: [], gateways: [] },
         },
         {
           name: 'wlan0',
@@ -97,34 +90,23 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
           ipv4: {
             addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }],
             dns: ['8.8.8.8'],
-            gateways: ['192.168.2.1']
-          }
-        }
+            gateways: ['192.168.2.1'],
+          },
+        },
       ]);
-
-      // Wait for WebSocket update to propagate
       await page.waitForTimeout(300);
 
-      const wlan0IpInput = page.getByRole('textbox', { name: /IP Address/i }).first();
-      await expect(wlan0IpInput).toHaveValue('192.168.2.100');
-
-      // Clear and fill with new value
-      await wlan0IpInput.click();
-      await wlan0IpInput.clear();
-      await wlan0IpInput.fill('192.168.2.150');
+      const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      await expect(ipInput).toHaveValue('192.168.2.100');
+      await ipInput.click();
+      await ipInput.clear();
+      await ipInput.fill('192.168.2.150');
       await page.waitForTimeout(500);
-
-      await expect(wlan0IpInput).toHaveValue('192.168.2.150');
 
       const saveButton = page.locator('.v-window-item--active [data-cy=network-apply-button]');
       await saveButton.click();
 
-      // Rollback modal should NOT appear for non-current adapter
-      // Verify that background updates to other adapters don't trigger the rollback modal
-      // and ensure only the active adapter's state affects the UI.
-      await expect(rollbackModal).not.toBeVisible({ timeout: 2000 });
-
-      // Should proceed directly to saving (no rollback modal blocking it)
+      await expect(page.getByText('Confirm Network Configuration Change')).not.toBeVisible({ timeout: 2000 });
       await expect(saveButton).toBeDisabled({ timeout: 10000 });
       await expect(page.getByText('Network configuration updated')).toBeVisible();
     });
