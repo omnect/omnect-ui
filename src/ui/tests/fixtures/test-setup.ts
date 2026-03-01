@@ -5,10 +5,13 @@ interface SetupOptions {
   // When false, App.vue will not suppress the factory-reset result modal watcher.
   // Defaults to true so that most tests never accidentally show the modal.
   factoryResetResultAcked?: boolean;
+  // When false, App.vue will not suppress the update validation modal watcher.
+  // Defaults to true.
+  updateValidationAcked?: boolean;
 }
 
 export async function setupAndLogin(page: Page, options: SetupOptions = {}) {
-  const { factoryResetResultAcked = true } = options;
+  const { factoryResetResultAcked = true, updateValidationAcked = true } = options;
 
   await mockConfig(page);
   await mockLoginSuccess(page);
@@ -24,7 +27,7 @@ export async function setupAndLogin(page: Page, options: SetupOptions = {}) {
           updateValidationStatus: { status: 'NoUpdate' },
           networkRollbackOccurred: false,
           factoryResetResultAcked,
-          updateValidationAcked: true
+          updateValidationAcked
       })
     });
   });

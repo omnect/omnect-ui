@@ -44,14 +44,16 @@ const formattedCountdown = computed(() => {
 		<div id="overlay" class="flex flex-col items-center">
 			<v-sheet class="flex flex-col gap-y-8 items-center p-8" :rounded="'lg'">
 				<div class="text-h4 text-center">{{ props.title }}</div>
-				<v-progress-circular color="secondary" :indeterminate="props.progress === undefined"
+				<v-progress-circular v-if="!props.timedOut" color="secondary"
+					:indeterminate="props.progress === undefined"
 					:model-value="props.progress" size="100" width="5">
 					<template v-slot:default>
 						<span v-if="props.progress !== undefined" class="text-h6">{{ props.progress }}%</span>
 					</template>
 				</v-progress-circular>
+				<v-icon v-else icon="mdi-alert-circle-outline" color="warning" size="100" />
 				<p class="text-h6 m-t-4">{{ props.text }}</p>
-				<div v-if="formattedCountdown" class="flex flex-col items-center gap-2">
+				<div v-if="formattedCountdown && !props.timedOut" class="flex flex-col items-center gap-2">
 					<div class="text-subtitle-1 text-medium-emphasis">{{ props.countdownLabel }}</div>
 					<div class="text-h5 text-primary font-mono">
 						{{ formattedCountdown }}

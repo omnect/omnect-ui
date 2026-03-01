@@ -88,14 +88,19 @@ const acknowledgeRollback = () => {
 const acknowledgeFactoryResetResult = () => {
 	ackFactoryResetResult()
 	showFactoryResetResultModal.value = false
+	factoryResetAckedOnMount.value = true
 }
 
 const acknowledgeUpdateValidation = () => {
 	ackUpdateValidation()
 	showUpdateValidationModal.value = false
+	updateValidationAckedOnMount.value = true
 }
 
 const factoryResetModalSuccess = ref(false)
+const factoryResetError = ref<string | null>(null)
+const factoryResetContext = ref<string | null>(null)
+const updateValidationIsRollback = ref(false)
 
 // Watch authentication state to redirect to login if session is lost
 // This handles the case where the backend restarts (reboot/factory reset) and the session becomes invalid
@@ -129,17 +134,36 @@ watch(
 	() => viewModel.factoryReset?.result,
 	(result) => {
 		if (result && result.status !== 'unknown' && !factoryResetAckedOnMount.value) {
+			// Snapshot once so the template is decoupled from the live ViewModel during close animation
+			factoryResetError.value = result.error ?? null
+			factoryResetContext.value = result.context ?? null
 			factoryResetModalSuccess.value = result.status === 'modeSupported'
 			showFactoryResetResultModal.value = true
 		}
 	}
 )
 
-// Watch for update validation status (arrives via WebSocket and healthcheck)
+// Watch for update validation status (arrives via WebSocket and healthcheck).
+// Uses a combined watcher on all three sources so the condition is re-evaluated whenever
+// any of them changes:
+// - status: set by WebSocket history replay on (re-)login
+// - ackedInHealthcheck: set by reconnection-polling healthchecks (covers SPA re-login after
+//   a device operation — the onMounted flag is stale across re-logins in the same SPA session)
+// - ackedOnMount: set once from the plain fetch in onMounted (covers the initial page-load
+//   case where no reconnection polling has run yet and ackedInHealthcheck is undefined)
 watch(
-	() => viewModel.updateValidationStatus?.status,
-	(status) => {
-		if ((status === 'Succeeded' || status === 'Recovered') && !updateValidationAckedOnMount.value) {
+	[
+		() => viewModel.updateValidationStatus?.status,
+		() => viewModel.healthcheck?.updateValidationAcked,
+		updateValidationAckedOnMount,
+	],
+	([status, ackedInHealthcheck, ackedOnMount]) => {
+		// Prefer the live Core healthcheck value; fall back to the onMounted snapshot
+		// when the Core has not yet received a healthcheck response.
+		const notAcked = !(ackedInHealthcheck ?? ackedOnMount)
+		if ((status === 'Succeeded' || status === 'Recovered') && notAcked) {
+			// Snapshot once so the template is decoupled from the live ViewModel during close animation
+			updateValidationIsRollback.value = status === 'Recovered'
 			showUpdateValidationModal.value = true
 		}
 	}
@@ -162,17 +186,16 @@ onMounted(async () => {
 	factoryResetAckedOnMount.value = (data as any).factoryResetResultAcked ?? true
 	updateValidationAckedOnMount.value = (data as any).updateValidationAcked ?? true
 
-	// Check if we should show modals on mount based on initial state
+	// Check if we should show modals on mount based on initial state.
+	// This handles the race where the WebSocket history replay fires the watcher before
+	// onMounted has set the acked flags, so the watcher skips the modal. After setting
+	// the flags here, we check the already-loaded ViewModel state as a fallback.
 	if (!factoryResetAckedOnMount.value && viewModel.factoryReset?.result && viewModel.factoryReset.result.status !== 'unknown') {
-		factoryResetModalSuccess.value = viewModel.factoryReset.result.status === 'modeSupported'
+		const result = viewModel.factoryReset.result
+		factoryResetError.value = result.error ?? null
+		factoryResetContext.value = result.context ?? null
+		factoryResetModalSuccess.value = result.status === 'modeSupported'
 		showFactoryResetResultModal.value = true
-	}
-
-	if (!updateValidationAckedOnMount.value) {
-		const status = data.updateValidationStatus?.status
-		if (status === 'Succeeded' || status === 'Recovered') {
-			showUpdateValidationModal.value = true
-		}
 	}
 
 	if (!res.ok) {
@@ -214,12 +237,8 @@ onMounted(async () => {
             <p>The factory reset completed successfully.</p>
           </template>
           <template v-else>
-            <p v-if="viewModel.factoryReset?.result?.error">
-              {{ viewModel.factoryReset.result.error }}
-            </p>
-            <p v-if="viewModel.factoryReset?.result?.context">
-              {{ viewModel.factoryReset.result.context }}
-            </p>
+            <p v-if="factoryResetError">{{ factoryResetError }}</p>
+            <p v-if="factoryResetContext">{{ factoryResetContext }}</p>
           </template>
           <div class="flex justify-end">
             <v-btn color="primary" @click="acknowledgeFactoryResetResult">OK</v-btn>
@@ -229,15 +248,11 @@ onMounted(async () => {
     </v-dialog>
     <v-dialog v-model="showUpdateValidationModal" max-width="500" persistent>
       <DialogContent
-        :title="viewModel.updateValidationStatus?.status === 'Recovered'
-          ? 'Update Rolled Back'
-          : 'Update Succeeded'"
-        :dialog-type="viewModel.updateValidationStatus?.status === 'Recovered'
-          ? 'Warning'
-          : 'Success'"
+        :title="updateValidationIsRollback ? 'Update Rolled Back' : 'Update Succeeded'"
+        :dialog-type="updateValidationIsRollback ? 'Warning' : 'Success'"
         :show-close="false">
         <div class="flex flex-col gap-4 mb-4">
-          <template v-if="viewModel.updateValidationStatus?.status === 'Succeeded'">
+          <template v-if="!updateValidationIsRollback">
             <p>The firmware update was applied and validated successfully.</p>
           </template>
           <template v-else>

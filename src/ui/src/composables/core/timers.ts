@@ -38,6 +38,7 @@ const NEW_IP_POLL_INTERVAL_MS = Number(import.meta.env.VITE_NEW_IP_POLL_INTERVAL
 // Optional test overrides for reconnection timeouts (production values come from Core)
 const REBOOT_TIMEOUT_OVERRIDE_MS = import.meta.env.VITE_REBOOT_TIMEOUT_MS ? Number(import.meta.env.VITE_REBOOT_TIMEOUT_MS) : null
 const FACTORY_RESET_TIMEOUT_OVERRIDE_MS = import.meta.env.VITE_FACTORY_RESET_TIMEOUT_MS ? Number(import.meta.env.VITE_FACTORY_RESET_TIMEOUT_MS) : null
+const FIRMWARE_UPDATE_TIMEOUT_OVERRIDE_MS = import.meta.env.VITE_FIRMWARE_UPDATE_TIMEOUT_MS ? Number(import.meta.env.VITE_FIRMWARE_UPDATE_TIMEOUT_MS) : null
 
 // ============================================================================
 // Timer IDs
@@ -75,7 +76,10 @@ export function startReconnectionPolling(): void {
 
 	// Allow test env override for shorter timeouts
 	const isFactoryReset = viewModel.deviceOperationState.type === 'factoryResetting'
-	const overrideMs = isFactoryReset ? FACTORY_RESET_TIMEOUT_OVERRIDE_MS : REBOOT_TIMEOUT_OVERRIDE_MS
+	const isFirmwareUpdate = viewModel.deviceOperationState.type === 'updating'
+	const overrideMs = isFactoryReset ? FACTORY_RESET_TIMEOUT_OVERRIDE_MS
+		: isFirmwareUpdate ? FIRMWARE_UPDATE_TIMEOUT_OVERRIDE_MS
+		: REBOOT_TIMEOUT_OVERRIDE_MS
 	const timeoutMs = overrideMs ?? coreCountdownSeconds * 1000
 	const countdownSeconds = Math.ceil(timeoutMs / 1000)
 	// Update the displayed countdown to match effective timeout

@@ -6,6 +6,7 @@ use crate::Effect;
 
 pub const REBOOT_TIMEOUT_SECS: u32 = 300; // 5 minutes
 pub const FACTORY_RESET_TIMEOUT_SECS: u32 = 600; // 10 minutes
+pub const FIRMWARE_UPDATE_TIMEOUT_SECS: u32 = 600; // 10 minutes
 
 /// Check if an error message indicates a network error
 pub fn is_network_error(error: &str) -> bool {
@@ -19,6 +20,13 @@ pub fn is_network_error(error: &str) -> bool {
 pub fn is_update_complete(info: &crate::types::HealthcheckInfo) -> bool {
     let status = &info.update_validation_status.status;
     status == "Succeeded" || status == "Recovered" || status == "NoUpdate"
+}
+
+/// Returns true when an actual firmware update completed (succeeded or rolled back).
+/// Distinct from `is_update_complete`, which also matches `"NoUpdate"` for polling purposes.
+pub fn is_actual_update_result(info: &crate::types::HealthcheckInfo) -> bool {
+    let status = &info.update_validation_status.status;
+    status == "Succeeded" || status == "Recovered"
 }
 
 /// Generic handler for device operation responses (reboot, factory reset, update)
@@ -43,6 +51,7 @@ pub fn handle_device_operation_response(
         });
         let timeout_secs = match &operation {
             DeviceOperationState::FactoryResetting => FACTORY_RESET_TIMEOUT_SECS,
+            DeviceOperationState::Updating => FIRMWARE_UPDATE_TIMEOUT_SECS,
             _ => REBOOT_TIMEOUT_SECS,
         };
         model.device_operation_state = operation;

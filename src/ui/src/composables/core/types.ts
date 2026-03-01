@@ -154,6 +154,7 @@ export interface ViewModel {
 		versionInfo: { required: string; current: string; mismatch: boolean }
 		updateValidationStatus: { status: string }
 		networkRollbackOccurred: boolean
+		updateValidationAcked: boolean
 	} | null
 	isAuthenticated: boolean
 	requiresPasswordSet: boolean

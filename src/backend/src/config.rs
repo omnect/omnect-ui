@@ -204,8 +204,8 @@ impl KeycloakConfig {
 
 impl DeviceServiceConfig {
     fn load() -> Result<Self> {
-        let socket_path = env::var("SOCKET_PATH")
-            .unwrap_or_else(|_| "/socket/api.sock".to_string())
+        let socket_path = env::var("DEVICE_SERVICE_SOCKET_PATH")
+            .unwrap_or_else(|_| "/socket/device-service.sock".to_string())
             .into();
 
         Ok(Self { socket_path })
