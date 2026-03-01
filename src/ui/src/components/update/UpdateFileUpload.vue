@@ -18,12 +18,19 @@ const isUploading = computed(() => uploadState.value?.type === 'uploading')
 
 watch(
 	() => viewModel.deviceOperationState,
-	(state) => {
-		if (state.type === 'reconnectionSuccessful' && state.operation === 'Update') {
+	(state, oldState) => {
+		// Only clear on the transition into reconnectionSuccessful, not on every re-render.
+		// sync.ts replaces deviceOperationState with a new object reference on each Core render,
+		// so without the oldState guard the watcher fires repeatedly and would race with an
+		// in-flight axios upload, clearing updateFile while the response is still pending.
+		if (
+			state?.type === 'reconnectionSuccessful' &&
+			(state as any)?.operation === 'Update' &&
+			oldState?.type !== 'reconnectionSuccessful'
+		) {
 			updateFile.value = undefined
 		}
-	},
-	{ deep: true }
+	}
 )
 
 // Auto-upload when file is selected
@@ -53,8 +60,12 @@ const uploadFile = async () => {
 		return
 	}
 
+	// Capture a local reference before any await so the file is stable even if
+	// the reactive ref is cleared by the deviceOperationState watcher mid-upload.
+	const file = updateFile.value
+
 	const formData = new FormData()
-	formData.append("file", updateFile.value as File)
+	formData.append("file", file)
 
 	// Notify Core: Upload Started
 	sendEvent(new EventVariantDevice(new DeviceEventVariantUploadStarted()))
@@ -72,8 +83,8 @@ const uploadFile = async () => {
 
 		if (res.status < 300) {
 			// Notify Core: Upload Completed
-			sendEvent(new EventVariantDevice(new DeviceEventVariantUploadCompleted(updateFile.value.name)))
-			emit("fileUploaded", updateFile.value.name)
+			sendEvent(new EventVariantDevice(new DeviceEventVariantUploadCompleted(file.name)))
+			emit("fileUploaded", file.name)
 		} else if (res.status === 401) {
 			router.push("/login")
 		} else {

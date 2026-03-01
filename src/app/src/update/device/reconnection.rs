@@ -5,11 +5,11 @@ use crate::{
     http_get,
     http_helpers::build_url,
     model::Model,
-    types::{DeviceOperationState, NetworkChangeState, OverlaySpinnerState},
+    types::{DeviceOperationState, NetworkChangeState, OverlaySpinnerState, UploadState},
     Effect,
 };
 
-use super::operations::is_update_complete;
+use super::operations::{is_actual_update_result, is_update_complete};
 
 /// Handle reconnection check tick - polls healthcheck endpoint
 pub fn handle_reconnection_check_tick(model: &mut Model) -> Command<Effect, Event> {
@@ -112,6 +112,17 @@ pub fn handle_healthcheck_response(
 
                 // Clear overlay spinner
                 model.overlay_spinner.clear();
+
+                // Clear stale firmware page state so the update page is fresh on re-login.
+                // Only when an actual update ran — "NoUpdate" preserves the loaded manifest.
+                if is_updating {
+                    if let Ok(info) = &result {
+                        if is_actual_update_result(info) {
+                            model.update_manifest = None;
+                            model.firmware_upload_state = UploadState::Idle;
+                        }
+                    }
+                }
             }
             // else: healthcheck succeeded but device never went offline - keep checking
         }
@@ -145,6 +156,17 @@ pub fn handle_healthcheck_response(
 
                     // Clear overlay spinner
                     model.overlay_spinner.clear();
+
+                    // Clear stale firmware page state so the update page is fresh on re-login.
+                    // Only when an actual update ran — "NoUpdate" preserves the loaded manifest.
+                    if is_update {
+                        if let Ok(info) = &result {
+                            if is_actual_update_result(info) {
+                                model.update_manifest = None;
+                                model.firmware_upload_state = UploadState::Idle;
+                            }
+                        }
+                    }
                 }
                 // else: healthcheck succeeded but device never went offline - keep checking
             }
@@ -568,6 +590,64 @@ mod tests {
 
                 assert_eq!(model.device_operation_state, DeviceOperationState::Updating);
             }
+
+            #[test]
+            fn clears_manifest_and_upload_state_on_succeeded() {
+                let mut model = Model {
+                    device_operation_state: DeviceOperationState::Updating,
+                    device_went_offline: true,
+                    update_manifest: Some(crate::types::UpdateManifest::default()),
+                    firmware_upload_state: crate::types::UploadState::Completed,
+                    ..Default::default()
+                };
+
+                let _ = handle_healthcheck_response(
+                    Ok(create_healthcheck("Succeeded", false)),
+                    &mut model,
+                );
+
+                assert!(model.update_manifest.is_none());
+                assert_eq!(model.firmware_upload_state, crate::types::UploadState::Idle);
+            }
+
+            #[test]
+            fn clears_manifest_and_upload_state_on_recovered() {
+                let mut model = Model {
+                    device_operation_state: DeviceOperationState::Updating,
+                    device_went_offline: true,
+                    update_manifest: Some(crate::types::UpdateManifest::default()),
+                    firmware_upload_state: crate::types::UploadState::Completed,
+                    ..Default::default()
+                };
+
+                let _ = handle_healthcheck_response(
+                    Ok(create_healthcheck("Recovered", false)),
+                    &mut model,
+                );
+
+                assert!(model.update_manifest.is_none());
+                assert_eq!(model.firmware_upload_state, crate::types::UploadState::Idle);
+            }
+
+            #[test]
+            fn does_not_clear_manifest_on_no_update() {
+                let manifest = crate::types::UpdateManifest::default();
+                let mut model = Model {
+                    device_operation_state: DeviceOperationState::Updating,
+                    device_went_offline: true,
+                    update_manifest: Some(manifest.clone()),
+                    firmware_upload_state: crate::types::UploadState::Completed,
+                    ..Default::default()
+                };
+
+                let _ = handle_healthcheck_response(
+                    Ok(create_healthcheck("NoUpdate", false)),
+                    &mut model,
+                );
+
+                assert_eq!(model.update_manifest, Some(manifest));
+                assert_eq!(model.firmware_upload_state, crate::types::UploadState::Completed);
+            }
         }
 
         mod waiting_reconnection {
@@ -664,6 +744,73 @@ mod tests {
                     model.device_operation_state,
                     DeviceOperationState::WaitingReconnection { .. }
                 ));
+            }
+
+            #[test]
+            fn clears_manifest_and_upload_state_on_succeeded_from_waiting() {
+                let mut model = Model {
+                    device_operation_state: DeviceOperationState::WaitingReconnection {
+                        operation: "Update".to_string(),
+                        attempt: 3,
+                    },
+                    device_went_offline: true,
+                    update_manifest: Some(crate::types::UpdateManifest::default()),
+                    firmware_upload_state: crate::types::UploadState::Completed,
+                    ..Default::default()
+                };
+
+                let _ = handle_healthcheck_response(
+                    Ok(create_healthcheck("Succeeded", false)),
+                    &mut model,
+                );
+
+                assert!(model.update_manifest.is_none());
+                assert_eq!(model.firmware_upload_state, crate::types::UploadState::Idle);
+            }
+
+            #[test]
+            fn clears_manifest_and_upload_state_on_recovered_from_waiting() {
+                let mut model = Model {
+                    device_operation_state: DeviceOperationState::WaitingReconnection {
+                        operation: "Update".to_string(),
+                        attempt: 3,
+                    },
+                    device_went_offline: true,
+                    update_manifest: Some(crate::types::UpdateManifest::default()),
+                    firmware_upload_state: crate::types::UploadState::Completed,
+                    ..Default::default()
+                };
+
+                let _ = handle_healthcheck_response(
+                    Ok(create_healthcheck("Recovered", false)),
+                    &mut model,
+                );
+
+                assert!(model.update_manifest.is_none());
+                assert_eq!(model.firmware_upload_state, crate::types::UploadState::Idle);
+            }
+
+            #[test]
+            fn does_not_clear_manifest_on_no_update_from_waiting() {
+                let manifest = crate::types::UpdateManifest::default();
+                let mut model = Model {
+                    device_operation_state: DeviceOperationState::WaitingReconnection {
+                        operation: "Update".to_string(),
+                        attempt: 3,
+                    },
+                    device_went_offline: true,
+                    update_manifest: Some(manifest.clone()),
+                    firmware_upload_state: crate::types::UploadState::Completed,
+                    ..Default::default()
+                };
+
+                let _ = handle_healthcheck_response(
+                    Ok(create_healthcheck("NoUpdate", false)),
+                    &mut model,
+                );
+
+                assert_eq!(model.update_manifest, Some(manifest));
+                assert_eq!(model.firmware_upload_state, crate::types::UploadState::Completed);
             }
         }
 

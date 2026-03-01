@@ -22,7 +22,7 @@
       "preLaunchTask": "check_ods_and_centrifugo",
       "env": {
         "RUST_LOG": "omnect_ui=debug",
-        "SOCKET_PATH": "/tmp/api.sock",
+        "DEVICE_SERVICE_SOCKET_PATH": "/tmp/api.sock",
         "CERT_PATH": "temp/device_id_cert.pem",
         "KEY_PATH": "temp/device_id_cert_key.pem",
         "CENTRIFUGO_ADMIN_ENABLED": "true",
