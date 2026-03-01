@@ -1,12 +1,17 @@
+use std::collections::HashMap;
+
 use crux_core::Command;
 
 use crate::{
     events::{Event, WebSocketEvent},
     model::Model,
     parse_ods_update,
-    types::ods::{
-        OdsFactoryReset, OdsNetworkStatus, OdsOnlineStatus, OdsSystemInfo, OdsTimeouts,
-        OdsUpdateValidationStatus,
+    types::{
+        ods::{
+            OdsFactoryReset, OdsNetworkStatus, OdsOnlineStatus, OdsSystemInfo, OdsTimeouts,
+            OdsUpdateValidationStatus,
+        },
+        NetworkFormData, NetworkFormState,
     },
     update_field, CentrifugoCmd, Effect,
 };
@@ -40,6 +45,7 @@ pub fn handle(event: WebSocketEvent, model: &mut Model) -> Command<Effect, Event
                 |m, status| {
                     m.network_status = Some(status.into());
                     m.update_current_connection_adapter();
+                    sync_network_form_from_status(m);
                     crux_core::render::render()
                 }
             )
@@ -65,6 +71,36 @@ pub fn handle(event: WebSocketEvent, model: &mut Model) -> Command<Effect, Event
 
         WebSocketEvent::Connected => update_field!(model.is_connected, true),
         WebSocketEvent::Disconnected => update_field!(model.is_connected, false),
+    }
+}
+
+/// When the form has no unsaved changes, re-initialize it from freshly updated adapter data.
+/// This keeps the form in sync when external events (e.g. WiFi connecting) change the
+/// adapter's IP/config at the OS level.
+fn sync_network_form_from_status(m: &mut Model) {
+    let maybe_adapter_name = if !m.network_form_dirty {
+        if let NetworkFormState::Editing { adapter_name, .. } = &m.network_form_state {
+            Some(adapter_name.clone())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    if let Some(adapter_name) = maybe_adapter_name {
+        if let Some(form_data) = m
+            .network_status
+            .as_ref()
+            .and_then(|ns| ns.network_status.iter().find(|n| n.name == adapter_name))
+            .map(NetworkFormData::from)
+        {
+            m.network_form_state = NetworkFormState::Editing {
+                adapter_name,
+                form_data: form_data.clone(),
+                original_data: form_data,
+                errors: HashMap::new(),
+            };
+        }
     }
 }
 

@@ -5,6 +5,7 @@ pub mod macros;
 pub mod model;
 pub mod types;
 pub mod update;
+pub mod wifi_psk;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;

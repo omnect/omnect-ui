@@ -2,6 +2,7 @@ mod auth;
 mod device;
 mod ui;
 mod websocket;
+mod wifi;
 
 use crux_core::{render::render, Command};
 
@@ -17,11 +18,15 @@ pub fn update(event: Event, model: &mut Model) -> Command<Effect, Event> {
     match event {
         Event::Initialize => {
             model.start_loading();
-            render()
+            Command::all([
+                render(),
+                wifi::handle(crate::events::WifiEvent::CheckAvailability, model),
+            ])
         }
         Event::Auth(auth_event) => auth::handle(auth_event, model),
         Event::Device(device_event) => device::handle(device_event, model),
         Event::WebSocket(ws_event) => websocket::handle(ws_event, model),
         Event::Ui(ui_event) => ui::handle(ui_event, model),
+        Event::Wifi(wifi_event) => wifi::handle(wifi_event, model),
     }
 }

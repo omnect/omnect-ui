@@ -62,6 +62,23 @@ pub fn extract_error_message(action: &str, response: &mut Response<Vec<u8>>) -> 
     }
 }
 
+/// Parse JSON from response body regardless of HTTP status.
+///
+/// Unlike `parse_json_response`, this does not check for 2xx status.
+/// Used for endpoints like healthcheck where the body is valid JSON
+/// even on error status codes (e.g., 503 for version mismatch).
+pub fn parse_json_response_any_status<T: serde::de::DeserializeOwned>(
+    action: &str,
+    response: &mut Response<Vec<u8>>,
+) -> Result<T, String> {
+    match response.take_body() {
+        Some(body) => {
+            serde_json::from_slice(&body).map_err(|e| format!("{action}: JSON parse error: {e}"))
+        }
+        None => Err(format!("{action}: Empty response body")),
+    }
+}
+
 /// Parse JSON from response body.
 ///
 /// Returns error if response is not successful or JSON parsing fails.
@@ -178,9 +195,49 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crux_http::http::StatusCode;
+    use crux_http::testing::ResponseBuilder;
+
+    fn make_response(status: StatusCode, body: &[u8]) -> Response<Vec<u8>> {
+        ResponseBuilder::with_status(status)
+            .body(body.to_vec())
+            .build()
+    }
 
     #[test]
     fn test_build_url() {
         assert_eq!(build_url("/test"), "https://relative/test");
+    }
+
+    #[test]
+    fn parse_json_response_any_status_parses_on_503() {
+        #[derive(serde::Deserialize, PartialEq, Debug)]
+        struct Info {
+            ok: bool,
+        }
+
+        let mut response = make_response(StatusCode::ServiceUnavailable, b"{\"ok\":false}");
+        let result: Result<Info, String> = parse_json_response_any_status("test", &mut response);
+        assert_eq!(result.unwrap(), Info { ok: false });
+    }
+
+    #[test]
+    fn parse_json_response_any_status_parses_on_200() {
+        #[derive(serde::Deserialize, PartialEq, Debug)]
+        struct Info {
+            value: u32,
+        }
+
+        let mut response = make_response(StatusCode::Ok, b"{\"value\":42}");
+        let result: Result<Info, String> = parse_json_response_any_status("test", &mut response);
+        assert_eq!(result.unwrap(), Info { value: 42 });
+    }
+
+    #[test]
+    fn parse_json_response_any_status_returns_error_on_invalid_json() {
+        let mut response = make_response(StatusCode::Ok, b"not json");
+        let result: Result<String, String> = parse_json_response_any_status("test", &mut response);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("JSON parse error"));
     }
 }

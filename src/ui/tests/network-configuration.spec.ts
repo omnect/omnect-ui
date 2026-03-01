@@ -1,5 +1,4 @@
-import { test, expect, Page } from '@playwright/test';
-import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './fixtures/mock-api';
+import { test, expect } from '@playwright/test';
 import { NetworkTestHarness, DeviceNetwork } from './fixtures/network-test-harness';
 
 // Run all tests in this file serially to avoid Centrifugo channel interference
@@ -10,17 +9,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
   test.beforeEach(async ({ page }) => {
     harness = new NetworkTestHarness();
-    await mockConfig(page);
-    await mockLoginSuccess(page);
-    await mockRequireSetPassword(page);
-    await harness.mockNetworkConfig(page);
-    await harness.mockHealthcheck(page);
-    await harness.mockAckRollback(page);
-
-    await page.goto('/');
-    await page.getByPlaceholder(/enter your password/i).fill('password');
-    await page.getByRole('button', { name: /log in/i }).click();
-    await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
+    await harness.setupWithLogin(page);
   });
 
   test.afterEach(() => {
@@ -478,68 +467,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
     test('Rollback modal should close on second apply after a rollback', async ({ page }) => {
       test.setTimeout(60000); // Increase timeout for rollback scenario
 
-      // Shim WebSocket to redirect 192.168.1.150 to localhost
-      await page.addInitScript(() => {
-          const OriginalWebSocket = window.WebSocket;
-          // @ts-ignore
-          window.WebSocket = function(url, protocols) {
-              if (typeof url === 'string' && url.includes('192.168.1.150')) {
-                  url = url.replace('192.168.1.150', 'localhost');
-              }
-              return new OriginalWebSocket(url, protocols);
-          };
-          window.WebSocket.prototype = OriginalWebSocket.prototype;
-          window.WebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
-          window.WebSocket.OPEN = OriginalWebSocket.OPEN;
-          window.WebSocket.CLOSING = OriginalWebSocket.CLOSING;
-          window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
-      });
-
-      // Mock the redirect to the new IP to prevent navigation failure
-      await page.route(/.*192\.168\.1\.150.*/, async (route) => {
-          const url = new URL(route.request().url());
-
-          // Handle healthcheck separately to avoid CORS and ensure correct response
-          if (url.pathname.includes('/healthcheck')) {
-              await route.fulfill({
-                  status: 200,
-                  contentType: 'application/json',
-                  headers: {
-                      'Access-Control-Allow-Origin': 'https://localhost:5173',
-                      'Access-Control-Allow-Credentials': 'true',
-                  },
-                  body: JSON.stringify({
-                      versionInfo: { required: '>=0.39.0', current: '0.40.0', mismatch: false },
-                      updateValidationStatus: { status: 'valid' },
-                      networkRollbackOccurred: harness.getRollbackState().occurred,
-                  }),
-              });
-              return;
-          }
-
-          // For other requests (main page, assets), proxy to localhost
-          const originalUrl = page.url();
-          const originalPort = new URL(originalUrl).port || '5173';
-          const originalProtocol = new URL(originalUrl).protocol;
-
-          const newUrl = `${originalProtocol}//localhost:${originalPort}${url.pathname}${url.search}`;
-
-          try {
-              const response = await page.request.fetch(newUrl, {
-                  method: route.request().method(),
-                  headers: route.request().headers(),
-                  data: route.request().postDataBuffer(),
-                  ignoreHTTPSErrors: true
-              });
-
-              await route.fulfill({
-                  response: response
-              });
-          } catch (e) {
-              console.error('Failed to proxy request:', e);
-              await route.abort();
-          }
-      });
+      await harness.mockNewIpProxy(page, '192.168.1.150');
 
       await page.unroute('**/network');
       await harness.mockNetworkConfig(page, { rollbackTimeoutSeconds: 10 }); // Short timeout

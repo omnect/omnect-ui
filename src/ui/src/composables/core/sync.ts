@@ -12,6 +12,7 @@ import {
 	convertNetworkChangeState,
 	convertNetworkFormState,
 	convertUploadState,
+	convertWifiState,
 } from './types'
 import { setViewModelUpdater } from './effects'
 import { Model as GeneratedViewModel } from '../../../../shared_types/generated/typescript/types/shared_types'
@@ -30,6 +31,60 @@ let sendEventCallback: ((event: Event) => Promise<void>) | null = null
  */
 export function setEventSender(callback: (event: Event) => Promise<void>): void {
 	sendEventCallback = callback
+}
+
+/**
+ * Sync the overlay spinner state from Core.
+ *
+ * Must be called BEFORE updating deviceOperationState / networkChangeState so that
+ * the `preserveCountdown` decision reads the previous (still-active) state values.
+ */
+function syncOverlaySpinner(coreViewModel: GeneratedViewModel): void {
+	const isNetworkChangeActive = viewModel.networkChangeState.type === 'waitingForNewIp'
+	const isDeviceOpActive = viewModel.deviceOperationState.type === 'rebooting'
+		|| viewModel.deviceOperationState.type === 'factoryResetting'
+		|| viewModel.deviceOperationState.type === 'updating'
+		|| viewModel.deviceOperationState.type === 'waitingReconnection'
+	// Keep the Shell's countdown value when an active countdown interval is running;
+	// otherwise accept the value from Core (which starts null and is only set by Shell timers).
+	const preserveCountdown = (isNetworkChangeActive || isDeviceOpActive)
+		&& viewModel.overlaySpinner.countdownSeconds !== null
+
+	viewModel.overlaySpinner = {
+		overlay: coreViewModel.overlaySpinner.overlay,
+		title: coreViewModel.overlaySpinner.title,
+		text: coreViewModel.overlaySpinner.text || null,
+		timedOut: coreViewModel.overlaySpinner.timedOut,
+		progress: coreViewModel.overlaySpinner.progress !== null && coreViewModel.overlaySpinner.progress !== undefined
+			? coreViewModel.overlaySpinner.progress
+			: null,
+		countdownSeconds: preserveCountdown
+			? viewModel.overlaySpinner.countdownSeconds
+			: (coreViewModel.overlaySpinner.countdownSeconds !== null && coreViewModel.overlaySpinner.countdownSeconds !== undefined
+				? coreViewModel.overlaySpinner.countdownSeconds
+				: null),
+	}
+}
+
+/**
+ * Handle authentication state transitions (login / logout side-effects).
+ *
+ * Must be called AFTER viewModel.isAuthenticated has been updated from Core.
+ */
+function handleAuthTransitions(wasAuthenticated: boolean): void {
+	if (viewModel.isAuthenticated && !wasAuthenticated) {
+		console.log('[useCore] User authenticated, triggering subscription')
+		if (authToken.value && !isSubscribed.value && sendEventCallback) {
+			isSubscribed.value = true
+			sendEventCallback(new EventVariantWebSocket(new WebSocketEventVariantSubscribeToChannels()))
+		}
+	}
+
+	if (!viewModel.isAuthenticated && wasAuthenticated) {
+		console.log('[useCore] User logged out, resetting subscription state and disconnecting Centrifugo')
+		isSubscribed.value = false
+		centrifugoInstance.disconnect()
+	}
 }
 
 /**
@@ -148,29 +203,7 @@ export function updateViewModelFromCore(): void {
 		authToken.value = viewModel.authToken
 
 		// Overlay spinner state (synced BEFORE device/network state so watchers can read countdown)
-		// Preserve countdownSeconds if it's being actively managed by the Shell (countdown interval running)
-		const isNetworkChangeActive = viewModel.networkChangeState.type === 'waitingForNewIp'
-		const isDeviceOpActive = viewModel.deviceOperationState.type === 'rebooting'
-			|| viewModel.deviceOperationState.type === 'factoryResetting'
-			|| viewModel.deviceOperationState.type === 'updating'
-			|| viewModel.deviceOperationState.type === 'waitingReconnection'
-		const preserveCountdown = (isNetworkChangeActive || isDeviceOpActive)
-			&& viewModel.overlaySpinner.countdownSeconds !== null
-
-		viewModel.overlaySpinner = {
-			overlay: coreViewModel.overlaySpinner.overlay,
-			title: coreViewModel.overlaySpinner.title,
-			text: coreViewModel.overlaySpinner.text || null,
-			timedOut: coreViewModel.overlaySpinner.timedOut,
-			progress: coreViewModel.overlaySpinner.progress !== null && coreViewModel.overlaySpinner.progress !== undefined
-				? coreViewModel.overlaySpinner.progress
-				: null,
-			countdownSeconds: preserveCountdown
-				? viewModel.overlaySpinner.countdownSeconds // Keep Shell's calculated value
-				: (coreViewModel.overlaySpinner.countdownSeconds !== null && coreViewModel.overlaySpinner.countdownSeconds !== undefined
-					? coreViewModel.overlaySpinner.countdownSeconds
-					: null),
-		}
+		syncOverlaySpinner(coreViewModel)
 
 		// Device operation state - convert bincode variant to typed object
 		viewModel.deviceOperationState = convertDeviceOperationState(coreViewModel.deviceOperationState)
@@ -196,25 +229,17 @@ export function updateViewModelFromCore(): void {
 		viewModel.shouldShowRollbackModal = coreViewModel.shouldShowRollbackModal
 		viewModel.defaultRollbackEnabled = coreViewModel.defaultRollbackEnabled
 
+		// Version mismatch state (derived from healthcheck in Core)
+		viewModel.versionMismatch = coreViewModel.versionMismatch
+		viewModel.versionMismatchMessage = coreViewModel.versionMismatchMessage || null
+
 		// Firmware upload state
 		viewModel.firmwareUploadState = convertUploadState(coreViewModel.firmwareUploadState)
 
-		// Auto-subscribe logic based on authentication state transition
-		if (viewModel.isAuthenticated && !wasAuthenticated) {
-			console.log('[useCore] User authenticated, triggering subscription')
-			if (authToken.value && !isSubscribed.value && sendEventCallback) {
-				isSubscribed.value = true
-				sendEventCallback(new EventVariantWebSocket(new WebSocketEventVariantSubscribeToChannels()))
-			}
-		}
+		// WiFi state
+		viewModel.wifiState = convertWifiState(coreViewModel.wifiState)
 
-		// Reset subscription state on logout
-		if (!viewModel.isAuthenticated && wasAuthenticated) {
-			console.log('[useCore] User logged out, resetting subscription state and disconnecting Centrifugo')
-			isSubscribed.value = false
-			// Disconnect Centrifugo to ensure old tokens are not reused
-			centrifugoInstance.disconnect()
-		}
+		handleAuthTransitions(wasAuthenticated)
 	} catch (error) {
 		console.error('Failed to update view model from core:', error)
 		// Don't throw - keep the viewModel as-is from events

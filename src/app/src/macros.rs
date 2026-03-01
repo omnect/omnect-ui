@@ -44,7 +44,8 @@ macro_rules! update_field {
 pub use crate::http_helpers::{
     build_url, check_response_status, extract_error_message, extract_string_response,
     handle_auth_error, handle_request_error, is_response_success, map_http_error,
-    parse_json_response, process_json_response, process_status_response, BASE_URL,
+    parse_json_response, parse_json_response_any_status, process_json_response,
+    process_status_response, BASE_URL,
 };
 
 /// Macro for unauthenticated POST requests with standard error handling.
@@ -418,6 +419,34 @@ macro_rules! http_get {
             ))
         })
     };
+}
+
+/// Macro for authenticated GET requests expecting JSON response.
+/// Does not set loading state — used for background polling and status checks.
+///
+/// # Example
+/// ```ignore
+/// auth_get!(Wifi, WifiEvent, model, "/wifi/status", StatusResponse, "WiFi status",
+///     expect_json: WifiStatusApiResponse)
+/// ```
+#[macro_export]
+macro_rules! auth_get {
+    ($domain:ident, $domain_event:ident, $model:expr, $endpoint:expr, $response_event:ident, $action:expr, expect_json: $response_type:ty) => {{
+        if let Some(token) = &$model.auth_token {
+            $crate::HttpCmd::get($crate::build_url($endpoint))
+                .header("Authorization", format!("Bearer {token}"))
+                .build()
+                .then_send(|result| {
+                    let event_result: Result<$response_type, String> =
+                        $crate::process_json_response($action, result);
+                    $crate::events::Event::$domain($crate::events::$domain_event::$response_event(
+                        event_result,
+                    ))
+                })
+        } else {
+            $crate::handle_auth_error($model, $action)
+        }
+    }};
 }
 
 /// Silent HTTP GET - no loading state, custom success/error event handlers.

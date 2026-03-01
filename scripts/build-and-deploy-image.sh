@@ -176,9 +176,9 @@ if [[ "$DEPLOY" == "true" ]]; then
 
   echo "Copying image to device $DEVICE_HOST..."
   if [ -n "$DEVICE_PASS" ]; then
-    sshpass -p "$DEVICE_PASS" scp "$IMAGE_TAR" "${DEVICE_USER}@${DEVICE_HOST}:/tmp/"
+    sshpass -p "$DEVICE_PASS" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$IMAGE_TAR" "${DEVICE_USER}@${DEVICE_HOST}:/tmp/"
   else
-    scp "$IMAGE_TAR" "${DEVICE_USER}@${DEVICE_HOST}:/tmp/"
+    scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "$IMAGE_TAR" "${DEVICE_USER}@${DEVICE_HOST}:/tmp/"
   fi
 
   echo "Loading image on device and restarting container..."
@@ -203,9 +203,9 @@ if [[ "$DEPLOY" == "true" ]]; then
     sudo iotedge system restart"
 
   if [ -n "$DEVICE_PASS" ]; then
-    sshpass -p "$DEVICE_PASS" ssh "${DEVICE_USER}@${DEVICE_HOST}" "$CMD"
+    sshpass -p "$DEVICE_PASS" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "${DEVICE_USER}@${DEVICE_HOST}" "$CMD"
   else
-    ssh "${DEVICE_USER}@${DEVICE_HOST}" "$CMD"
+    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "${DEVICE_USER}@${DEVICE_HOST}" "$CMD"
   fi
 
   echo "Cleaning up local tar file..."

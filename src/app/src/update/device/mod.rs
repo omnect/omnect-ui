@@ -116,13 +116,7 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
             handle_set_network_config_response(result, model)
         }
 
-        DeviceEvent::AckRollbackResponse(result) => {
-            model.stop_loading();
-            if let Err(e) = result {
-                model.set_error(e);
-            }
-            crux_core::render::render()
-        }
+        DeviceEvent::AckRollbackResponse(result) => handle_ack_response(result, model),
 
         DeviceEvent::LoadUpdate { file_path } => {
             let request = LoadUpdateRequest { file_path };
@@ -161,6 +155,8 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
             Some("The device is restarting with the updated firmware.".to_string()),
         ),
 
+        DeviceEvent::FetchInitialHealthcheck => build_initial_healthcheck_cmd(),
+
         DeviceEvent::HealthcheckResponse(result) => handle_healthcheck_response(result, model),
 
         // Device reconnection events (reboot/factory reset/update)
@@ -178,21 +174,9 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
         DeviceEvent::AckFactoryResetResult => handle_ack_factory_reset_result(model),
         DeviceEvent::AckUpdateValidation => handle_ack_update_validation(model),
 
-        DeviceEvent::AckFactoryResetResultResponse(result) => {
-            model.stop_loading();
-            if let Err(e) = result {
-                model.set_error(e);
-            }
-            crux_core::render::render()
-        }
+        DeviceEvent::AckFactoryResetResultResponse(result) => handle_ack_response(result, model),
 
-        DeviceEvent::AckUpdateValidationResponse(result) => {
-            model.stop_loading();
-            if let Err(e) = result {
-                model.set_error(e);
-            }
-            crux_core::render::render()
-        }
+        DeviceEvent::AckUpdateValidationResponse(result) => handle_ack_response(result, model),
 
         // Network form events
         DeviceEvent::NetworkFormStartEdit { adapter_name } => {
@@ -205,6 +189,36 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
             handle_network_form_start_edit(adapter_name, model)
         }
     }
+}
+
+fn handle_ack_response(result: Result<(), String>, model: &mut Model) -> Command<Effect, Event> {
+    model.stop_loading();
+    if let Err(e) = result {
+        model.set_error(e);
+    }
+    crux_core::render::render()
+}
+
+fn build_initial_healthcheck_cmd() -> Command<Effect, Event> {
+    // crux_http converts 4xx/5xx to HttpError::Http but preserves the body.
+    // The backend returns 503 on version mismatch with a valid JSON body,
+    // so we must parse the body from both success and error paths.
+    crate::HttpCmd::get(crate::http_helpers::build_url("/healthcheck"))
+        .build()
+        .then_send(|result| {
+            let event_result = match result {
+                Ok(mut response) => crate::http_helpers::parse_json_response_any_status(
+                    "Healthcheck",
+                    &mut response,
+                ),
+                Err(crux_http::HttpError::Http {
+                    body: Some(body), ..
+                }) => serde_json::from_slice(&body)
+                    .map_err(|e| format!("Healthcheck: JSON parse error: {e}")),
+                Err(e) => Err(e.to_string()),
+            };
+            Event::Device(DeviceEvent::HealthcheckResponse(event_result))
+        })
 }
 
 #[cfg(test)]
