@@ -413,6 +413,13 @@ async fn run_server(
             .route("/version", web::get().to(UiApi::version))
             .route("/logout", web::post().to(UiApi::logout))
             .route("/healthcheck", web::get().to(UiApi::healthcheck))
+            .route("/settings", web::get().to(UiApi::get_settings))
+            .route(
+                "/settings",
+                web::post()
+                    .to(UiApi::update_settings)
+                    .wrap(middleware::AuthMw),
+            )
             .route("/network", web::post().to(UiApi::set_network_config))
             .route("/ack-rollback", web::post().to(UiApi::ack_rollback))
             .route(

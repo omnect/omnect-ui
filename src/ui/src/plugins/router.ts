@@ -7,6 +7,7 @@ import DeviceOverview from "../pages/DeviceOverview.vue"
 import DeviceUpdate from "../pages/DeviceUpdate.vue"
 import Login from "../pages/Login.vue"
 import Network from "../pages/Network.vue"
+import Settings from "../pages/Settings.vue"
 import SetPassword from "../pages/SetPassword.vue"
 import UpdatePassword from "../pages/UpdatePassword.vue"
 
@@ -14,6 +15,7 @@ const routes = [
 	{ path: "/", component: DeviceOverview, meta: { text: "Device", requiresAuth: true, showMenu: true } },
 	{ path: "/network", component: Network, meta: { text: "Network", requiresAuth: true, showMenu: true } },
 	{ path: "/update", component: DeviceUpdate, meta: { text: "Update", requiresAuth: true, showMenu: true } },
+	{ path: "/settings", component: Settings, meta: { text: "Settings", requiresAuth: true, showMenu: true } },
 	{ path: "/login", component: Login, meta: { showMenu: false, guestOnly: true, inlineErrors: true } },
 	{ path: "/set-password", component: SetPassword, meta: { requiresPortalAuth: true, showMenu: false, inlineErrors: true } },
 	{ path: "/update-password", component: UpdatePassword, meta: { requiresAuth: true, showMenu: true, inlineErrors: true } },

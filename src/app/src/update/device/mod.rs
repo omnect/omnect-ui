@@ -230,7 +230,7 @@ mod tests {
 
     mod reboot {
         use super::*;
-        use crate::update::device::operations::REBOOT_TIMEOUT_SECS;
+        use crate::types::DEFAULT_REBOOT_TIMEOUT_SECS;
 
         #[test]
         fn success_sets_rebooting_state() {
@@ -250,7 +250,7 @@ mod tests {
             assert!(model.overlay_spinner.is_visible());
             assert_eq!(
                 model.overlay_spinner.countdown_seconds(),
-                Some(REBOOT_TIMEOUT_SECS)
+                Some(DEFAULT_REBOOT_TIMEOUT_SECS)
             );
         }
 

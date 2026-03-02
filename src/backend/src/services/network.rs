@@ -1,4 +1,7 @@
-use crate::{omnect_device_service_client::DeviceServiceClient, services::marker};
+use crate::{
+    omnect_device_service_client::DeviceServiceClient,
+    services::{marker, settings::SettingsService},
+};
 use anyhow::{Context, Result};
 use ini::Ini;
 use log::{debug, error, info};
@@ -54,10 +57,12 @@ macro_rules! clear_rollback {
 static SERVER_RESTART_TX: std::sync::OnceLock<broadcast::Sender<()>> = std::sync::OnceLock::new();
 
 // ============================================================================
-// Constants
+// Helpers
 // ============================================================================
 
-const ROLLBACK_TIMEOUT_SECS: u64 = 90;
+fn rollback_timeout_secs() -> u64 {
+    SettingsService::get().network_rollback_timeout_secs.into()
+}
 
 // ============================================================================
 // Structs
@@ -122,7 +127,7 @@ impl NetworkConfigService {
         }
 
         Ok(SetNetworkConfigResponse {
-            rollback_timeout_seconds: ROLLBACK_TIMEOUT_SECS,
+            rollback_timeout_seconds: rollback_timeout_secs(),
             ui_port: crate::config::AppConfig::get().ui.port,
             rollback_enabled: enable_rollback
                 && request.is_server_addr
@@ -406,7 +411,7 @@ impl NetworkConfigService {
     fn create_rollback(network: &NetworkConfigRequest) -> Result<()> {
         let rollback = Rollback {
             network_config: network.clone(),
-            deadline: SystemTime::now() + Duration::from_secs(ROLLBACK_TIMEOUT_SECS),
+            deadline: SystemTime::now() + Duration::from_secs(rollback_timeout_secs()),
         };
 
         info!("create rollback: {rollback:?}");
@@ -608,18 +613,21 @@ mod tests {
         #[test]
         fn response_includes_rollback_timeout() {
             let response = SetNetworkConfigResponse {
-                rollback_timeout_seconds: ROLLBACK_TIMEOUT_SECS,
+                rollback_timeout_seconds: u64::from(omnect_ui_core::types::DEFAULT_NETWORK_ROLLBACK_TIMEOUT_SECS),
                 ui_port: 1977,
                 rollback_enabled: true,
             };
 
-            assert_eq!(response.rollback_timeout_seconds, 90);
+            assert_eq!(
+                response.rollback_timeout_seconds,
+                u64::from(omnect_ui_core::types::DEFAULT_NETWORK_ROLLBACK_TIMEOUT_SECS)
+            );
         }
 
         #[test]
         fn rollback_enabled_when_ip_changed_and_is_server() {
             let response = SetNetworkConfigResponse {
-                rollback_timeout_seconds: ROLLBACK_TIMEOUT_SECS,
+                rollback_timeout_seconds: omnect_ui_core::types::DEFAULT_NETWORK_ROLLBACK_TIMEOUT_SECS.into(),
                 ui_port: 1977,
                 rollback_enabled: true,
             };
@@ -630,7 +638,7 @@ mod tests {
         #[test]
         fn rollback_disabled_when_not_requested() {
             let response = SetNetworkConfigResponse {
-                rollback_timeout_seconds: ROLLBACK_TIMEOUT_SECS,
+                rollback_timeout_seconds: omnect_ui_core::types::DEFAULT_NETWORK_ROLLBACK_TIMEOUT_SECS.into(),
                 ui_port: 1977,
                 rollback_enabled: false,
             };

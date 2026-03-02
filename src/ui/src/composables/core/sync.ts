@@ -239,6 +239,14 @@ export function updateViewModelFromCore(): void {
 		// WiFi state
 		viewModel.wifiState = convertWifiState(coreViewModel.wifiState)
 
+		// Timeout settings
+		viewModel.timeoutSettings = {
+			rebootTimeoutSecs: coreViewModel.timeoutSettings.rebootTimeoutSecs,
+			factoryResetTimeoutSecs: coreViewModel.timeoutSettings.factoryResetTimeoutSecs,
+			firmwareUpdateTimeoutSecs: coreViewModel.timeoutSettings.firmwareUpdateTimeoutSecs,
+			networkRollbackTimeoutSecs: coreViewModel.timeoutSettings.networkRollbackTimeoutSecs,
+		}
+
 		handleAuthTransitions(wasAuthenticated)
 	} catch (error) {
 		console.error('Failed to update view model from core:', error)

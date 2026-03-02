@@ -134,6 +134,54 @@ export async function mockUpdatePasswordFailure(page: Page, message = 'current p
   });
 }
 
+export interface TimeoutSettingsPayload {
+  rebootTimeoutSecs: number;
+  factoryResetTimeoutSecs: number;
+  firmwareUpdateTimeoutSecs: number;
+  networkRollbackTimeoutSecs: number;
+}
+
+export const DEFAULT_TIMEOUT_SETTINGS: TimeoutSettingsPayload = {
+  rebootTimeoutSecs: 300,
+  factoryResetTimeoutSecs: 600,
+  firmwareUpdateTimeoutSecs: 600,
+  networkRollbackTimeoutSecs: 90,
+};
+
+export async function mockGetSettings(page: Page, settings: TimeoutSettingsPayload = DEFAULT_TIMEOUT_SETTINGS) {
+  await page.route('**/settings', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(settings),
+      });
+    } else {
+      await route.continue();
+    }
+  });
+}
+
+export async function mockSaveSettingsSuccess(page: Page) {
+  await page.route('**/settings', async (route) => {
+    if (route.request().method() === 'POST') {
+      await route.fulfill({ status: 200, body: '' });
+    } else {
+      await route.continue();
+    }
+  });
+}
+
+export async function mockSaveSettingsFailure(page: Page, message = 'failed to save settings') {
+  await page.route('**/settings', async (route) => {
+    if (route.request().method() === 'POST') {
+      await route.fulfill({ status: 500, contentType: 'text/plain', body: message });
+    } else {
+      await route.continue();
+    }
+  });
+}
+
 export async function mockNetworkConfig(page: Page) {
   // Mock the network configuration endpoint
   await page.route('**/network', async (route) => {

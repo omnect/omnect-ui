@@ -24,6 +24,9 @@ pub struct Model {
     pub timeouts: Option<Timeouts>,
     pub healthcheck: Option<HealthcheckInfo>,
 
+    // User-configurable timeout settings
+    pub timeout_settings: TimeoutSettings,
+
     // Authentication state
     /// Auth token for API requests
     pub auth_token: Option<String>,
