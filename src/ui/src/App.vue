@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import axios from "axios"
-import { onMounted, type Ref, ref, computed, watch } from "vue"
+import { type Ref, ref, computed, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
 import { useDisplay } from "vuetify"
 import BaseSideBar from "./components/BaseSideBar.vue"
@@ -9,11 +8,8 @@ import OmnectLogo from "./components/branding/OmnectLogo.vue"
 import OverlaySpinner from "./components/feedback/OverlaySpinner.vue"
 import UserMenu from "./components/UserMenu.vue"
 import { useCore } from "./composables/useCore"
-import type { HealthcheckInfo } from "./composables/useCore"
 import { useSnackbar } from "./composables/useSnackbar"
 import { useMessageWatchers } from "./composables/useMessageWatchers"
-
-axios.defaults.validateStatus = (_) => true
 
 const { snackbarState } = useSnackbar()
 const { viewModel, ackRollback, ackFactoryResetResult, ackUpdateValidation, subscribeToChannels, unsubscribeFromChannels } = useCore()
@@ -27,14 +23,9 @@ const { lgAndUp } = useDisplay()
 const router = useRouter()
 const route = useRoute()
 const showSideBar: Ref<boolean> = ref(lgAndUp.value)
-const overlay: Ref<boolean> = ref(false)
 const showRollbackNotification: Ref<boolean> = ref(false)
 const showFactoryResetResultModal: Ref<boolean> = ref(false)
 const showUpdateValidationModal: Ref<boolean> = ref(false)
-const factoryResetAckedOnMount = ref(true)
-const updateValidationAckedOnMount = ref(true)
-const errorTitle = ref("")
-const errorMsg = ref("")
 
 const overlaySpinnerState = computed(() => viewModel.overlaySpinner)
 
@@ -86,15 +77,17 @@ const acknowledgeRollback = () => {
 }
 
 const acknowledgeFactoryResetResult = () => {
+	// Mark as seen in this session so Centrifugo replays don't re-show the modal
+	sessionStorage.setItem('factoryResetResultAcked', 'true')
 	ackFactoryResetResult()
 	showFactoryResetResultModal.value = false
-	factoryResetAckedOnMount.value = true
 }
 
 const acknowledgeUpdateValidation = () => {
+	// Mark as seen in this session so Centrifugo replays don't re-show the modal
+	sessionStorage.setItem('updateValidationAcked', 'true')
 	ackUpdateValidation()
 	showUpdateValidationModal.value = false
-	updateValidationAckedOnMount.value = true
 }
 
 const factoryResetModalSuccess = ref(false)
@@ -130,10 +123,12 @@ watch(
 )
 
 // Watch for factory reset result (arrives via WebSocket after republish)
+// Use sessionStorage to suppress the modal within the same browser session — each new
+// session (new tab, new browser) starts fresh, so every client sees it once.
 watch(
 	() => viewModel.factoryReset?.result,
 	(result) => {
-		if (result && result.status !== 'unknown' && !factoryResetAckedOnMount.value) {
+		if (result && result.status !== 'unknown' && !sessionStorage.getItem('factoryResetResultAcked')) {
 			// Snapshot once so the template is decoupled from the live ViewModel during close animation
 			factoryResetError.value = result.error ?? null
 			factoryResetContext.value = result.context ?? null
@@ -144,23 +139,21 @@ watch(
 )
 
 // Watch for update validation status (arrives via WebSocket and healthcheck).
-// Uses a combined watcher on all three sources so the condition is re-evaluated whenever
-// any of them changes:
+// Uses a combined watch so the condition is re-evaluated whenever either changes:
 // - status: set by WebSocket history replay on (re-)login
-// - ackedInHealthcheck: set by reconnection-polling healthchecks (covers SPA re-login after
-//   a device operation — the onMounted flag is stale across re-logins in the same SPA session)
-// - ackedOnMount: set once from the plain fetch in onMounted (covers the initial page-load
-//   case where no reconnection polling has run yet and ackedInHealthcheck is undefined)
+// - ackedInHealthcheck: live Core value, reset to false by reconnection-polling after a new
+//   update cycle — overrides the stale sessionStorage flag in the same SPA session
 watch(
 	[
 		() => viewModel.updateValidationStatus?.status,
 		() => viewModel.healthcheck?.updateValidationAcked,
-		updateValidationAckedOnMount,
 	],
-	([status, ackedInHealthcheck, ackedOnMount]) => {
-		// Prefer the live Core healthcheck value; fall back to the onMounted snapshot
-		// when the Core has not yet received a healthcheck response.
-		const notAcked = !(ackedInHealthcheck ?? ackedOnMount)
+	([status, ackedInHealthcheck]) => {
+		// Prefer live Core healthcheck value; fall back to sessionStorage when Core has not
+		// yet received a healthcheck response (undefined means no healthcheck fetched yet).
+		const notAcked = ackedInHealthcheck !== undefined
+			? !ackedInHealthcheck
+			: !sessionStorage.getItem('updateValidationAcked')
 		if ((status === 'Succeeded' || status === 'Recovered') && notAcked) {
 			// Snapshot once so the template is decoupled from the live ViewModel during close animation
 			updateValidationIsRollback.value = status === 'Recovered'
@@ -169,49 +162,17 @@ watch(
 	}
 )
 
-onMounted(async () => {
-	const res = await fetch("healthcheck", {
-		headers: {
-			"Cache-Control": "no-cache, no-store, must-revalidate",
-			Pragma: "no-cache",
-			Expires: "0"
-		}
-	})
-	const data = (await res.json()) as HealthcheckInfo
-	if (data.networkRollbackOccurred) {
-		showRollbackNotification.value = true
-	}
-
-	// Record acked state to suppress watcher-triggered modals for already-acked results
-	factoryResetAckedOnMount.value = (data as any).factoryResetResultAcked ?? true
-	updateValidationAckedOnMount.value = (data as any).updateValidationAcked ?? true
-
-	// Check if we should show modals on mount based on initial state.
-	// This handles the race where the WebSocket history replay fires the watcher before
-	// onMounted has set the acked flags, so the watcher skips the modal. After setting
-	// the flags here, we check the already-loaded ViewModel state as a fallback.
-	if (!factoryResetAckedOnMount.value && viewModel.factoryReset?.result && viewModel.factoryReset.result.status !== 'unknown') {
-		const result = viewModel.factoryReset.result
-		factoryResetError.value = result.error ?? null
-		factoryResetContext.value = result.context ?? null
-		factoryResetModalSuccess.value = result.status === 'modeSupported'
-		showFactoryResetResultModal.value = true
-	}
-
-	if (!res.ok) {
-		overlay.value = true
-		errorTitle.value = "omnect-device-service version mismatch"
-		errorMsg.value = `Current version: ${data.versionInfo.current}. Required version ${data.versionInfo.required}. Please consider to update omnect Secure OS.`
-	}
-})
+// Initial healthcheck is fetched during Core initialization (initializeCore)
+// to avoid a race condition where App.vue mounts before the router guard
+// finishes loading WASM.
 </script>
 
 <template>
   <v-app>
-    <v-dialog v-model="overlay" max-width="50vw" :no-click-animation="true" persistent fullscreen>
-      <DialogContent :title="errorTitle" dialog-type="Error" :show-close="false">
+    <v-dialog :model-value="viewModel.versionMismatch" max-width="50vw" :no-click-animation="true" persistent fullscreen>
+      <DialogContent title="omnect-device-service version mismatch" dialog-type="Error" :show-close="false">
         <div class="flex flex-col gap-2 mb-8">
-          {{ errorMsg }}
+          {{ viewModel.versionMismatchMessage }}
         </div>
       </DialogContent>
     </v-dialog>

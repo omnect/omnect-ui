@@ -6,6 +6,9 @@ import { useCore } from "../composables/useCore"
 import { useCoreInitialization } from "../composables/useCoreInitialization"
 import { usePasswordForm } from "../composables/usePasswordForm"
 import { useAuthNavigation } from "../composables/useAuthNavigation"
+import { removeUser, login } from "../auth/auth-service"
+
+const PORTAL_AUTH_ERROR = "portal authentication required"
 
 const { viewModel, setPassword } = useCore()
 const { password, repeatPassword, errorMsg, validatePasswords } = usePasswordForm()
@@ -22,6 +25,13 @@ watch(
 	},
 	{ flush: 'sync' }
 )
+
+watch(errorMsg, (msg) => {
+	if (msg === PORTAL_AUTH_ERROR) {
+		// Backend session lost — clear stale OIDC user and re-authenticate
+		removeUser().then(() => login())
+	}
+})
 
 const handleSubmit = async (): Promise<void> => {
 	if (!validatePasswords()) return

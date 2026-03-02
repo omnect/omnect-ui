@@ -24,6 +24,9 @@ pub struct AppConfig {
     #[cfg_attr(feature = "mock", allow(dead_code))]
     pub iot_edge: IoTEdgeConfig,
 
+    /// WiFi commissioning service configuration
+    pub wifi: WifiConfig,
+
     /// Path configuration
     pub paths: PathConfig,
 
@@ -81,6 +84,11 @@ pub struct PathConfig {
     pub local_update_file: PathBuf,
 }
 
+#[derive(Clone, Debug)]
+pub struct WifiConfig {
+    pub socket_path: PathBuf,
+}
+
 impl AppConfig {
     /// Get or load the application configuration
     ///
@@ -116,6 +124,7 @@ impl AppConfig {
         let device_service = DeviceServiceConfig::load()?;
         let certificate = CertificateConfig::load()?;
         let iot_edge = IoTEdgeConfig::load()?;
+        let wifi = WifiConfig::load();
         let paths = PathConfig::load()?;
         let tenant = env::var("TENANT").unwrap_or_else(|_| "cp".to_string());
 
@@ -126,6 +135,7 @@ impl AppConfig {
             device_service,
             certificate,
             iot_edge,
+            wifi,
             paths,
             tenant,
         })
@@ -268,6 +278,16 @@ impl IoTEdgeConfig {
                 workload_uri,
             })
         }
+    }
+}
+
+impl WifiConfig {
+    fn load() -> Self {
+        let socket_path = env::var("WIFI_COMMISSIONING_SOCKET_PATH")
+            .unwrap_or_else(|_| "/socket/wifi-commissioning.sock".to_string())
+            .into();
+
+        Self { socket_path }
     }
 }
 

@@ -4,9 +4,6 @@ use crate::model::Model;
 use crate::types::{DeviceOperationState, OverlaySpinnerState};
 use crate::Effect;
 
-pub const REBOOT_TIMEOUT_SECS: u32 = 300; // 5 minutes
-pub const FACTORY_RESET_TIMEOUT_SECS: u32 = 600; // 10 minutes
-pub const FIRMWARE_UPDATE_TIMEOUT_SECS: u32 = 600; // 10 minutes
 
 /// Check if an error message indicates a network error
 pub fn is_network_error(error: &str) -> bool {
@@ -50,9 +47,11 @@ pub fn handle_device_operation_response(
             success_msg.to_string()
         });
         let timeout_secs = match &operation {
-            DeviceOperationState::FactoryResetting => FACTORY_RESET_TIMEOUT_SECS,
-            DeviceOperationState::Updating => FIRMWARE_UPDATE_TIMEOUT_SECS,
-            _ => REBOOT_TIMEOUT_SECS,
+            DeviceOperationState::FactoryResetting => {
+                model.timeout_settings.factory_reset_timeout_secs
+            }
+            DeviceOperationState::Updating => model.timeout_settings.firmware_update_timeout_secs,
+            _ => model.timeout_settings.reboot_timeout_secs,
         };
         model.device_operation_state = operation;
         model.reconnection_attempt = 0;
