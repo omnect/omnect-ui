@@ -134,6 +134,21 @@ export async function mockUpdatePasswordFailure(page: Page, message = 'current p
   });
 }
 
+export async function mockTokenRefresh(page: Page, status = 200) {
+  const token = jwt.sign({ sub: 'user123' }, 'secret', { expiresIn: '1h' });
+  await page.route('**/token/refresh', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        status,
+        contentType: 'text/plain',
+        body: status === 200 ? token : '',
+      });
+    } else {
+      await route.continue();
+    }
+  });
+}
+
 export async function mockNetworkConfig(page: Page) {
   // Mock the network configuration endpoint
   await page.route('**/network', async (route) => {

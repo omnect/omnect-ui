@@ -2230,7 +2230,7 @@ dependencies = [
 
 [[package]]
 name = "omnect-ui"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "actix-cors",
  "actix-files",
@@ -2272,7 +2272,7 @@ dependencies = [
 
 [[package]]
 name = "omnect-ui-core"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "base64 0.22.1",
  "console_log",
@@ -3330,7 +3330,7 @@ dependencies = [
 
 [[package]]
 name = "shared_types"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "anyhow",
  "crux_core",
