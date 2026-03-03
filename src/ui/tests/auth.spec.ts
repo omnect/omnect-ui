@@ -308,6 +308,18 @@ test.describe('Authentication', () => {
         sessionStorage.setItem('updateValidationAcked', 'true');
       });
 
+      // Pre-seed the session cookie to simulate a user who already logged in during
+      // a prior session. mockTokenRefresh validates cookie presence, so this is
+      // required for the 200 response to be issued.
+      await page.context().addCookies([{
+        name: 'omnect-ui-session',
+        value: 'mock-session-value',
+        domain: 'localhost',
+        path: '/',
+        httpOnly: true,
+        sameSite: 'Strict',
+      }]);
+
       await page.goto('/set-password');
 
       await expect(page).toHaveURL('/');

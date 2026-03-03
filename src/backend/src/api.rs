@@ -287,7 +287,9 @@ where
             return HttpResponse::InternalServerError().body("failed to insert token into session");
         }
 
-        HttpResponse::Ok().body(token)
+        HttpResponse::Ok()
+            .content_type("text/plain; charset=utf-8")
+            .body(token)
     }
 }
 
