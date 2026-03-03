@@ -11,7 +11,7 @@ import {
   mockPortalAuth,
   mockTokenRefresh
 } from './fixtures/mock-api';
-import { mockHealthcheck } from './fixtures/test-setup';
+import { mockHealthcheck, setupAndLogin } from './fixtures/test-setup';
 
 test.describe('Authentication', () => {
   test.beforeEach(async ({ page }) => {
@@ -311,6 +311,41 @@ test.describe('Authentication', () => {
       await page.goto('/set-password');
 
       await expect(page).toHaveURL('/');
+    });
+  });
+
+  test.describe('route guards', () => {
+    test('redirects to /login when accessing protected route without authentication', async ({ page }) => {
+      await mockRequireSetPassword(page);
+      await mockTokenRefresh(page, 401);
+
+      await page.goto('/network');
+
+      await expect(page).toHaveURL(/\/login$/);
+      await expect(page.getByPlaceholder(/enter your password/i)).toBeVisible();
+    });
+
+    test('redirects to /login when accessing invalid route without authentication', async ({ page }) => {
+      await mockRequireSetPassword(page);
+      await mockTokenRefresh(page, 401);
+
+      await page.goto('/this-route-does-not-exist');
+
+      await expect(page).toHaveURL(/\/login$/);
+      await expect(page.getByPlaceholder(/enter your password/i)).toBeVisible();
+    });
+
+    test('redirects to / when accessing invalid route as authenticated user', async ({ page }) => {
+      await setupAndLogin(page);
+
+      // Register token refresh mock after login so session is restored when the
+      // second full navigation reinitialises the Core
+      await mockTokenRefresh(page, 200);
+
+      await page.goto('/this-route-does-not-exist');
+
+      await expect(page).toHaveURL(/\/$/);
+      await expect(page.getByText('Common Info')).toBeVisible();
     });
   });
 

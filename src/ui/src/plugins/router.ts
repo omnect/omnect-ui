@@ -17,7 +17,8 @@ const routes = [
 	{ path: "/login", component: Login, meta: { showMenu: false, guestOnly: true, inlineErrors: true } },
 	{ path: "/set-password", component: SetPassword, meta: { requiresPortalAuth: true, showMenu: false, inlineErrors: true } },
 	{ path: "/update-password", component: UpdatePassword, meta: { requiresAuth: true, showMenu: true, inlineErrors: true } },
-	{ path: "/auth-callback", component: Callback, meta: { showMenu: false } }
+	{ path: "/auth-callback", component: Callback, meta: { showMenu: false } },
+	{ path: "/:pathMatch(.*)*", redirect: "/" }
 ]
 
 const router = createRouter({
