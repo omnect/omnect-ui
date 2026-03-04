@@ -48,6 +48,7 @@ import {
 	EventVariantDevice,
 	EventVariantWebSocket,
 	EventVariantUi,
+	EventVariantWifi,
 	AuthEventVariantLogin,
 	AuthEventVariantLogout,
 	AuthEventVariantSetPassword,
@@ -61,6 +62,7 @@ import {
 	DeviceEventVariantNetworkFormStartEdit,
 	DeviceEventVariantNetworkFormUpdate,
 	DeviceEventVariantNetworkFormReset,
+	DeviceEventVariantFetchInitialHealthcheck,
 	DeviceEventVariantAckRollback,
 	DeviceEventVariantAckFactoryResetResult,
 	DeviceEventVariantAckUpdateValidation,
@@ -69,6 +71,14 @@ import {
 	UiEventVariantClearError,
 	UiEventVariantClearSuccess,
 	UiEventVariantSetBrowserHostname,
+	WifiEventVariantScan,
+	WifiEventVariantConnect,
+	WifiEventVariantDisconnect,
+	WifiEventVariantGetStatus,
+	WifiEventVariantGetSavedNetworks,
+	WifiEventVariantForgetNetwork,
+	WifiEventVariantScanPollTick,
+	WifiEventVariantConnectPollTick,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 
 // Re-export types for external use
@@ -80,6 +90,12 @@ export type {
 	NetworkFormDataType,
 	OverlaySpinnerStateType,
 	FactoryResetStatusString,
+	WifiStateType,
+	WifiNetworkType,
+	WifiSavedNetworkType,
+	WifiConnectionStatusType,
+	WifiScanStateType,
+	WifiConnectionStateType,
 	SystemInfo,
 	NetworkStatus,
 	OnlineStatus,
@@ -189,6 +205,9 @@ async function initializeCore(): Promise<void> {
 			const hostname = window.location.hostname
 			await sendEventToCore(new EventVariantUi(new UiEventVariantSetBrowserHostname(hostname)))
 
+			// Fetch initial healthcheck (version mismatch detection, acked flags)
+			await sendEventToCore(new EventVariantDevice(new DeviceEventVariantFetchInitialHealthcheck()))
+
 			// Expose for E2E tests to spoof hostname
 			;(window as any).setBrowserHostname = (h: string) => {
 				console.log(`[useCore] Spoofing browser hostname: ${h}`)
@@ -289,11 +308,24 @@ export function useCore() {
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantNetworkFormUpdate(formDataJson))),
 		networkFormReset: (adapterName: string) =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantNetworkFormReset(adapterName))),
+		fetchInitialHealthcheck: () =>
+			sendEventToCore(new EventVariantDevice(new DeviceEventVariantFetchInitialHealthcheck())),
 		ackRollback: () =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAckRollback())),
 		ackFactoryResetResult: () =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAckFactoryResetResult())),
 		ackUpdateValidation: () =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAckUpdateValidation())),
+
+		// WiFi management
+		wifiScan: () => sendEventToCore(new EventVariantWifi(new WifiEventVariantScan())),
+		wifiConnect: (ssid: string, password: string) =>
+			sendEventToCore(new EventVariantWifi(new WifiEventVariantConnect(ssid, password))),
+		wifiDisconnect: () => sendEventToCore(new EventVariantWifi(new WifiEventVariantDisconnect())),
+		wifiGetStatus: () => sendEventToCore(new EventVariantWifi(new WifiEventVariantGetStatus())),
+		wifiGetSavedNetworks: () =>
+			sendEventToCore(new EventVariantWifi(new WifiEventVariantGetSavedNetworks())),
+		wifiForgetNetwork: (ssid: string) =>
+			sendEventToCore(new EventVariantWifi(new WifiEventVariantForgetNetwork(ssid))),
 	}
 }

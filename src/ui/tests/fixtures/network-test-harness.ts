@@ -1,5 +1,6 @@
 import { Page, expect } from '@playwright/test';
 import { publishToCentrifugo } from './centrifugo';
+import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './mock-api';
 
 /**
  * Polling interval used by the application for healthcheck requests.
@@ -220,8 +221,6 @@ export class NetworkTestHarness {
               status: 'valid',
             },
             networkRollbackOccurred: this.networkRollbackOccurred,
-            factoryResetResultAcked: true,
-            updateValidationAcked: true,
           }),
         });
       } else {
@@ -247,19 +246,22 @@ export class NetworkTestHarness {
     });
   }
 
+  /** Mock a POST-only endpoint to return 200 with no body. */
+  private async mockAckEndpoint(page: Page, path: string): Promise<void> {
+    await page.route(`**/${path}`, async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({ status: 200 });
+      }
+    });
+  }
+
   /**
    * Mock the /ack-factory-reset-result endpoint.
    *
    * @param page - Playwright page instance
    */
   async mockAckFactoryResetResult(page: Page): Promise<void> {
-    await page.route('**/ack-factory-reset-result', async (route) => {
-      if (route.request().method() === 'POST') {
-        await route.fulfill({
-          status: 200,
-        });
-      }
-    });
+    await this.mockAckEndpoint(page, 'ack-factory-reset-result');
   }
 
   /**
@@ -268,13 +270,7 @@ export class NetworkTestHarness {
    * @param page - Playwright page instance
    */
   async mockAckUpdateValidation(page: Page): Promise<void> {
-    await page.route('**/ack-update-validation', async (route) => {
-      if (route.request().method() === 'POST') {
-        await route.fulfill({
-          status: 200,
-        });
-      }
-    });
+    await this.mockAckEndpoint(page, 'ack-update-validation');
   }
 
   /**
@@ -488,13 +484,7 @@ export class NetworkTestHarness {
    */
   async navigateToAdapter(page: Page, adapterName: string): Promise<void> {
     const tab = page.getByRole('tab', { name: adapterName }).or(page.locator('.v-tab').filter({ hasText: new RegExp(`^${adapterName}$`) }));
-    
-    try {
-      await expect(tab).toBeVisible({ timeout: 10000 });
-    } catch (e) {
-      throw e;
-    }
-
+    await expect(tab).toBeVisible({ timeout: 10000 });
     await tab.click();
     // Wait for form to load (IP input visible)
     await expect(page.getByRole('textbox', { name: /IP Address/i }).first()).toBeVisible({ timeout: 10000 });
@@ -542,6 +532,104 @@ export class NetworkTestHarness {
     await saveButton.click();
     await expect(saveButton).toBeDisabled({ timeout });
     await expect(page.getByText('Network configuration updated')).toBeVisible();
+  }
+
+  /**
+   * Standard beforeEach setup for network tests.
+   *
+   * Mocks auth and network API endpoints, suppresses unrelated modals via
+   * sessionStorage, navigates to `/`, and performs login.
+   *
+   * @param page - Playwright page instance
+   */
+  async setupWithLogin(page: Page): Promise<void> {
+    await mockConfig(page);
+    await mockLoginSuccess(page);
+    await mockRequireSetPassword(page);
+    await this.mockNetworkConfig(page);
+    await this.mockHealthcheck(page);
+    await this.mockAckRollback(page);
+
+    await page.addInitScript(() => {
+      sessionStorage.setItem('factoryResetResultAcked', 'true');
+      sessionStorage.setItem('updateValidationAcked', 'true');
+    });
+
+    await page.goto('/');
+    await page.getByPlaceholder(/enter your password/i).fill('password');
+    await page.getByRole('button', { name: /log in/i }).click();
+    await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
+  }
+
+  /**
+   * Intercept all traffic to a new IP address and proxy it to localhost.
+   *
+   * - Shims `WebSocket` via `addInitScript` so Centrifugo connects to localhost.
+   * - Routes all HTTP requests for `newIp` to the equivalent localhost path,
+   *   with healthcheck responses reflecting current harness rollback state.
+   *
+   * Call this before any navigation to the new IP.
+   *
+   * @param page   - Playwright page instance
+   * @param newIp  - IP address to intercept (e.g. '192.168.1.150')
+   */
+  async mockNewIpProxy(page: Page, newIp: string): Promise<void> {
+    await page.addInitScript((ip: string) => {
+      const OriginalWebSocket = window.WebSocket;
+      // @ts-ignore
+      window.WebSocket = function(url: string, protocols: any) {
+        if (typeof url === 'string' && url.includes(ip)) {
+          url = url.replace(ip, 'localhost');
+        }
+        return new OriginalWebSocket(url, protocols);
+      };
+      window.WebSocket.prototype = OriginalWebSocket.prototype;
+      window.WebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
+      window.WebSocket.OPEN = OriginalWebSocket.OPEN;
+      window.WebSocket.CLOSING = OriginalWebSocket.CLOSING;
+      window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
+    }, newIp);
+
+    const escaped = newIp.replace(/\./g, '\\.');
+    await page.route(new RegExp(`.*${escaped}.*`), async (route) => {
+      const url = new URL(route.request().url());
+
+      if (url.pathname.includes('/healthcheck')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          headers: {
+            'Access-Control-Allow-Origin': 'https://localhost:5173',
+            'Access-Control-Allow-Credentials': 'true',
+          },
+          body: JSON.stringify({
+            versionInfo: { required: '>=0.39.0', current: '0.40.0', mismatch: false },
+            updateValidationStatus: { status: 'valid' },
+            networkRollbackOccurred: this.networkRollbackOccurred,
+          }),
+        });
+        return;
+      }
+
+      // Proxy all other requests (page, assets, API) to localhost
+      const originalUrl = page.url();
+      const originalPort = new URL(originalUrl).port || '5173';
+      const originalProtocol = new URL(originalUrl).protocol;
+      const proxiedUrl = `${originalProtocol}//localhost:${originalPort}${url.pathname}${url.search}`;
+
+      try {
+        const response = await page.request.fetch(proxiedUrl, {
+          method: route.request().method(),
+          headers: route.request().headers(),
+          data: route.request().postDataBuffer(),
+          ignoreHTTPSErrors: true,
+        });
+        await route.fulfill({ response });
+      } catch (e) {
+        console.error('Failed to proxy request:', e);
+        await route.abort();
+      }
+    });
   }
 
   /**

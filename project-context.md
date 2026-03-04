@@ -155,6 +155,7 @@ omnect-ui/
 │   │       ├── wasm.rs           # WASM FFI bindings
 │   │       ├── macros.rs         # URL and log macros
 │   │       ├── http_helpers.rs   # HTTP request utilities
+│   │       ├── wifi_psk.rs       # WiFi PSK utilities
 │   │       ├── commands/         # Custom side-effect commands
 │   │       │   ├── mod.rs
 │   │       │   └── centrifugo.rs # Centrifugo WebSocket commands
@@ -164,6 +165,7 @@ omnect-ui/
 │   │       │   ├── common.rs     # Common shared types
 │   │       │   ├── device.rs     # Device information types
 │   │       │   ├── network.rs    # Network configuration types
+│   │       │   ├── wifi.rs       # WiFi types
 │   │       │   ├── ods.rs        # ODS-specific DTOs
 │   │       │   ├── factory_reset.rs
 │   │       │   └── update.rs     # Update validation types
@@ -171,6 +173,7 @@ omnect-ui/
 │   │           ├── mod.rs        # Main dispatcher
 │   │           ├── auth.rs       # Auth event handlers
 │   │           ├── ui.rs         # UI state handlers
+│   │           ├── wifi.rs       # WiFi event handlers
 │   │           ├── websocket.rs  # WebSocket state handlers
 │   │           └── device/       # Device domain handlers
 │   │               ├── mod.rs
@@ -187,11 +190,13 @@ omnect-ui/
 │   │   │   ├── http_client.rs    # Internal HTTP client
 │   │   │   ├── keycloak_client.rs
 │   │   │   ├── omnect_device_service_client.rs
+│   │   │   ├── wifi_commissioning_client.rs
 │   │   │   └── services/         # Business logic services
 │   │   │       ├── mod.rs
 │   │   │       ├── certificate.rs
 │   │   │       ├── firmware.rs
 │   │   │       ├── network.rs
+│   │   │       ├── marker.rs
 │   │   │       └── auth/         # Auth logic
 │   │   │           ├── mod.rs
 │   │   │           ├── authorization.rs # JWT/SSO validation
@@ -242,6 +247,7 @@ omnect-ui/
 │           ├── smoke.spec.ts
 │           ├── update.spec.ts
 │           ├── version-mismatch.spec.ts
+│           ├── wifi.spec.ts
 │           └── fixtures/
 └── project-context.md            # This file
 ```
