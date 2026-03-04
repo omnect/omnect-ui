@@ -72,6 +72,8 @@ import {
 	UiEventVariantClearError,
 	UiEventVariantClearSuccess,
 	UiEventVariantSetBrowserHostname,
+	UiEventVariantSaveSettings,
+	TimeoutSettings,
 	WifiEventVariantScan,
 	WifiEventVariantConnect,
 	WifiEventVariantDisconnect,
@@ -97,6 +99,7 @@ export type {
 	WifiConnectionStatusType,
 	WifiScanStateType,
 	WifiConnectionStateType,
+	TimeoutSettingsType,
 	SystemInfo,
 	NetworkStatus,
 	OnlineStatus,
@@ -332,6 +335,12 @@ export function useCore() {
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAckFactoryResetResult())),
 		ackUpdateValidation: () =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAckUpdateValidation())),
+
+		// Settings management
+		saveSettings: (settings: { rebootTimeoutSecs: number; factoryResetTimeoutSecs: number; firmwareUpdateTimeoutSecs: number; networkRollbackTimeoutSecs: number }) =>
+			sendEventToCore(new EventVariantUi(new UiEventVariantSaveSettings(
+				new TimeoutSettings(settings.rebootTimeoutSecs, settings.factoryResetTimeoutSecs, settings.firmwareUpdateTimeoutSecs, settings.networkRollbackTimeoutSecs)
+			))),
 
 		// WiFi management
 		wifiScan: () => sendEventToCore(new EventVariantWifi(new WifiEventVariantScan())),

@@ -135,6 +135,13 @@ export interface OverlaySpinnerStateType {
 	countdownSeconds: number | null
 }
 
+export interface TimeoutSettingsType {
+	rebootTimeoutSecs: number
+	factoryResetTimeoutSecs: number
+	firmwareUpdateTimeoutSecs: number
+	networkRollbackTimeoutSecs: number
+}
+
 export type WifiScanStateType =
 	| { type: 'idle' }
 	| { type: 'scanning' }
@@ -260,6 +267,9 @@ export interface ViewModel {
 
 	// WiFi state
 	wifiState: WifiStateType
+
+	// User-configurable timeout settings
+	timeoutSettings: TimeoutSettingsType
 }
 
 // ============================================================================

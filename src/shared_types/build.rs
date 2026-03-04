@@ -4,8 +4,8 @@ use omnect_ui_core::{
     events::{AuthEvent, DeviceEvent, UiEvent, WebSocketEvent, WifiEvent},
     types::{
         DeviceOperationState, FactoryResetStatus, NetworkChangeState, NetworkConfigRequest,
-        NetworkFormData, NetworkFormState, UploadState, WifiConnectionState, WifiConnectionStatus,
-        WifiNetwork, WifiSavedNetwork, WifiScanState, WifiState,
+        NetworkFormData, NetworkFormState, TimeoutSettings, UploadState, WifiConnectionState,
+        WifiConnectionStatus, WifiNetwork, WifiSavedNetwork, WifiScanState, WifiState,
     },
     App,
 };
@@ -33,6 +33,7 @@ fn main() -> Result<()> {
     gen.register_type::<UploadState>()?;
     gen.register_type::<NetworkConfigRequest>()?;
     gen.register_type::<NetworkFormData>()?;
+    gen.register_type::<TimeoutSettings>()?;
 
     // Register WiFi types
     gen.register_type::<WifiState>()?;

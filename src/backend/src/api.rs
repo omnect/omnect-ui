@@ -8,6 +8,7 @@ use crate::{
         firmware::FirmwareService,
         marker,
         network::{NetworkConfigRequest, NetworkConfigService},
+        settings::SettingsService,
     },
     wifi_commissioning_client::{
         WifiAvailability, WifiCommissioningClient, WifiConnectRequest, WifiForgetRequest,
@@ -253,6 +254,16 @@ where
             NetworkConfigService::set_network_config(&api.service_client, &network_config).await,
             "set_network_config",
         )
+    }
+
+    pub async fn get_settings() -> impl Responder {
+        debug!("get_settings() called");
+        HttpResponse::Ok().json(SettingsService::get())
+    }
+
+    pub async fn update_settings(body: web::Json<omnect_ui_core::types::TimeoutSettings>) -> impl Responder {
+        debug!("update_settings() called: {body:?}");
+        handle_service_result(SettingsService::save(&body), "update_settings")
     }
 
     pub async fn ack_rollback() -> impl Responder {

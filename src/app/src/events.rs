@@ -226,6 +226,12 @@ pub enum UiEvent {
     ClearError,
     ClearSuccess,
     SetBrowserHostname(String),
+    LoadSettings,
+    SaveSettings(crate::types::TimeoutSettings),
+    #[serde(skip)]
+    LoadSettingsResponse(Result<crate::types::TimeoutSettings, String>),
+    #[serde(skip)]
+    SaveSettingsResponse(Result<(), String>),
 }
 
 /// Main event enum - wraps domain events

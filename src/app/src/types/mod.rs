@@ -17,6 +17,7 @@ pub mod device;
 pub mod factory_reset;
 pub mod network;
 pub mod ods;
+pub mod settings;
 pub mod update;
 pub mod wifi;
 
@@ -27,5 +28,6 @@ pub use device::*;
 pub use factory_reset::*;
 pub use network::*;
 pub use ods::*;
+pub use settings::*;
 pub use update::*;
 pub use wifi::*;

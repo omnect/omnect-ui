@@ -167,6 +167,7 @@ omnect-ui/
 │   │       │   ├── network.rs    # Network configuration types
 │   │       │   ├── wifi.rs       # WiFi types
 │   │       │   ├── ods.rs        # ODS-specific DTOs
+│   │       │   ├── settings.rs   # Timeout settings types
 │   │       │   ├── factory_reset.rs
 │   │       │   └── update.rs     # Update validation types
 │   │       └── update/           # Domain-based event handlers
@@ -197,6 +198,7 @@ omnect-ui/
 │   │   │       ├── firmware.rs
 │   │   │       ├── network.rs
 │   │   │       ├── marker.rs
+│   │   │       ├── settings.rs   # Timeout settings service
 │   │   │       └── auth/         # Auth logic
 │   │   │           ├── mod.rs
 │   │   │           ├── authorization.rs # JWT/SSO validation
@@ -227,28 +229,30 @@ omnect-ui/
 │       │   │       ├── timers.ts # Timer/Polling logic
 │       │   │       └── sync.ts   # ViewModel synchronization
 │       │   ├── pages/            # Route components
-│       │   │   ├── DeviceOverview.vue
-│       │   │   ├── DeviceUpdate.vue
-│       │   │   ├── Network.vue
-│       │   │   ├── Login.vue
-│       │   │   ├── SetPassword.vue
-│       │   │   ├── UpdatePassword.vue
-│       │   │   └── Callback.vue
-│       │   ├── plugins/          # Router, Vuetify
-│       │   └── types/            # UI-specific types
-│       └── tests/                # Playwright E2E tests
-│           ├── auth.spec.ts
-│           ├── device.spec.ts
-│           ├── error-handling.spec.ts
-│           ├── factory-reset.spec.ts
-│           ├── network-configuration.spec.ts
-│           ├── network-multi-adapter.spec.ts
-│           ├── reboot.spec.ts
-│           ├── smoke.spec.ts
-│           ├── update.spec.ts
-│           ├── version-mismatch.spec.ts
-│           ├── wifi.spec.ts
-│           └── fixtures/
+│   │   │   ├── DeviceOverview.vue
+│   │   │   ├── DeviceUpdate.vue
+│   │   │   ├── Network.vue
+│   │   │   ├── Settings.vue
+│   │   │   ├── Login.vue
+│   │   │   ├── SetPassword.vue
+│   │   │   ├── UpdatePassword.vue
+│   │   │   └── Callback.vue
+│   │   ├── plugins/          # Router, Vuetify
+│   │   └── types/            # UI-specific types
+│   └── tests/                # Playwright E2E tests
+│       ├── auth.spec.ts
+│       ├── device.spec.ts
+│       ├── error-handling.spec.ts
+│       ├── factory-reset.spec.ts
+│       ├── network-configuration.spec.ts
+│       ├── network-multi-adapter.spec.ts
+│       ├── reboot.spec.ts
+│       ├── settings.spec.ts
+│       ├── smoke.spec.ts
+│       ├── update.spec.ts
+│       ├── version-mismatch.spec.ts
+│       ├── wifi.spec.ts
+│       └── fixtures/
 └── project-context.md            # This file
 ```
 

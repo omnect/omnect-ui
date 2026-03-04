@@ -57,6 +57,13 @@ export const viewModel = reactive<ViewModel>({
 	overlaySpinner: { overlay: false, title: '', text: null, timedOut: false, progress: null, countdownSeconds: null },
 	// WiFi state
 	wifiState: { type: 'unavailable' },
+	// User-configurable timeout settings
+	timeoutSettings: {
+		rebootTimeoutSecs: 300,
+		factoryResetTimeoutSecs: 600,
+		firmwareUpdateTimeoutSecs: 900,
+		networkRollbackTimeoutSecs: 90,
+	},
 })
 
 /**

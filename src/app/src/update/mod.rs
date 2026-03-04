@@ -21,6 +21,7 @@ pub fn update(event: Event, model: &mut Model) -> Command<Effect, Event> {
             Command::all([
                 render(),
                 wifi::handle(crate::events::WifiEvent::CheckAvailability, model),
+                ui::handle(crate::events::UiEvent::LoadSettings, model),
             ])
         }
         Event::Auth(auth_event) => auth::handle(auth_event, model),
