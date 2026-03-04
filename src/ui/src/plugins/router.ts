@@ -17,7 +17,8 @@ const routes = [
 	{ path: "/login", component: Login, meta: { showMenu: false, guestOnly: true, inlineErrors: true } },
 	{ path: "/set-password", component: SetPassword, meta: { requiresPortalAuth: true, showMenu: false, inlineErrors: true } },
 	{ path: "/update-password", component: UpdatePassword, meta: { requiresAuth: true, showMenu: true, inlineErrors: true } },
-	{ path: "/auth-callback", component: Callback, meta: { showMenu: false } }
+	{ path: "/auth-callback", component: Callback, meta: { showMenu: false } },
+	{ path: "/:pathMatch(.*)*", redirect: "/" }
 ]
 
 const router = createRouter({
@@ -33,11 +34,22 @@ router.beforeEach(async (to) => {
 		await initialize()
 	}
 
-	if (to.meta.guestOnly && viewModel.isAuthenticated) {
+	// Redirect authenticated users away from guest-only and portal-auth routes
+	if ((to.meta.guestOnly || to.meta.requiresPortalAuth) && viewModel.isAuthenticated) {
 		return "/"
 	}
 
 	if (to.meta.requiresPortalAuth) {
+		// If a password already exists, the set-password flow is not needed.
+		// Redirect to regular login before triggering a Keycloak round-trip.
+		try {
+			const res = await fetch("/require-set-password")
+			const passwordRequired = await res.json() as boolean
+			if (!passwordRequired) return "/login"
+		} catch {
+			// Network failure during the check: fall through to portal auth.
+		}
+
 		// Validate the portal token against the backend to establish the server-side
 		// session flag (portal_validated). Normally Callback.vue does this after the
 		// OIDC redirect, but after a factory reset the OIDC user persists in

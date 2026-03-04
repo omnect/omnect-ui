@@ -98,6 +98,12 @@ pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
                 model.requires_password_set = requires;
             },
         }),
+
+        AuthEvent::RestoreSession(token) => {
+            model.auth_token = Some(token);
+            model.is_authenticated = true;
+            post_auth_commands(model)
+        }
     }
 }
 
@@ -372,6 +378,25 @@ mod tests {
             );
             // Session should remain valid even on password update failure
             assert!(model.is_authenticated);
+        }
+    }
+
+    mod restore_session {
+        use super::*;
+
+        #[test]
+        fn sets_authenticated_and_stores_token() {
+            let mut model = Model::default();
+
+            let _ = handle(
+                AuthEvent::RestoreSession("restored-token-123".into()),
+                &mut model,
+            );
+
+            assert!(model.is_authenticated);
+            assert_eq!(model.auth_token, Some("restored-token-123".into()));
+            assert!(!model.is_loading);
+            assert!(model.error_message.is_none());
         }
     }
 

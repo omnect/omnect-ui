@@ -54,6 +54,7 @@ import {
 	AuthEventVariantSetPassword,
 	AuthEventVariantUpdatePassword,
 	AuthEventVariantCheckRequiresPasswordSet,
+	AuthEventVariantRestoreSession,
 	DeviceEventVariantReboot,
 	DeviceEventVariantFactoryResetRequest,
 	DeviceEventVariantSetNetworkConfig,
@@ -197,6 +198,21 @@ async function initializeCore(): Promise<void> {
 
 			// Check for pending network change from previous session
 			checkPendingNetworkChange()
+
+			// Attempt to restore session from server-side cookie before sending Initialize.
+			// The /token/refresh endpoint verifies the existing session cookie and issues a
+			// fresh JWT, avoiding a forced re-login on every page refresh.
+			// The content-type guard prevents accidentally treating SPA-fallback HTML (served
+			// by Vite for unmatched routes) as a valid token.
+			try {
+				const refreshRes = await fetch('token/refresh', { credentials: 'include' })
+				if (refreshRes.ok && refreshRes.headers.get('content-type')?.startsWith('text/plain')) {
+					const token = await refreshRes.text()
+					await sendEventToCore(new EventVariantAuth(new AuthEventVariantRestoreSession(token)))
+				}
+			} catch {
+				// Network error during restore — proceed without session; user will be prompted to log in.
+			}
 
 			// Send initial event
 			await sendEventToCore(new EventVariantInitialize())

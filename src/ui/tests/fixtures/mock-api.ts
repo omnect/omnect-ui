@@ -31,6 +31,12 @@ export async function mockLoginSuccess(page: Page) {
       status: 200,
       contentType: 'text/plain',
       body: token,
+      // Plant the session cookie so that subsequent token/refresh calls in the
+      // same browser context include it — matching real backend behavior where
+      // actix-session sets Set-Cookie on every successful login.
+      headers: {
+        'Set-Cookie': 'omnect-ui-session=mock-session-value; Path=/; HttpOnly; SameSite=Strict',
+      },
     });
   });
 }
@@ -131,6 +137,28 @@ export async function mockUpdatePasswordFailure(page: Page, message = 'current p
       contentType: 'text/plain',
       body: message,
     });
+  });
+}
+
+export async function mockTokenRefresh(page: Page, status = 200) {
+  const token = jwt.sign({ sub: 'user123' }, 'secret', { expiresIn: '1h' });
+  await page.route('**/token/refresh', async (route) => {
+    if (route.request().method() === 'GET') {
+      // Mirror the real backend: AuthMw validates the session cookie before
+      // issuing a token. Return 401 when the cookie is absent, catching bugs
+      // where the login response failed to plant it or the browser failed to
+      // send it on the refresh request.
+      const cookieHeader = route.request().headers()['cookie'] ?? '';
+      const hasSession = cookieHeader.includes('omnect-ui-session=');
+      const effectiveStatus = status === 200 && !hasSession ? 401 : status;
+      await route.fulfill({
+        status: effectiveStatus,
+        contentType: 'text/plain',
+        body: effectiveStatus === 200 ? token : '',
+      });
+    } else {
+      await route.continue();
+    }
   });
 }
 

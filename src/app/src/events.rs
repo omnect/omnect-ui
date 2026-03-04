@@ -18,6 +18,7 @@ pub enum AuthEvent {
         password: String,
     },
     CheckRequiresPasswordSet,
+    RestoreSession(String),
     #[serde(skip)]
     LoginResponse(Result<AuthToken, String>),
     #[serde(skip)]
@@ -267,6 +268,7 @@ impl fmt::Debug for AuthEvent {
             },
             AuthEvent::Logout => write!(f, "Logout"),
             AuthEvent::CheckRequiresPasswordSet => write!(f, "CheckRequiresPasswordSet"),
+            AuthEvent::RestoreSession(_) => write!(f, "RestoreSession(<redacted token>)"),
             AuthEvent::LogoutResponse(r) => f.debug_tuple("LogoutResponse").field(r).finish(),
             AuthEvent::SetPasswordResponse(result) => match result {
                 Ok(_) => f

@@ -13,7 +13,7 @@ use crate::{
     keycloak_client::KeycloakProvider,
     omnect_device_service_client::{DeviceServiceClient, OmnectDeviceServiceClient},
     services::{
-        auth::TokenManager,
+        auth::{SessionKeyService, TokenManager},
         certificate::{CertificateService, CreateCertPayload},
         network::NetworkConfigService,
     },
@@ -30,7 +30,7 @@ use actix_session::{
 };
 use actix_web::{
     App, HttpServer,
-    cookie::{Key, SameSite},
+    cookie::SameSite,
     web::{self, Data},
 };
 use actix_web_static_files::ResourceFiles;
@@ -331,7 +331,7 @@ async fn run_server(
     let tls_config = load_tls_config().context("failed to load tls config")?;
     let config = &AppConfig::get();
     let ui_port = config.ui.port;
-    let session_key = Key::generate();
+    let session_key = SessionKeyService::load_or_generate(&config.paths.session_key_path);
     let token_manager = TokenManager::new(&config.centrifugo.client_token);
 
     let server = HttpServer::new(move || {
