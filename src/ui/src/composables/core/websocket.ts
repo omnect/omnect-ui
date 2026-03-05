@@ -1,12 +1,21 @@
 /**
- * Centrifugo capability implementation for Crux Core
+ * WebSocket capability implementation for Crux Core
  *
  * This module handles WebSocket subscriptions and message parsing
  * for real-time updates from omnect-device-service (ODS).
  */
 
-import { centrifugoInstance, wasmModule } from './state'
-import { CentrifugeSubscriptionType } from '../../enums/centrifuge-subscription-type.enum'
+import { websocketInstance, wasmModule } from './state'
+import {
+	webSocketChannelToString,
+	WebSocketChannel,
+	WebSocketChannelVariantOnlineStatusV1,
+	WebSocketChannelVariantSystemInfoV1,
+	WebSocketChannelVariantTimeoutsV1,
+	WebSocketChannelVariantNetworkStatusV1,
+	WebSocketChannelVariantFactoryResetV1,
+	WebSocketChannelVariantUpdateValidationStatusV1,
+} from './types'
 import {
 	EventVariantWebSocket,
 	WebSocketEventVariantOnlineStatusUpdated,
@@ -15,11 +24,13 @@ import {
 	WebSocketEventVariantFactoryResetUpdated,
 	WebSocketEventVariantUpdateValidationStatusUpdated,
 	WebSocketEventVariantTimeoutsUpdated,
-	CentrifugoOperationVariantSubscribeAll,
-	CentrifugoOperationVariantUnsubscribeAll,
-	CentrifugoOutputVariantConnected,
-	CentrifugoOutputVariantDisconnected,
-	CentrifugoOutputVariantError,
+	WebSocketOperationVariantSubscribe,
+	WebSocketOperationVariantUnsubscribe,
+	WebSocketOperationVariantSubscribeAll,
+	WebSocketOperationVariantUnsubscribeAll,
+	WebSocketOutputVariantConnected,
+	WebSocketOutputVariantDisconnected,
+	WebSocketOutputVariantError,
 	type Event,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 import { BincodeSerializer } from '../../../../shared_types/generated/typescript/bincode/mod'
@@ -48,7 +59,7 @@ export function setEffectsProcessor(callback: (effectsBytes: Uint8Array) => Prom
  * Parse WebSocket channel data from ODS JSON and send as typed event to Core
  *
  * Architecture:
- * - Receives JSON from Centrifugo WebSocket (ODS data format)
+ * - Receives JSON from WebSocket WebSocket (ODS data format)
  * - Sends raw JSON string to Core
  * - Core parses JSON and constructs internal types
  * - Core processes events, updates Model, and renders
@@ -58,7 +69,7 @@ export function setEffectsProcessor(callback: (effectsBytes: Uint8Array) => Prom
  */
 async function parseAndSendChannelEvent(channel: string, jsonData: string): Promise<void> {
 	if (!sendEventCallback) {
-		console.warn('[Centrifugo] Event sender not initialized')
+		console.warn('[WebSocket] Event sender not initialized')
 		return
 	}
 
@@ -91,22 +102,22 @@ async function parseAndSendChannelEvent(channel: string, jsonData: string): Prom
 				break
 			}
 			default:
-				console.warn(`[Centrifugo] Unknown channel: ${channel}`)
+				console.warn(`[WebSocket] Unknown channel: ${channel}`)
 		}
 	} catch (error) {
-		console.error(`[Centrifugo] Error parsing ${channel}:`, error)
+		console.error(`[WebSocket] Error parsing ${channel}:`, error)
 	}
 }
 
 /**
- * Execute Centrifugo operation
+ * Execute WebSocket operation
  *
- * Subscribes to all Centrifugo channels and forwards messages as events to Core.
+ * Subscribes to all WebSocket channels and forwards messages as events to Core.
  * Uses the event-based architecture where WebSocket data is parsed and sent as
  * typed events (*Updated) rather than responses.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function executeCentrifugoOperation(requestId: number, operation: any): Promise<void> {
+export async function executeWebSocketOperation(requestId: number, operation: any): Promise<void> {
 	const sendResponse = async (output: any) => {
 		if (!wasmModule.value) return
 		const serializer = new BincodeSerializer()
@@ -118,9 +129,17 @@ export async function executeCentrifugoOperation(requestId: number, operation: a
 		}
 	}
 
-	if (operation instanceof CentrifugoOperationVariantSubscribeAll) {
-		const channels = Object.values(CentrifugeSubscriptionType)
-		centrifugoInstance.initializeCentrifuge()
+	const allChannels = [
+		new WebSocketChannelVariantOnlineStatusV1(),
+		new WebSocketChannelVariantSystemInfoV1(),
+		new WebSocketChannelVariantTimeoutsV1(),
+		new WebSocketChannelVariantNetworkStatusV1(),
+		new WebSocketChannelVariantFactoryResetV1(),
+		new WebSocketChannelVariantUpdateValidationStatusV1(),
+	]
+
+	if (operation instanceof WebSocketOperationVariantSubscribeAll) {
+		websocketInstance.initializeWebSocket()
 
 		let subscriptionsStarted = false
 		const performSubscriptions = async () => {
@@ -128,39 +147,50 @@ export async function executeCentrifugoOperation(requestId: number, operation: a
 			subscriptionsStarted = true
 
 			try {
-				for (const channel of channels) {
-					await centrifugoInstance.subscribe((data: unknown) => {
+				for (const channel of allChannels) {
+					const channelName = webSocketChannelToString(channel)
+					await websocketInstance.subscribe((data: unknown) => {
 						const jsonData = JSON.stringify(data)
-						parseAndSendChannelEvent(channel, jsonData)
-					}, channel)
+						parseAndSendChannelEvent(channelName, jsonData)
+					}, channelName)
 
-					await centrifugoInstance.history((data: unknown) => {
+					await websocketInstance.history((data: unknown) => {
 						try {
 							if (data) {
 								const jsonData = JSON.stringify(data)
-								parseAndSendChannelEvent(channel, jsonData)
+								parseAndSendChannelEvent(channelName, jsonData)
 							}
 						} catch (error) {
-							console.error(`[Centrifugo] Error processing history for ${channel}:`, error)
+							console.error(`[WebSocket] Error processing history for ${channelName}:`, error)
 						}
-					}, channel)
+					}, channelName)
 				}
-				await sendResponse(new CentrifugoOutputVariantConnected())
+				await sendResponse(new WebSocketOutputVariantConnected())
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error)
-				await sendResponse(new CentrifugoOutputVariantError(errorMessage))
+				await sendResponse(new WebSocketOutputVariantError(errorMessage))
 			}
 		}
 
-		centrifugoInstance.onConnected(() => {
+		websocketInstance.onConnected(() => {
 			performSubscriptions()
 		})
 		performSubscriptions()
-	} else if (operation instanceof CentrifugoOperationVariantUnsubscribeAll) {
-		centrifugoInstance.disconnect()
-		await sendResponse(new CentrifugoOutputVariantDisconnected())
+	} else if (operation instanceof WebSocketOperationVariantSubscribe) {
+		const channelName = webSocketChannelToString(operation.channel)
+		await websocketInstance.subscribe((data: unknown) => {
+			const jsonData = JSON.stringify(data)
+			parseAndSendChannelEvent(channelName, jsonData)
+		}, channelName)
+		// Shell-only response for individual subscribe
+	} else if (operation instanceof WebSocketOperationVariantUnsubscribe) {
+		const channelName = webSocketChannelToString(operation.channel)
+		websocketInstance.unsubscribe(channelName)
+	} else if (operation instanceof WebSocketOperationVariantUnsubscribeAll) {
+		websocketInstance.disconnect()
+		await sendResponse(new WebSocketOutputVariantDisconnected())
 	} else {
-		console.error(`[Centrifugo] Unsupported operation`)
-		await sendResponse(new CentrifugoOutputVariantError('Unsupported operation'))
+		console.error(`[WebSocket] Unsupported operation`)
+		await sendResponse(new WebSocketOutputVariantError('Unsupported operation'))
 	}
 }

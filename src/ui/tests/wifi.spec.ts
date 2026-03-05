@@ -1,7 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './fixtures/mock-api';
 import { mockHealthcheck } from './fixtures/test-setup';
-import { publishToCentrifugo } from './fixtures/centrifugo';
+import { publishToWebsocket } from './fixtures/websocket';
 
 // Run all tests in this file serially to avoid state interference
 test.describe.configure({ mode: 'serial' });
@@ -174,7 +174,7 @@ async function loginAndNavigateWith(page: Page, adapters = defaultAdapters) {
   await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
 
   // Publish network adapter data via Centrifugo (after login so WebSocket is subscribed)
-  await publishToCentrifugo('NetworkStatusV1', { network_status: adapters });
+  await publishToWebsocket('NetworkStatusV1', { network_status: adapters });
 
   // Navigate to network page
   await page.getByRole('link', { name: /network/i }).click();
@@ -399,7 +399,7 @@ test.describe('WiFi and Network Config Interaction', () => {
     await expect(activeApplyButton(page)).toBeDisabled();
 
     // Simulate WiFi connecting and the OS assigning a new IP to wlan0
-    await publishToCentrifugo('NetworkStatusV1', { network_status: wlan0AfterWifiAdapters });
+    await publishToWebsocket('NetworkStatusV1', { network_status: wlan0AfterWifiAdapters });
 
     // Form must sync to the WiFi-assigned IP and remain clean
     await expect(activeIpField(page)).toHaveValue('192.168.100.50', { timeout: 5000 });
@@ -418,7 +418,7 @@ test.describe('WiFi and Network Config Interaction', () => {
     await expect(activeApplyButton(page)).toBeEnabled({ timeout: 5000 });
 
     // Simulate WiFi assigning a different IP to wlan0
-    await publishToCentrifugo('NetworkStatusV1', { network_status: wlan0AfterWifiAdapters });
+    await publishToWebsocket('NetworkStatusV1', { network_status: wlan0AfterWifiAdapters });
 
     // Dirty flag must protect the user's edit — form must NOT be overwritten
     await expect(activeIpField(page)).toHaveValue('192.168.1.99');
@@ -459,7 +459,7 @@ test.describe('WiFi and Network Config Interaction', () => {
     await expect(activeApplyButton(page)).toBeEnabled({ timeout: 5000 });
 
     // Simulate WiFi assigning a new IP to wlan0 while user has unsaved edits
-    await publishToCentrifugo('NetworkStatusV1', { network_status: wlan0AfterWifiAdapters });
+    await publishToWebsocket('NetworkStatusV1', { network_status: wlan0AfterWifiAdapters });
 
     // Discard changes — must reload from the current network_status, not the original
     await activeDiscardButton(page).click();

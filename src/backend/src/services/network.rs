@@ -613,7 +613,9 @@ mod tests {
         #[test]
         fn response_includes_rollback_timeout() {
             let response = SetNetworkConfigResponse {
-                rollback_timeout_seconds: u64::from(omnect_ui_core::types::DEFAULT_NETWORK_ROLLBACK_TIMEOUT_SECS),
+                rollback_timeout_seconds: u64::from(
+                    omnect_ui_core::types::DEFAULT_NETWORK_ROLLBACK_TIMEOUT_SECS,
+                ),
                 ui_port: 1977,
                 rollback_enabled: true,
             };
@@ -627,7 +629,8 @@ mod tests {
         #[test]
         fn rollback_enabled_when_ip_changed_and_is_server() {
             let response = SetNetworkConfigResponse {
-                rollback_timeout_seconds: omnect_ui_core::types::DEFAULT_NETWORK_ROLLBACK_TIMEOUT_SECS.into(),
+                rollback_timeout_seconds:
+                    omnect_ui_core::types::DEFAULT_NETWORK_ROLLBACK_TIMEOUT_SECS.into(),
                 ui_port: 1977,
                 rollback_enabled: true,
             };
@@ -638,7 +641,8 @@ mod tests {
         #[test]
         fn rollback_disabled_when_not_requested() {
             let response = SetNetworkConfigResponse {
-                rollback_timeout_seconds: omnect_ui_core::types::DEFAULT_NETWORK_ROLLBACK_TIMEOUT_SECS.into(),
+                rollback_timeout_seconds:
+                    omnect_ui_core::types::DEFAULT_NETWORK_ROLLBACK_TIMEOUT_SECS.into(),
                 ui_port: 1977,
                 rollback_enabled: false,
             };

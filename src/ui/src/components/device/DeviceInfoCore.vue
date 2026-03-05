@@ -4,7 +4,7 @@
  *
  * This component uses the Crux architecture where:
  * - All state lives in the Core
- * - Shell handles only effects (HTTP, Centrifugo)
+ * - Shell handles only effects (HTTP, WebSocket)
  * - Components read from the reactive viewModel
  * - No local refs for data - all computed from Core state
  */

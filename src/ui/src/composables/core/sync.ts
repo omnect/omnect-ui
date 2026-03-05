@@ -5,7 +5,7 @@
  * the Crux Core's serialized state.
  */
 
-import { viewModel, authToken, isSubscribed, wasmModule, centrifugoInstance } from './state'
+import { viewModel, authToken, isSubscribed, wasmModule, websocketInstance } from './state'
 import {
 	factoryResetStatusToString,
 	convertDeviceOperationState,
@@ -81,9 +81,9 @@ function handleAuthTransitions(wasAuthenticated: boolean): void {
 	}
 
 	if (!viewModel.isAuthenticated && wasAuthenticated) {
-		console.log('[useCore] User logged out, resetting subscription state and disconnecting Centrifugo')
+		console.log('[useCore] User logged out, resetting subscription state and disconnecting WebSocket')
 		isSubscribed.value = false
-		centrifugoInstance.disconnect()
+		websocketInstance.disconnect()
 	}
 }
 

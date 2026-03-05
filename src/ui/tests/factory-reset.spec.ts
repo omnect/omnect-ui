@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { setupAndLogin } from './fixtures/test-setup';
 import { mockPortalAuth, mockSetPasswordSuccess } from './fixtures/mock-api';
-import { publishToCentrifugo } from './fixtures/centrifugo';
+import { publishToWebsocket } from './fixtures/websocket';
 
 test.describe('Device Factory Reset', () => {
   test.beforeEach(async ({ page }) => {
@@ -148,7 +148,7 @@ test.describe('Device Factory Reset - Reconnection', () => {
 
     // ODS publishes the factory reset result via Centrifugo after republishing.
     // status=0 maps to OdsFactoryResetResultStatus::ModeSupported → factoryResetIsSuccess=true.
-    await publishToCentrifugo('FactoryResetV1', {
+    await publishToWebsocket('FactoryResetV1', {
       keys: ['network'],
       result: { status: 0, error: '0', paths: ['/etc/systemd/network/'] },
     });
@@ -169,7 +169,7 @@ test.describe('Device Factory Reset - Reconnection', () => {
     });
 
     // Trigger the factory reset success modal via WebSocket (status: 0 = ModeSupported)
-    await publishToCentrifugo('FactoryResetV1', {
+    await publishToWebsocket('FactoryResetV1', {
       keys: ['network'],
       result: { status: 0, error: '0', paths: ['/etc/systemd/network/'] },
     });

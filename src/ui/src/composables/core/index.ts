@@ -21,6 +21,7 @@ import {
 	authToken,
 	wasmModule,
 	initializationPromise,
+	websocketInstance,
 	setWasmModule,
 	setInitializationPromise,
 } from './state'
@@ -31,8 +32,8 @@ import { processEffects } from './effects'
 // Import timer management
 import { setEventSender as setTimerEventSender, initializeTimerWatchers, checkPendingNetworkChange } from './timers'
 
-// Import Centrifugo
-import { setEventSender as setCentrifugoEventSender } from './centrifugo'
+// Import WebSocket
+import { setEventSender as setWebSocketEventSender } from './websocket'
 
 // Import sync
 import { setEventSender as setSyncEventSender } from './sync'
@@ -162,11 +163,18 @@ async function sendEventToCore(event: Event): Promise<void> {
 
 // Wire up event sender callbacks to break circular dependencies
 setTimerEventSender(sendEventToCore)
-setCentrifugoEventSender(sendEventToCore)
+setWebSocketEventSender(sendEventToCore)
 setSyncEventSender(sendEventToCore)
 
 // Initialize timer watchers
 initializeTimerWatchers()
+
+// When WebSocket connects, trigger a republish from ODS to sync initial state.
+// Since we use native WebSockets without history, this is essential for the first UI load.
+websocketInstance.onConnected(() => {
+	console.log('[useCore] WebSocket connected, triggering republish')
+	fetch('/republish', { method: 'POST' }).catch((e) => console.error('[useCore] Failed to trigger republish:', e))
+})
 
 // ============================================================================
 // Initialization

@@ -10,7 +10,7 @@ import { setupAndLogin } from './fixtures/test-setup';
 const inputs = (page: any) => page.locator('input[type="number"]');
 
 async function setupWithSettings(page: any, settings: TimeoutSettingsPayload = DEFAULT_TIMEOUT_SETTINGS) {
-	await page.route('**/settings', async (route: any) => {
+	await page.route('**/api/settings', async (route: any) => {
 		if (route.request().method() === 'GET') {
 			await route.fulfill({
 				status: 200,
@@ -50,7 +50,7 @@ test.describe('Settings page', () => {
 	test('save sends POST with modified values and shows success message', async ({ page }) => {
 		let capturedBody: TimeoutSettingsPayload | null = null;
 
-		await page.route('**/settings', async (route: any) => {
+		await page.route('**/api/settings', async (route: any) => {
 			if (route.request().method() === 'GET') {
 				await route.fulfill({
 					status: 200,
@@ -99,7 +99,7 @@ test.describe('Settings page', () => {
 	});
 
 	test('save failure shows error message', async ({ page }) => {
-		await page.route('**/settings', async (route: any) => {
+		await page.route('**/api/settings', async (route: any) => {
 			if (route.request().method() === 'GET') {
 				await route.fulfill({
 					status: 200,

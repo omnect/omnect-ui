@@ -27,8 +27,8 @@ impl SettingsService {
 
     fn load() -> Result<TimeoutSettings> {
         let path = Self::settings_path();
-        let content = fs::read_to_string(&path)
-            .context(format!("failed to read settings file: {path:?}"))?;
+        let content =
+            fs::read_to_string(&path).context(format!("failed to read settings file: {path:?}"))?;
         serde_json::from_str(&content).context("failed to deserialize settings")
     }
 
@@ -41,5 +41,4 @@ impl SettingsService {
             .expect("app_config_path has no parent")
             .join("timeouts.json")
     }
-
 }

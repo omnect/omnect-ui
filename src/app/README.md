@@ -37,9 +37,9 @@ The Crux Core follows the Model-View-Update pattern:
       - `config.rs` - Network config request/response
       - `form.rs` - Form state management
       - `verification.rs` - IP check and rollback logic
-  - `websocket.rs` - WebSocket/Centrifugo handlers
+  - `websocket.rs` - WebSocket handlers
   - `ui.rs` - UI action handlers (clear error/success)
-- `src/commands/centrifugo.rs` - Custom WebSocket commands
+- `src/commands/websocket.rs` - Custom WebSocket commands
 
 ## Building
 

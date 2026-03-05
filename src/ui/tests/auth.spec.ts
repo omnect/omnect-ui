@@ -327,15 +327,19 @@ test.describe('Authentication', () => {
   });
 
   test.describe('route guards', () => {
-    test('redirects to /login when accessing protected route without authentication', async ({ page }) => {
-      await mockRequireSetPassword(page);
-      await mockTokenRefresh(page, 401);
+    const protectedRoutes = ['/', '/network', '/update', '/settings', '/update-password'];
 
-      await page.goto('/network');
+    for (const route of protectedRoutes) {
+      test(`redirects to /login when accessing ${route} without authentication`, async ({ page }) => {
+        await mockRequireSetPassword(page);
+        await mockTokenRefresh(page, 401);
 
-      await expect(page).toHaveURL(/\/login$/);
-      await expect(page.getByPlaceholder(/enter your password/i)).toBeVisible();
-    });
+        await page.goto(route);
+
+        await expect(page).toHaveURL(/\/login(\?.*)?$/);
+        await expect(page.getByPlaceholder(/enter your password/i)).toBeVisible();
+      });
+    }
 
     test('redirects to /login when accessing invalid route without authentication', async ({ page }) => {
       await mockRequireSetPassword(page);

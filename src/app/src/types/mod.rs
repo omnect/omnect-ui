@@ -19,6 +19,7 @@ pub mod network;
 pub mod ods;
 pub mod settings;
 pub mod update;
+pub mod websocket;
 pub mod wifi;
 
 // Re-export all types for backward compatibility
@@ -30,4 +31,5 @@ pub use network::*;
 pub use ods::*;
 pub use settings::*;
 pub use update::*;
+pub use websocket::*;
 pub use wifi::*;

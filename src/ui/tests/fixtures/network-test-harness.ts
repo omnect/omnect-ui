@@ -1,5 +1,5 @@
 import { Page, expect } from '@playwright/test';
-import { publishToCentrifugo } from './centrifugo';
+import { publishToWebsocket } from './websocket';
 import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './mock-api';
 
 /**
@@ -282,7 +282,7 @@ export class NetworkTestHarness {
   async publishNetworkStatus(adapters: Array<Partial<DeviceNetwork> & { name: string }>): Promise<void> {
     const fullAdapters = adapters.map(adapter => this.createAdapter(adapter.name, adapter));
     this.lastNetworkConfig = fullAdapters;
-    await publishToCentrifugo('NetworkStatusV1', {
+    await publishToWebsocket('NetworkStatusV1', {
       network_status: fullAdapters,
     });
   }

@@ -77,14 +77,14 @@ const acknowledgeRollback = () => {
 }
 
 const acknowledgeFactoryResetResult = () => {
-	// Mark as seen in this session so Centrifugo replays don't re-show the modal
+	// Mark as seen in this session so WebSocket replays don't re-show the modal
 	sessionStorage.setItem('factoryResetResultAcked', 'true')
 	ackFactoryResetResult()
 	showFactoryResetResultModal.value = false
 }
 
 const acknowledgeUpdateValidation = () => {
-	// Mark as seen in this session so Centrifugo replays don't re-show the modal
+	// Mark as seen in this session so WebSocket replays don't re-show the modal
 	sessionStorage.setItem('updateValidationAcked', 'true')
 	ackUpdateValidation()
 	showUpdateValidationModal.value = false

@@ -1,7 +1,7 @@
 //! External Data Transfer Objects (DTOs) for omnect-device-service (ODS)
 //!
 //! These types represent the "wire format" of JSON payloads received from ODS
-//! over WebSocket/Centrifugo.
+//! over WebSocket/WebSocket.
 //!
 //! ### Why separate types?
 //! 1. **Wire Format Isolation**: ODS uses `snake_case` variants, while our internal

@@ -72,6 +72,13 @@ import {
 	UploadStateVariantcompleted,
 	UploadStateVariantfailed,
 	DeviceNetwork,
+	WebSocketChannel,
+	WebSocketChannelVariantOnlineStatusV1,
+	WebSocketChannelVariantSystemInfoV1,
+	WebSocketChannelVariantTimeoutsV1,
+	WebSocketChannelVariantNetworkStatusV1,
+	WebSocketChannelVariantFactoryResetV1,
+	WebSocketChannelVariantUpdateValidationStatusV1,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 
 // Re-export variant classes for external use
@@ -83,11 +90,31 @@ export {
 	UploadState,
 	DeviceNetwork,
 	WifiState,
+	WebSocketChannel,
+	WebSocketChannelVariantOnlineStatusV1,
+	WebSocketChannelVariantSystemInfoV1,
+	WebSocketChannelVariantTimeoutsV1,
+	WebSocketChannelVariantNetworkStatusV1,
+	WebSocketChannelVariantFactoryResetV1,
+	WebSocketChannelVariantUpdateValidationStatusV1,
 }
 
 // ============================================================================
 // TypeScript Discriminated Union Types
 // ============================================================================
+
+/**
+ * Convert WebSocketChannel variant to string
+ */
+export function webSocketChannelToString(channel: WebSocketChannel): string {
+	if (channel instanceof WebSocketChannelVariantOnlineStatusV1) return 'OnlineStatusV1'
+	if (channel instanceof WebSocketChannelVariantSystemInfoV1) return 'SystemInfoV1'
+	if (channel instanceof WebSocketChannelVariantTimeoutsV1) return 'TimeoutsV1'
+	if (channel instanceof WebSocketChannelVariantNetworkStatusV1) return 'NetworkStatusV1'
+	if (channel instanceof WebSocketChannelVariantFactoryResetV1) return 'FactoryResetV1'
+	if (channel instanceof WebSocketChannelVariantUpdateValidationStatusV1) return 'UpdateValidationStatusV1'
+	return 'unknown'
+}
 
 export type DeviceOperationStateType =
 	| { type: 'idle' }

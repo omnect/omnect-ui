@@ -34,6 +34,7 @@ fn main() -> Result<()> {
     gen.register_type::<NetworkConfigRequest>()?;
     gen.register_type::<NetworkFormData>()?;
     gen.register_type::<TimeoutSettings>()?;
+    gen.register_type::<omnect_ui_core::types::WebSocketChannel>()?;
 
     // Register WiFi types
     gen.register_type::<WifiState>()?;

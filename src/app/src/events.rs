@@ -89,7 +89,7 @@ pub enum DeviceEvent {
     AckUpdateValidationResponse(Result<(), String>),
 }
 
-/// WebSocket/Centrifugo events
+/// WebSocket/WebSocket events
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum WebSocketEvent {
     SubscribeToChannels,

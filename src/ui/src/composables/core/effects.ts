@@ -4,17 +4,17 @@
  * This module processes effects returned by the Crux Core:
  * - Render: Update the viewModel from Core
  * - Http: Execute HTTP requests
- * - Centrifugo: Handle WebSocket subscriptions
+ * - WebSocket: Handle WebSocket subscriptions
  */
 
 import { wasmModule } from './state'
 import { executeHttpRequest, setEffectsProcessor as setHttpEffectsProcessor } from './http'
-import { executeCentrifugoOperation, setEffectsProcessor as setCentrifugoEffectsProcessor } from './centrifugo'
+import { executeWebSocketOperation, setEffectsProcessor as setWebSocketEffectsProcessor } from './websocket'
 import {
 	Request as CruxRequest,
 	EffectVariantRender,
 	EffectVariantHttp,
-	EffectVariantCentrifugo,
+	EffectVariantWebSocket,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 import { BincodeDeserializer } from '../../../../shared_types/generated/typescript/bincode/mod'
 
@@ -34,7 +34,7 @@ export function setViewModelUpdater(callback: () => void): void {
  * Effects are the Core's way of requesting the Shell to perform side effects:
  * - Render: Fetch and update the viewModel from Core
  * - Http: Execute HTTP requests and send responses back to Core
- * - Centrifugo: Subscribe to WebSocket channels (only SubscribeAll)
+ * - WebSocket: Subscribe to WebSocket channels (only SubscribeAll)
  */
 export async function processEffects(effectsBytes: Uint8Array): Promise<void> {
 	if (!wasmModule.value) {
@@ -69,14 +69,14 @@ export async function processEffects(effectsBytes: Uint8Array): Promise<void> {
 			}).catch((error) => {
 				console.error('Failed to execute HTTP request:', error)
 			})
-		} else if (effect instanceof EffectVariantCentrifugo) {
-			// Centrifugo effect: Handle WebSocket subscription
-			const centrifugoOperation = effect.value
-			console.log(`Centrifugo operation:`, centrifugoOperation)
+		} else if (effect instanceof EffectVariantWebSocket) {
+			// WebSocket effect: Handle WebSocket subscription
+			const websocketOperation = effect.value
+			console.log(`WebSocket operation:`, websocketOperation)
 
 			// Execute the operation asynchronously
-			executeCentrifugoOperation(request.id, centrifugoOperation).catch((error) => {
-				console.error('Failed to execute Centrifugo operation:', error)
+			executeWebSocketOperation(request.id, websocketOperation).catch((error) => {
+				console.error('Failed to execute WebSocket operation:', error)
 			})
 		} else {
 			console.warn('Unknown effect type:', effect)
@@ -84,6 +84,6 @@ export async function processEffects(effectsBytes: Uint8Array): Promise<void> {
 	}
 }
 
-// Wire up the circular dependency: http.ts and centrifugo.ts need to call processEffects
+// Wire up the circular dependency: http.ts and websocket.ts need to call processEffects
 setHttpEffectsProcessor(processEffects)
-setCentrifugoEffectsProcessor(processEffects)
+setWebSocketEffectsProcessor(processEffects)

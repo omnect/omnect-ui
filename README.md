@@ -19,7 +19,7 @@ omnect UI provides the following main features:
 
 omnect UI follows a full-stack Single Page Application (SPA) architecture:
 
-- **Backend**: Rust-based web service (Actix-web) providing API endpoints and WebSocket support via Centrifugo
+- **Backend**: Rust-based web service (Actix-web) providing API endpoints and WebSocket support
 - **Crux Core**: Platform-agnostic business logic compiled to WebAssembly
 - **Frontend**: Vue 3 TypeScript SPA serving as the shell for the Crux Core
 - **Shared Types**: TypeScript bindings auto-generated from Rust types
@@ -179,7 +179,7 @@ Run `./scripts/build-and-deploy-image.sh --help` for all available options.
 # Run all unit tests (backend + core)
 cargo test --features mock
 
-# Run E2E tests (automated setup - starts Centrifugo + frontend dev server)
+# Run E2E tests (automated setup - starts Mock WebSocket server + frontend dev server)
 ./scripts/run-e2e-tests.sh
 
 # Run E2E tests in Docker container (isolated environment)
@@ -204,7 +204,7 @@ The project includes VSCode launch configurations optimized for development:
 
 #### Pre-Launch Task (runs before each debug session)
 
-- `check_ods_and_centrifugo` task: Verifies omnect-device-service is running and kills existing Centrifugo processes
+- `check_ods` task: Verifies omnect-device-service is running
 
 **Prerequisites before launching the debugger:**
 

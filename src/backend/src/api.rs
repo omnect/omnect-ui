@@ -49,15 +49,10 @@ where
     }
 
     pub async fn index(
-        api: web::Data<Self>,
+        _api: web::Data<Self>,
         static_resources: web::Data<StaticResources>,
     ) -> actix_web::Result<HttpResponse> {
         debug!("index() called");
-
-        api.service_client.republish().await.map_err(|e| {
-            error!("republish failed: {e:#}");
-            actix_web::error::ErrorInternalServerError("republish failed")
-        })?;
 
         let Some(index_html) = static_resources.get("index.html") else {
             return Err(actix_web::error::ErrorNotFound(
@@ -87,6 +82,11 @@ where
                 HttpResponse::InternalServerError().body(e.to_string())
             }
         }
+    }
+
+    pub async fn republish(api: web::Data<Self>) -> impl Responder {
+        debug!("republish() called");
+        handle_service_result(api.service_client.republish().await, "republish")
     }
 
     pub async fn factory_reset(
@@ -261,7 +261,9 @@ where
         HttpResponse::Ok().json(SettingsService::get())
     }
 
-    pub async fn update_settings(body: web::Json<omnect_ui_core::types::TimeoutSettings>) -> impl Responder {
+    pub async fn update_settings(
+        body: web::Json<omnect_ui_core::types::TimeoutSettings>,
+    ) -> impl Responder {
         debug!("update_settings() called: {body:?}");
         handle_service_result(SettingsService::save(&body), "update_settings")
     }

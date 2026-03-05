@@ -8,8 +8,8 @@ pub struct AppConfig {
     /// UI server configuration
     pub ui: UiConfig,
 
-    /// Centrifugo WebSocket server configuration
-    pub centrifugo: CentrifugoConfig,
+    /// Internal Publish endpoint configuration
+    pub publish: PublishConfig,
 
     /// Keycloak SSO configuration
     pub keycloak: KeycloakConfig,
@@ -40,14 +40,9 @@ pub struct UiConfig {
 }
 
 #[derive(Clone, Debug)]
-pub struct CentrifugoConfig {
-    pub port: String,
-    pub client_token: String,
+pub struct PublishConfig {
     pub api_key: String,
-    pub publish_endpoint: crate::omnect_device_service_client::PublishEndpoint,
-    pub log_level: String,
-    pub binary_path: PathBuf,
-    pub config_path: PathBuf,
+    pub endpoint: crate::omnect_device_service_client::PublishEndpoint,
 }
 
 #[derive(Clone, Debug)]
@@ -120,7 +115,7 @@ impl AppConfig {
         );
 
         let ui = UiConfig::load()?;
-        let centrifugo = CentrifugoConfig::load()?;
+        let publish = PublishConfig::load()?;
         let keycloak = KeycloakConfig::load()?;
         let device_service = DeviceServiceConfig::load()?;
         let certificate = CertificateConfig::load()?;
@@ -131,7 +126,7 @@ impl AppConfig {
 
         Ok(Self {
             ui,
-            centrifugo,
+            publish,
             keycloak,
             device_service,
             certificate,
@@ -154,17 +149,14 @@ impl UiConfig {
     }
 }
 
-impl CentrifugoConfig {
+impl PublishConfig {
     fn load() -> Result<Self> {
-        let port = env::var("CENTRIFUGO_HTTP_SERVER_PORT").unwrap_or_else(|_| "8000".to_string());
-        let log_level = env::var("CENTRIFUGO_LOG_LEVEL").unwrap_or_else(|_| "none".to_string());
-
-        // Generate unique tokens for this instance
-        let client_token = Uuid::new_v4().to_string();
+        let port = env::var("PUBLISH_PORT").unwrap_or_else(|_| "8000".to_string());
+        // Generate a unique token for this instance to protect the internal publish endpoint
         let api_key = Uuid::new_v4().to_string();
 
-        let publish_endpoint = crate::omnect_device_service_client::PublishEndpoint {
-            url: format!("https://localhost:{port}/api/publish"),
+        let endpoint = crate::omnect_device_service_client::PublishEndpoint {
+            url: format!("http://localhost:{port}/api/internal/publish"),
             headers: vec![
                 crate::omnect_device_service_client::HeaderKeyValue {
                     name: String::from("Content-Type"),
@@ -177,26 +169,7 @@ impl CentrifugoConfig {
             ],
         };
 
-        #[cfg(any(test, feature = "mock"))]
-        let binary_path = PathBuf::from("tools/centrifugo");
-        #[cfg(not(any(test, feature = "mock")))]
-        let binary_path =
-            std::fs::canonicalize("centrifugo").context("failed to find centrifugo binary")?;
-
-        #[cfg(any(test, feature = "mock"))]
-        let config_path = PathBuf::from("src/backend/config/centrifugo_config.json");
-        #[cfg(not(any(test, feature = "mock")))]
-        let config_path = PathBuf::from("/centrifugo_config.json");
-
-        Ok(Self {
-            port,
-            client_token,
-            api_key,
-            publish_endpoint,
-            log_level,
-            binary_path,
-            config_path,
-        })
+        Ok(Self { api_key, endpoint })
     }
 }
 

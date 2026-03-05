@@ -1,3 +1,137 @@
+# Interaction Constraints
+
+## Style & Tone
+- **Neutrality:** No automatic agreement, mirroring, or role-playing. Remain objective and factual.
+- **Brevity:** Provide short, precise answers. Exclude conversational filler.
+- **No Emotion:** Do not offer congratulations, praise, thanks, or apologies.
+
+## Intellectual Honesty
+- **Critique:** Do not assume user input is correct. Verify everything.
+- **Correction:** State flaws directly without hedging.
+
+## Formatting
+- **Code:** Output code blocks immediately.
+- **Logic:** Use bullet points for explanations.
+
+# Product Context: omnect Secure OS
+
+## 1. Core Identity
+omnect is a production-grade **Secure OS** for edge devices, built on **Yocto Linux** and natively integrated with **Azure IoT Hub**.
+
+## 2. Architecture & Constraints
+
+### Architectural Style
+- **Embedded Secure OS:** Minimal, immutable Linux distribution built with **Yocto**.
+- **Edge-Cloud Hybrid:** Native integration with **Azure IoT Hub** for control and telemetry.
+- **Containerized Workloads:** Applications run as **Docker** containers (Azure IoT Edge Modules).
+
+### Technology Stack
+- **Core OS:** Yocto Project (Linux).
+- **Device Management:** **Rust** (`omnect-device-service`) for safety and performance.
+- **Local UI:** Web technologies (`omnect-ui`) for device visualization.
+- **Updates:** **SWUpdate** for atomic A/B partition updates.
+- **Cloud:** Microsoft Azure (IoT Hub, DPS, IoT Edge).
+
+### Security
+- **Immutable Rootfs:** Read-only root filesystem prevents runtime tampering.
+- **Secure Boot:** Hardware-rooted chain of trust (where supported).
+- **Identity:** Device identity stored in TPM/Secure Element; provisioning via Azure DPS.
+- **Network:** Outbound-only connectivity; minimized attack surface (no open inbound ports).
+
+### Constraints
+- **Persistence:** Filesystem is volatile. Permanent state **MUST** be stored in `/data` (application state) or `/factory` (device identity).
+- **No Package Manager:** No `apt-get` or similar. Features must be baked into the OS image or containerized.
+- **Partition Layout:** Strict A/B partitioning requires adherence to the update model.
+
+## 3. Terminology & Abbreviations
+- **ods:** `omnect-device-service`
+- **ota:** `Over-the-Air` (Updates)
+- **adu:** `Azure Device Update`
+
+## 4. Repository Index (Source of Truth)
+- **[meta-omnect](https://github.com/omnect/meta-omnect)**
+  *The core Yocto meta-layer.*
+- **[omnect-os](https://github.com/omnect/omnect-os)**
+  *The OS build definitions.*
+- **[omnect-device-service](https://github.com/omnect/omnect-device-service)**
+  *Rust-based daemon managing network configuration and device state.*
+- **[omnect-ui](https://github.com/omnect/omnect-ui)**
+  *The local web interface for device visualization.*
+- **[omnect-cli](https://github.com/omnect/omnect-cli)**
+  *Command-line interface for provisioning and debugging.*
+
+## 5. Documentation References
+- **Product Docs:** [https://documentation.omnect.conplement.cloud/](https://documentation.omnect.conplement.cloud/)
+- **UI Docs:** [https://documentation.omnect.conplement.cloud/omnect-Secure-OS/omnect-ui](https://documentation.omnect.conplement.cloud/omnect-Secure-OS/omnect-ui)
+
+# Global Coding Standards
+
+## Code Quality
+- **No Magic Numbers:** Never use literal values for configuration, timeouts, or logic constants. Define named constants instead.
+
+```rust
+// ✅ Good
+const MAX_RETRIES: u32 = 3;
+for _ in 0..MAX_RETRIES { ... }
+
+// ❌ Bad
+for _ in 0..3 { ... }
+```
+
+## Comments
+- **Explain "Why", Not "What":** Code explains what it does. Comments should explain *why* it does it (e.g., business logic, complex constraints, workarounds).
+- **Keep Fresh:** Delete comments that contradict the code. If you change logic, update the reasoning.
+- **No Redundancy:** Do not narrate obvious logic (e.g., `i += 1 // Increment i`).
+
+# Git & Version Control
+
+## Commit Messages
+- Format: Conventional Commits `<type>(<scope>): <subject>`
+- Example: `fix(auth): handle jwt expiration`
+- Types: feat, fix, docs, style, refactor, test, chore.
+- **Rule:** Never write "WIP" without context.
+- **Rule:** Never add AI agent related information like "Co-Authored-By: Claude"
+
+## DCO / Trailers
+- **Requirement:** Every commit message MUST end with a "Signed-off-by" trailer using the current git user configuration.
+- **Format:** `Signed-off-by: Name <email>`
+- **Helper Command:** To retrieve the correct string, run:
+  ```bash
+  echo "$(git config user.name) <$(git config user.email)>"
+  ```
+
+## Pull Requests
+- **Target:** Always target the **omnect organization** repositories. NEVER target a personal fork.
+- Description Structure:
+  1. **Summary:** What changed?
+  2. **Reason:** Why was this needed?
+  3. **Verification:** How was this tested?
+
+# CI/CD & Security Tracking
+
+## Tools
+
+### Concourse CI
+- **Purpose:** Used for Continuous Integration and Continuous Deployment (CI/CD) pipelines.
+- **Usage:** Automates builds, testing, and deployment of omnect OS and related services. Creates SBOM's and uploads to dtrack.
+- **Key Concepts:** Pipelines are defined in YAML and consist of resources, jobs, and tasks.
+
+### Dependency-Track (DTrack)
+- **Purpose:** Used for Software Composition Analysis (SCA) and tracking Vulnerabilities (CVEs).
+- **Usage:** Monitors third-party components and libraries for known security vulnerabilities.
+- **Integration:** Often integrated into CI pipelines to upload SBOMs (Software Bill of Materials) for analysis.
+
+# QA & Definition of Done
+
+## Requirements
+- **Verification:** You must run the language-specific **Linting** and **Testing** commands defined in the language rules file (e.g., `lang-rust.md`).
+- **Strictness:** Do not output code that violates the linter configurations.
+
+## Execution
+- **Claude/Gemini:** Use your `run_terminal_cmd` tool to verify changes.
+- **Copilot:** Suggest the specific test command to run.
+
+--- PROJECT SPECIFIC CONTEXT ---
 # Project Context
 
 This repository implements a web frontend and backend to provide omnect specific features in a local environment, where the device might not be connected to the azure cloud.
@@ -144,7 +278,6 @@ omnect-ui/
 ├── scripts/                      # Build and test scripts
 │   ├── build-frontend.sh         # Build WASM + Types + UI
 │   ├── build-and-deploy-image.sh # Docker build and deploy
-│   ├── build-and-run-image.sh    # Local docker development
 │   └── run-e2e-tests.sh          # Playwright test runner
 ├── src/
 │   ├── app/                      # Crux Core (business logic)
@@ -169,7 +302,6 @@ omnect-ui/
 │   │       │   ├── wifi.rs       # WiFi types
 │   │       │   ├── ods.rs        # ODS-specific DTOs
 │   │       │   ├── settings.rs   # Timeout settings types
-│   │       │   ├── websocket.rs  # WebSocket channel enum
 │   │       │   ├── factory_reset.rs
 │   │       │   └── update.rs     # Update validation types
 │   │       └── update/           # Domain-based event handlers
@@ -187,9 +319,7 @@ omnect-ui/
 │   │   ├── Cargo.toml
 │   │   ├── src/
 │   │   │   ├── main.rs           # Application entry point
-│   │   │   ├── lib.rs            # Library entry point
 │   │   │   ├── api.rs            # API route handlers
-│   │   │   ├── build.rs          # Static resource generation
 │   │   │   ├── middleware.rs     # Auth middleware
 │   │   │   ├── config.rs         # Configuration loading
 │   │   │   ├── http_client.rs    # Internal HTTP client
@@ -203,12 +333,10 @@ omnect-ui/
 │   │   │       ├── network.rs
 │   │   │       ├── marker.rs
 │   │   │       ├── settings.rs   # Timeout settings service
-│   │   │       ├── websocket.rs  # WebSocket handlers
 │   │   │       └── auth/         # Auth logic
 │   │   │           ├── mod.rs
 │   │   │           ├── authorization.rs # JWT/SSO validation
 │   │   │           ├── password.rs      # Password hashing/storage
-│   │   │           ├── session_key.rs   # Session key management
 │   │   │           └── token.rs         # JWT generation
 │   │   └── tests/                # Integration tests
 │   ├── shared_types/             # TypeGen for TypeScript bindings
@@ -218,21 +346,20 @@ omnect-ui/
 │   └── ui/                       # Vue 3 Shell
 │       ├── package.json
 │       ├── playwright.config.ts  # E2E test configuration
-│       ├── vite.config.ts        # Build configuration
 │       ├── src/
 │       │   ├── App.vue           # Root component
 │       │   ├── main.ts           # UI entry point
 │       │   ├── components/       # UI components
 │       │   ├── composables/      # Logic & WASM bridge
 │       │   │   ├── useCore.ts    # Main bridge + effect handlers
-│   │       │   ├── useWebSocket.ts # Native WebSocket client
+│   │       │   ├── useWebSocket.ts
 │   │       │   └── core/         # Modular Core integration
 │   │       │       ├── index.ts  # Main entry point
 │   │       │       ├── state.ts  # Singleton reactive state
 │   │       │       ├── types.ts  # TypeScript type conversions
 │   │       │       ├── effects.ts # Effect processing
 │   │       │       ├── http.ts   # HTTP capability
-│   │       │       ├── websocket.ts # WebSocket capability
+│   │       │       ├── websocket.ts  # WebSocket capability
 │       │   │       ├── timers.ts # Timer/Polling logic
 │       │   │       └── sync.ts   # ViewModel synchronization
 │       │   ├── pages/            # Route components
@@ -260,10 +387,6 @@ omnect-ui/
 │       ├── version-mismatch.spec.ts
 │       ├── wifi.spec.ts
 │       └── fixtures/
-│           ├── mock-api.ts
-│           ├── network-test-harness.ts
-│           ├── test-setup.ts
-│           └── websocket.ts      # WebSocket test mocks
 └── project-context.md            # This file
 ```
 
@@ -285,8 +408,10 @@ omnect-ui/
 **Backend:**
 - `src/backend/src/main.rs` - Application entry point
 - `src/backend/src/api.rs` - API route handlers
-- `src/backend/src/services/websocket.rs` - Native WebSocket implementation
+- `src/backend/src/services/` - Business logic services
 
 **Scripts:**
 - `scripts/build-frontend.sh` - Build complete frontend (WASM + TypeScript types + UI)
 - `scripts/build-and-deploy-image.sh` - Docker build and deploy script
+
+

@@ -10,3 +10,4 @@ pub mod firmware;
 pub mod marker;
 pub mod network;
 pub mod settings;
+pub mod websocket;

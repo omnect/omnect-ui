@@ -177,7 +177,7 @@ export const DEFAULT_TIMEOUT_SETTINGS: TimeoutSettingsPayload = {
 };
 
 export async function mockGetSettings(page: Page, settings: TimeoutSettingsPayload = DEFAULT_TIMEOUT_SETTINGS) {
-  await page.route('**/settings', async (route) => {
+  await page.route('**/api/settings', async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         status: 200,
@@ -191,7 +191,7 @@ export async function mockGetSettings(page: Page, settings: TimeoutSettingsPaylo
 }
 
 export async function mockSaveSettingsSuccess(page: Page) {
-  await page.route('**/settings', async (route) => {
+  await page.route('**/api/settings', async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({ status: 200, body: '' });
     } else {
@@ -201,7 +201,7 @@ export async function mockSaveSettingsSuccess(page: Page) {
 }
 
 export async function mockSaveSettingsFailure(page: Page, message = 'failed to save settings') {
-  await page.route('**/settings', async (route) => {
+  await page.route('**/api/settings', async (route) => {
     if (route.request().method() === 'POST') {
       await route.fulfill({ status: 500, contentType: 'text/plain', body: message });
     } else {

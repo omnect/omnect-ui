@@ -20,7 +20,13 @@ pub fn handle(event: UiEvent, model: &mut Model) -> Command<Effect, Event> {
             crux_core::render::render()
         }
         UiEvent::LoadSettings => {
-            http_get!(Ui, UiEvent, build_url("/settings"), LoadSettingsResponse, TimeoutSettings)
+            http_get!(
+                Ui,
+                UiEvent,
+                build_url("/api/settings"),
+                LoadSettingsResponse,
+                TimeoutSettings
+            )
         }
         UiEvent::LoadSettingsResponse(result) => handle_response!(model, result, {
             on_success: |m, settings| {
@@ -32,7 +38,7 @@ pub fn handle(event: UiEvent, model: &mut Model) -> Command<Effect, Event> {
             // Optimistic update so the form reflects the new values immediately,
             // regardless of when the POST response arrives.
             model.timeout_settings = settings.clone();
-            auth_post!(Ui, UiEvent, model, "/settings", SaveSettingsResponse, "Save settings",
+            auth_post!(Ui, UiEvent, model, "/api/settings", SaveSettingsResponse, "Save settings",
                 body_json: &settings
             )
         }

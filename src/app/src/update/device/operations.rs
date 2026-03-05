@@ -4,7 +4,6 @@ use crate::model::Model;
 use crate::types::{DeviceOperationState, OverlaySpinnerState};
 use crate::Effect;
 
-
 /// Check if an error message indicates a network error
 pub fn is_network_error(error: &str) -> bool {
     let e_lower = error.to_lowercase();

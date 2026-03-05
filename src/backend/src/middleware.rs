@@ -133,7 +133,6 @@ fn unauthorized_error(req: ServiceRequest) -> ServiceResponse {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::config::AppConfig;
 
     const TOKEN_SUBJECT: &str = "omnect-ui";
     const TOKEN_EXPIRE_HOURS: u64 = 2;
@@ -210,7 +209,7 @@ pub mod tests {
     }
 
     fn generate_token(claim: TestClaims) -> String {
-        let key = EncodingKey::from_secret(AppConfig::get().centrifugo.client_token.as_bytes());
+        let key = EncodingKey::from_secret("test-secret-key!".as_bytes());
         encode(&Header::default(), &claim, &key).unwrap()
     }
 
@@ -245,7 +244,7 @@ pub mod tests {
             .cookie_http_only(true)
             .build();
 
-        let token_manager = TokenManager::new(AppConfig::get().centrifugo.client_token.as_str());
+        let token_manager = TokenManager::new("test-secret-key!");
 
         test::init_service(
             App::new()
@@ -484,7 +483,7 @@ pub mod tests {
     async fn verify_correct_token_should_succeed() {
         let claim = generate_valid_claim();
         let token = generate_token(claim);
-        let token_manager = TokenManager::new(AppConfig::get().centrifugo.client_token.as_str());
+        let token_manager = TokenManager::new("test-secret-key!");
 
         assert!(token_manager.verify_token(token.as_str()));
     }
@@ -493,7 +492,7 @@ pub mod tests {
     async fn verify_expired_token_should_fail() {
         let claim = generate_expired_claim();
         let token = generate_token(claim);
-        let token_manager = TokenManager::new(AppConfig::get().centrifugo.client_token.as_str());
+        let token_manager = TokenManager::new("test-secret-key!");
 
         assert!(!token_manager.verify_token(token.as_str()));
     }
@@ -502,7 +501,7 @@ pub mod tests {
     async fn verify_token_with_invalid_subject_should_fail() {
         let claim = generate_unset_subject_claim();
         let token = generate_token(claim);
-        let token_manager = TokenManager::new(AppConfig::get().centrifugo.client_token.as_str());
+        let token_manager = TokenManager::new("test-secret-key!");
 
         assert!(!token_manager.verify_token(token.as_str()));
 
@@ -517,7 +516,7 @@ pub mod tests {
         let claim = generate_invalid_subject_claim();
         let _ = generate_token(claim);
         let token = "someinvalidtestbytes".to_string();
-        let token_manager = TokenManager::new(AppConfig::get().centrifugo.client_token.as_str());
+        let token_manager = TokenManager::new("test-secret-key!");
 
         assert!(!token_manager.verify_token(token.as_str()));
     }

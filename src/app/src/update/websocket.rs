@@ -13,22 +13,22 @@ use crate::{
         },
         NetworkFormData, NetworkFormState,
     },
-    update_field, CentrifugoCmd, Effect,
+    update_field, Effect, WebSocketCmd,
 };
 
-/// Handle WebSocket and Centrifugo-related events
+/// Handle WebSocket and WebSocket-related events
 pub fn handle(event: WebSocketEvent, model: &mut Model) -> Command<Effect, Event> {
     match event {
         WebSocketEvent::SubscribeToChannels => {
-            // Issue Centrifugo effect (shell sends WebSocket data as events directly)
-            CentrifugoCmd::subscribe_all()
+            // Issue WebSocket effect (shell sends WebSocket data as events directly)
+            WebSocketCmd::subscribe_all()
                 .build()
                 .then_send(|_| Event::WebSocket(WebSocketEvent::Connected))
         }
 
         WebSocketEvent::UnsubscribeFromChannels => {
-            // Issue Centrifugo effect
-            CentrifugoCmd::unsubscribe_all()
+            // Issue WebSocket effect
+            WebSocketCmd::unsubscribe_all()
                 .build()
                 .then_send(|_| Event::WebSocket(WebSocketEvent::Disconnected))
         }

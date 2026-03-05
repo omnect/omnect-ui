@@ -19,7 +19,6 @@
 		"@mdi/font": "^7.4.47",
 		"@vueuse/core": "^14.2.1",
 		"axios": "^1.13.6",
-		"centrifuge": "^5.5.3",
 		"oidc-client-ts": "^3.4.1",
 		"vue": "^3.5.29",
 		"vue-imask": "^7.6.1",

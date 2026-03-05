@@ -40,10 +40,10 @@ use log::{debug, error, info, warn};
 use rustls::crypto::{CryptoProvider, ring::default_provider};
 use std::{io::Write, sync::Mutex};
 use tokio::{
-    process::{Child, Command},
     signal::unix::{SignalKind, signal},
     sync::broadcast,
 };
+use uuid::Uuid;
 
 const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
 const MULTIPART_CHUNK_SIZE_BYTES: usize = 512 * 1024;
@@ -202,18 +202,21 @@ async fn run_until_shutdown(
         info!("certificate still valid, skipping recreation");
     }
 
-    // 2. run centrifugo with valid cert
-    let mut centrifugo = run_centrifugo().context("failed to start centrifugo")?;
+    let (ws_tx, _) = broadcast::channel(100);
 
-    // 3. register publish endpoint with running centrifugo
+    // 2. start the server
+    let (server_handle, server_task) = run_server(service_client.clone(), ws_tx).await?;
+
+    // 3. register publish endpoint with ods (after server is listening)
     if !service_client.has_publish_endpoint {
+        // Wait a tiny bit for the sockets to be fully ready
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
         service_client
-            .register_publish_endpoint(AppConfig::get().centrifugo.publish_endpoint.clone())
+            .register_publish_endpoint(AppConfig::get().publish.endpoint.clone())
             .await
             .context("failed to register publish endpoint")?;
     }
-
-    let (server_handle, server_task) = run_server(service_client.clone()).await?;
 
     let service_client_clone = service_client.clone();
     let rollback_task = tokio::spawn(async move {
@@ -242,10 +245,6 @@ async fn run_until_shutdown(
                 Err(e) => error!("server task panicked: {e}"),
             }
             ShutdownReason::Shutdown
-        },
-        _ = centrifugo.wait() => {
-            error!("centrifugo stopped unexpectedly");
-            ShutdownReason::Shutdown
         }
     };
 
@@ -253,9 +252,6 @@ async fn run_until_shutdown(
     info!("{reason}");
 
     server_handle.stop(true).await;
-    if let Err(e) = centrifugo.kill().await {
-        error!("failed to kill centrifugo: {e:#}");
-    }
 
     if matches!(reason, ShutdownReason::Shutdown) {
         if let Err(e) = service_client.shutdown().await {
@@ -316,6 +312,7 @@ async fn initialize_wifi_client() -> (Option<WifiCommissioningServiceClient>, Wi
 
 async fn run_server(
     service_client: OmnectDeviceServiceClient,
+    ws_tx: broadcast::Sender<String>,
 ) -> Result<(
     ServerHandle,
     tokio::task::JoinHandle<Result<(), std::io::Error>>,
@@ -331,181 +328,172 @@ async fn run_server(
     let tls_config = load_tls_config().context("failed to load tls config")?;
     let config = &AppConfig::get();
     let ui_port = config.ui.port;
+    let publish_url =
+        url::Url::parse(&config.publish.endpoint.url).context("failed to parse publish url")?;
+    let publish_port = publish_url
+        .port()
+        .context("failed to get port from publish url")?;
     let session_key = SessionKeyService::load_or_generate(&config.paths.session_key_path);
-    let token_manager = TokenManager::new(&config.centrifugo.client_token);
+    // TokenManager generates the JWT tokens for the UI to use in API requests (via Bearer token or session).
+    let token_manager = TokenManager::new(&Uuid::new_v4().to_string());
+
+    let ws_tx_data = Data::new(ws_tx);
 
     let server = HttpServer::new(move || {
         App::new()
-            .wrap(
-                SessionMiddleware::builder(CookieSessionStore::default(), session_key.clone())
-                    .cookie_name(String::from("omnect-ui-session"))
-                    .cookie_secure(true)
-                    .session_lifecycle(BrowserSession::default())
-                    .cookie_same_site(SameSite::Strict)
-                    .cookie_content_security(CookieContentSecurity::Private)
-                    .cookie_http_only(true)
-                    .build(),
-            )
             .app_data(
                 MultipartFormConfig::default()
                     .total_limit(UPLOAD_LIMIT_BYTES)
                     .memory_limit(MULTIPART_CHUNK_SIZE_BYTES),
             )
             .app_data(web::PayloadConfig::new(UPLOAD_LIMIT_BYTES))
+            .app_data(web::JsonConfig::default().limit(UPLOAD_LIMIT_BYTES))
             .app_data(Data::new(token_manager.clone()))
+            .app_data(ws_tx_data.clone())
             .app_data(Data::new(api.clone()))
             .app_data(Data::new(static_files()))
             .app_data(wifi_data.clone())
             .app_data(wifi_availability_data.clone())
-            .route("/", web::get().to(UiApi::index))
-            .route("/config.js", web::get().to(UiApi::config))
+            .route("/ws", web::get().to(services::websocket::ws_route))
             .route(
-                "/factory-reset",
-                web::post()
-                    .to(UiApi::factory_reset)
-                    .wrap(middleware::AuthMw),
+                "/api/internal/publish",
+                web::post().to(services::websocket::internal_publish),
             )
             .route(
-                "/reboot",
-                web::post().to(UiApi::reboot).wrap(middleware::AuthMw),
-            )
-            .route(
-                "/update/file",
-                web::post()
-                    .to(UiApi::upload_firmware_file)
-                    .wrap(middleware::AuthMw),
-            )
-            .route(
-                "/update/load",
-                web::post().to(UiApi::load_update).wrap(middleware::AuthMw),
-            )
-            .route(
-                "/update/run",
-                web::post().to(UiApi::run_update).wrap(middleware::AuthMw),
-            )
-            .route(
-                "/token/login",
-                web::post().to(UiApi::token).wrap(middleware::AuthMw),
-            )
-            .route(
-                "/token/refresh",
-                web::get().to(UiApi::token).wrap(middleware::AuthMw),
-            )
-            .route(
-                "/token/validate",
-                web::post().to(UiApi::validate_portal_token),
-            )
-            .route(
-                "/require-set-password",
-                web::get().to(UiApi::require_set_password),
-            )
-            .route("/set-password", web::post().to(UiApi::set_password))
-            .route("/update-password", web::post().to(UiApi::update_password))
-            .route("/version", web::get().to(UiApi::version))
-            .route("/logout", web::post().to(UiApi::logout))
-            .route("/healthcheck", web::get().to(UiApi::healthcheck))
-            .route("/settings", web::get().to(UiApi::get_settings))
-            .route(
-                "/settings",
-                web::post()
-                    .to(UiApi::update_settings)
-                    .wrap(middleware::AuthMw),
-            )
-            .route("/network", web::post().to(UiApi::set_network_config))
-            .route("/ack-rollback", web::post().to(UiApi::ack_rollback))
-            .route(
-                "/ack-factory-reset-result",
-                web::post().to(UiApi::ack_factory_reset_result),
-            )
-            .route(
-                "/ack-update-validation",
-                web::post().to(UiApi::ack_update_validation),
-            )
-            // WiFi management routes
-            .route("/wifi/available", web::get().to(api::wifi_available))
-            .route(
-                "/wifi/scan",
-                web::post().to(api::wifi_scan).wrap(middleware::AuthMw),
-            )
-            .route(
-                "/wifi/scan/results",
-                web::get()
-                    .to(api::wifi_scan_results)
-                    .wrap(middleware::AuthMw),
-            )
-            .route(
-                "/wifi/connect",
-                web::post().to(api::wifi_connect).wrap(middleware::AuthMw),
-            )
-            .route(
-                "/wifi/disconnect",
-                web::post()
-                    .to(api::wifi_disconnect)
-                    .wrap(middleware::AuthMw),
-            )
-            .route(
-                "/wifi/status",
-                web::get().to(api::wifi_status).wrap(middleware::AuthMw),
-            )
-            .route(
-                "/wifi/networks",
-                web::get()
-                    .to(api::wifi_saved_networks)
-                    .wrap(middleware::AuthMw),
-            )
-            .route(
-                "/wifi/networks/forget",
-                web::post()
-                    .to(api::wifi_forget_network)
-                    .wrap(middleware::AuthMw),
+                "/api/publish",
+                web::post().to(services::websocket::internal_publish),
             )
             .service(ResourceFiles::new("/static", static_files()))
+            .service(
+                web::scope("")
+                    .wrap(
+                        SessionMiddleware::builder(
+                            CookieSessionStore::default(),
+                            session_key.clone(),
+                        )
+                        .cookie_name(String::from("omnect-ui-session"))
+                        .cookie_secure(true)
+                        .session_lifecycle(BrowserSession::default())
+                        .cookie_same_site(SameSite::Strict)
+                        .cookie_content_security(CookieContentSecurity::Private)
+                        .cookie_http_only(true)
+                        .build(),
+                    )
+                    .route("/", web::get().to(UiApi::index))
+                    .route("/config.js", web::get().to(UiApi::config))
+                    .route(
+                        "/factory-reset",
+                        web::post()
+                            .to(UiApi::factory_reset)
+                            .wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/reboot",
+                        web::post().to(UiApi::reboot).wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/update/file",
+                        web::post()
+                            .to(UiApi::upload_firmware_file)
+                            .wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/update/load",
+                        web::post().to(UiApi::load_update).wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/update/run",
+                        web::post().to(UiApi::run_update).wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/token/login",
+                        web::post().to(UiApi::token).wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/token/refresh",
+                        web::get().to(UiApi::token).wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/token/validate",
+                        web::post().to(UiApi::validate_portal_token),
+                    )
+                    .route(
+                        "/require-set-password",
+                        web::get().to(UiApi::require_set_password),
+                    )
+                    .route("/set-password", web::post().to(UiApi::set_password))
+                    .route("/update-password", web::post().to(UiApi::update_password))
+                    .route("/version", web::get().to(UiApi::version))
+                    .route("/logout", web::post().to(UiApi::logout))
+                    .route("/healthcheck", web::get().to(UiApi::healthcheck))
+                    .route("/republish", web::post().to(UiApi::republish))
+                    .route("/api/settings", web::get().to(UiApi::get_settings))
+                    .route(
+                        "/api/settings",
+                        web::post()
+                            .to(UiApi::update_settings)
+                            .wrap(middleware::AuthMw),
+                    )
+                    .route("/network", web::post().to(UiApi::set_network_config))
+                    .route("/ack-rollback", web::post().to(UiApi::ack_rollback))
+                    .route(
+                        "/ack-factory-reset-result",
+                        web::post().to(UiApi::ack_factory_reset_result),
+                    )
+                    .route(
+                        "/ack-update-validation",
+                        web::post().to(UiApi::ack_update_validation),
+                    )
+                    // WiFi management routes
+                    .route("/wifi/available", web::get().to(api::wifi_available))
+                    .route(
+                        "/wifi/scan",
+                        web::post().to(api::wifi_scan).wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/wifi/scan/results",
+                        web::get()
+                            .to(api::wifi_scan_results)
+                            .wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/wifi/connect",
+                        web::post().to(api::wifi_connect).wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/wifi/disconnect",
+                        web::post()
+                            .to(api::wifi_disconnect)
+                            .wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/wifi/status",
+                        web::get().to(api::wifi_status).wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/wifi/networks",
+                        web::get()
+                            .to(api::wifi_saved_networks)
+                            .wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/wifi/networks/forget",
+                        web::post()
+                            .to(api::wifi_forget_network)
+                            .wrap(middleware::AuthMw),
+                    ),
+            )
             .default_service(web::route().to(UiApi::index))
     })
     .workers(optimal_worker_count())
+    .bind(format!("[::]:{publish_port}"))
+    .context("failed to bind HTTP server for internal publish")?
     .bind_rustls_0_23(format!("0.0.0.0:{ui_port}"), tls_config)
-    .context("failed to bind server")?
+    .context("failed to bind HTTPS server")?
     .disable_signals()
     .run();
 
     Ok((server.handle(), tokio::spawn(server)))
-}
-
-fn run_centrifugo() -> Result<Child> {
-    let config = &AppConfig::get().centrifugo;
-    let certificate = &AppConfig::get().certificate;
-
-    let centrifugo = Command::new(&config.binary_path)
-        .arg("-c")
-        .arg(&config.config_path)
-        .envs(vec![
-            (
-                "CENTRIFUGO_HTTP_SERVER_TLS_CERT_PEM",
-                certificate.cert_path.to_string_lossy().to_string(),
-            ),
-            (
-                "CENTRIFUGO_HTTP_SERVER_TLS_KEY_PEM",
-                certificate.key_path.to_string_lossy().to_string(),
-            ),
-            ("CENTRIFUGO_HTTP_SERVER_PORT", config.port.clone()),
-            (
-                "CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY",
-                config.client_token.clone(),
-            ),
-            ("CENTRIFUGO_HTTP_API_KEY", config.api_key.clone()),
-            ("CENTRIFUGO_LOG_LEVEL", config.log_level.clone()),
-        ])
-        .spawn()
-        .context("failed to spawn centrifugo process")?;
-
-    info!(
-        "centrifugo pid: {}",
-        centrifugo
-            .id()
-            .context("failed to get centrifugo process id")?
-    );
-
-    Ok(centrifugo)
 }
 
 fn load_tls_config() -> Result<rustls::ServerConfig> {
