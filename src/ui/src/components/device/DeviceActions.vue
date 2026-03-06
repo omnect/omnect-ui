@@ -26,8 +26,8 @@ const handleFactoryReset = () => execute(async () => {
 </script>
 
 <template>
-	<div class="flex flex-col gap-y-4 items-start">
-		<div class="text-h5 text-secondary border-b w-100 pb-2 font-weight-bold">Commands</div>
+	<div class="flex flex-col gap-y-4 items-start w-full">
+		<div class="text-h4 text-secondary border-b pb-2 mb-4 w-full">Commands</div>
 		<v-btn :prepend-icon="'mdi-restart'" color="primary" variant="flat" class="justify-start" density="compact" width="180">
 			Reboot
 			<v-dialog v-model="dialogs.reboot" activator="parent" max-width="340" :no-click-animation="true" persistent

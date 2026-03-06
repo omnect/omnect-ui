@@ -32,10 +32,7 @@ const toggleEnforceConnect = (v: boolean | null) => {
 <template>
 	<div class="flex flex-col gap-y-6">
 		<!-- Header -->
-		<div class="flex border-b pb-2 items-center justify-between">
-			<div class="text-h5 text-secondary font-weight-bold">Update Details</div>
-			<!-- Optional reload button if needed, but removing main button as requested -->
-		</div>
+		<div class="text-h4 text-secondary border-b pb-2 mb-4">Update Details</div>
 
 		<!-- Info Grid -->
 		<div v-if="updateManifest" class="grid grid-cols-1 md:grid-cols-3 gap-6">

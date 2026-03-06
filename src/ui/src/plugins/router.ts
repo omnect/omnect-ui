@@ -12,10 +12,10 @@ import SetPassword from "../pages/SetPassword.vue"
 import UpdatePassword from "../pages/UpdatePassword.vue"
 
 const routes = [
-	{ path: "/", component: DeviceOverview, meta: { text: "Device", requiresAuth: true, showMenu: true } },
-	{ path: "/network", component: Network, meta: { text: "Network", requiresAuth: true, showMenu: true } },
-	{ path: "/update", component: DeviceUpdate, meta: { text: "Update", requiresAuth: true, showMenu: true } },
-	{ path: "/settings", component: Settings, meta: { text: "Settings", requiresAuth: true, showMenu: true } },
+	{ path: "/", component: DeviceOverview, meta: { text: "Device", icon: "mdi-monitor", requiresAuth: true, showMenu: true } },
+	{ path: "/network", component: Network, meta: { text: "Network", icon: "mdi-lan", requiresAuth: true, showMenu: true } },
+	{ path: "/update", component: DeviceUpdate, meta: { text: "Update", icon: "mdi-update", requiresAuth: true, showMenu: true } },
+	{ path: "/settings", component: Settings, meta: { text: "Settings", icon: "mdi-cog", requiresAuth: true, showMenu: true } },
 	{ path: "/login", component: Login, meta: { showMenu: false, guestOnly: true, inlineErrors: true } },
 	{ path: "/set-password", component: SetPassword, meta: { requiresPortalAuth: true, showMenu: false, inlineErrors: true } },
 	{ path: "/update-password", component: UpdatePassword, meta: { requiresAuth: true, showMenu: true, inlineErrors: true } },
