@@ -2,7 +2,7 @@ import { type Ref, ref } from "vue"
 import { webSocketChannelToString, type WebSocketChannel } from "./core/types"
 import { useEventHook } from "./useEventHook"
 
-// Global state for the token ref, passed from useCore
+// Initialization guard — actual WebSocket auth uses session cookies
 let globalAuthTokenRef: Ref<string | null> | undefined
 
 const ws: Ref<WebSocket | undefined> = ref(undefined)
@@ -69,6 +69,7 @@ export function useWebSocket() {
 			ws.value.close()
 			ws.value = undefined
 			isConnected.value = false
+			subscriptions.clear()
 		}
 	}
 
@@ -77,14 +78,6 @@ export function useWebSocket() {
 		const subs = subscriptions.get(channelName) || []
 		subs.push(callback)
 		subscriptions.set(channelName, subs)
-	}
-
-	const history = async <T>(callback: (data: T) => void, channel: WebSocketChannel | string) => {
-		const channelName = typeof channel === 'string' ? channel : webSocketChannelToString(channel)
-		// History is not natively supported without Centrifugo.
-		// For our use cases (mostly status updates), the first fresh update via
-		// the active websocket connection will sync the state soon enough.
-		console.debug(`[WebSocket] History requested for ${channelName}, but not implemented in native WS.`)
 	}
 
 	const unsubscribe = (channel: WebSocketChannel | string) => {
@@ -96,5 +89,5 @@ export function useWebSocket() {
 		subscriptions.clear()
 	}
 
-	return { subscribe, unsubscribe, unsubscribeAll, initializeWebSocket, history, disconnect, onConnected: connectedEvent.on, isConnected, setAuthToken }
+	return { subscribe, unsubscribe, unsubscribeAll, initializeWebSocket, disconnect, onConnected: connectedEvent.on, isConnected, setAuthToken }
 }

@@ -153,17 +153,6 @@ export async function executeWebSocketOperation(requestId: number, operation: an
 						const jsonData = JSON.stringify(data)
 						parseAndSendChannelEvent(channelName, jsonData)
 					}, channelName)
-
-					await websocketInstance.history((data: unknown) => {
-						try {
-							if (data) {
-								const jsonData = JSON.stringify(data)
-								parseAndSendChannelEvent(channelName, jsonData)
-							}
-						} catch (error) {
-							console.error(`[WebSocket] Error processing history for ${channelName}:`, error)
-						}
-					}, channelName)
 				}
 				await sendResponse(new WebSocketOutputVariantConnected())
 			} catch (error) {

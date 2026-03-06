@@ -204,8 +204,9 @@ async fn run_until_shutdown(
 
     let (ws_tx, _) = broadcast::channel(100);
 
-    // 2. start the server
-    let (server_handle, server_task) = run_server(service_client.clone(), ws_tx).await?;
+    // 2. start both servers (HTTPS for UI, HTTP for internal ODS publish)
+    let (ui_handle, internal_handle, ui_task, internal_task) =
+        run_server(service_client.clone(), ws_tx).await?;
 
     // 3. register publish endpoint with ods (after server is listening)
     if !service_client.has_publish_endpoint {
@@ -238,11 +239,19 @@ async fn run_until_shutdown(
             debug!("server restart requested");
             ShutdownReason::Restart
         },
-        result = server_task => {
+        result = ui_task => {
             match result {
-                Ok(Ok(())) => debug!("server stopped normally"),
-                Ok(Err(e)) => error!("server stopped with error: {e}"),
-                Err(e) => error!("server task panicked: {e}"),
+                Ok(Ok(())) => debug!("UI server stopped normally"),
+                Ok(Err(e)) => error!("UI server stopped with error: {e}"),
+                Err(e) => error!("UI server task panicked: {e}"),
+            }
+            ShutdownReason::Shutdown
+        },
+        result = internal_task => {
+            match result {
+                Ok(Ok(())) => debug!("internal server stopped normally"),
+                Ok(Err(e)) => error!("internal server stopped with error: {e}"),
+                Err(e) => error!("internal server task panicked: {e}"),
             }
             ShutdownReason::Shutdown
         }
@@ -251,7 +260,8 @@ async fn run_until_shutdown(
     rollback_task.abort();
     info!("{reason}");
 
-    server_handle.stop(true).await;
+    ui_handle.stop(true).await;
+    internal_handle.stop(true).await;
 
     if matches!(reason, ShutdownReason::Shutdown) {
         if let Err(e) = service_client.shutdown().await {
@@ -315,6 +325,8 @@ async fn run_server(
     ws_tx: broadcast::Sender<String>,
 ) -> Result<(
     ServerHandle,
+    ServerHandle,
+    tokio::task::JoinHandle<Result<(), std::io::Error>>,
     tokio::task::JoinHandle<Result<(), std::io::Error>>,
 )> {
     let api = UiApi::new(service_client.clone(), Default::default())
@@ -339,7 +351,26 @@ async fn run_server(
 
     let ws_tx_data = Data::new(ws_tx);
 
-    let server = HttpServer::new(move || {
+    // Internal HTTP server — serves only the API-key-protected ODS publish endpoint.
+    // Isolated from the HTTPS server to prevent exposing UI routes on unencrypted HTTP.
+    let internal_ws_tx = ws_tx_data.clone();
+    let internal_server = HttpServer::new(move || {
+        App::new().app_data(internal_ws_tx.clone()).route(
+            "/api/internal/publish",
+            web::post().to(services::websocket::internal_publish),
+        )
+    })
+    .workers(1)
+    .bind(format!("[::]:{publish_port}"))
+    .context("failed to bind internal HTTP server")?
+    .disable_signals()
+    .run();
+
+    let internal_handle = internal_server.handle();
+    let internal_task = tokio::spawn(internal_server);
+
+    // Main HTTPS server — serves UI, API, and WebSocket routes
+    let ui_server = HttpServer::new(move || {
         App::new()
             .app_data(
                 MultipartFormConfig::default()
@@ -354,15 +385,6 @@ async fn run_server(
             .app_data(Data::new(static_files()))
             .app_data(wifi_data.clone())
             .app_data(wifi_availability_data.clone())
-            .route("/ws", web::get().to(services::websocket::ws_route))
-            .route(
-                "/api/internal/publish",
-                web::post().to(services::websocket::internal_publish),
-            )
-            .route(
-                "/api/publish",
-                web::post().to(services::websocket::internal_publish),
-            )
             .service(ResourceFiles::new("/static", static_files()))
             .service(
                 web::scope("")
@@ -378,6 +400,12 @@ async fn run_server(
                         .cookie_content_security(CookieContentSecurity::Private)
                         .cookie_http_only(true)
                         .build(),
+                    )
+                    .route(
+                        "/ws",
+                        web::get()
+                            .to(services::websocket::ws_route)
+                            .wrap(middleware::AuthMw),
                     )
                     .route("/", web::get().to(UiApi::index))
                     .route("/config.js", web::get().to(UiApi::config))
@@ -426,7 +454,10 @@ async fn run_server(
                     .route("/version", web::get().to(UiApi::version))
                     .route("/logout", web::post().to(UiApi::logout))
                     .route("/healthcheck", web::get().to(UiApi::healthcheck))
-                    .route("/republish", web::post().to(UiApi::republish))
+                    .route(
+                        "/republish",
+                        web::post().to(UiApi::republish).wrap(middleware::AuthMw),
+                    )
                     .route("/api/settings", web::get().to(UiApi::get_settings))
                     .route(
                         "/api/settings",
@@ -434,15 +465,27 @@ async fn run_server(
                             .to(UiApi::update_settings)
                             .wrap(middleware::AuthMw),
                     )
-                    .route("/network", web::post().to(UiApi::set_network_config))
-                    .route("/ack-rollback", web::post().to(UiApi::ack_rollback))
+                    .route(
+                        "/network",
+                        web::post()
+                            .to(UiApi::set_network_config)
+                            .wrap(middleware::AuthMw),
+                    )
+                    .route(
+                        "/ack-rollback",
+                        web::post().to(UiApi::ack_rollback).wrap(middleware::AuthMw),
+                    )
                     .route(
                         "/ack-factory-reset-result",
-                        web::post().to(UiApi::ack_factory_reset_result),
+                        web::post()
+                            .to(UiApi::ack_factory_reset_result)
+                            .wrap(middleware::AuthMw),
                     )
                     .route(
                         "/ack-update-validation",
-                        web::post().to(UiApi::ack_update_validation),
+                        web::post()
+                            .to(UiApi::ack_update_validation)
+                            .wrap(middleware::AuthMw),
                     )
                     // WiFi management routes
                     .route("/wifi/available", web::get().to(api::wifi_available))
@@ -486,14 +529,15 @@ async fn run_server(
             .default_service(web::route().to(UiApi::index))
     })
     .workers(optimal_worker_count())
-    .bind(format!("[::]:{publish_port}"))
-    .context("failed to bind HTTP server for internal publish")?
     .bind_rustls_0_23(format!("0.0.0.0:{ui_port}"), tls_config)
     .context("failed to bind HTTPS server")?
     .disable_signals()
     .run();
 
-    Ok((server.handle(), tokio::spawn(server)))
+    let ui_handle = ui_server.handle();
+    let ui_task = tokio::spawn(ui_server);
+
+    Ok((ui_handle, internal_handle, ui_task, internal_task))
 }
 
 fn load_tls_config() -> Result<rustls::ServerConfig> {
@@ -528,4 +572,165 @@ fn load_tls_config() -> Result<rustls::ServerConfig> {
     };
 
     Ok(config)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        middleware::{self, AuthMw},
+        services::auth::TokenManager,
+    };
+    use actix_http::StatusCode;
+    use actix_session::{
+        SessionMiddleware,
+        config::{BrowserSession, CookieContentSecurity},
+        storage::CookieSessionStore,
+    };
+    use actix_web::{App, HttpResponse, cookie::SameSite, dev::ServiceResponse, test, web};
+
+    const SESSION_SECRET: [u8; 64] = [
+        0xb2, 0x64, 0x83, 0x0, 0xf5, 0xcb, 0xf6, 0x1d, 0x5c, 0x83, 0xc0, 0x90, 0x6b, 0xb2, 0xe4,
+        0x26, 0x14, 0x9, 0x2b, 0xa1, 0xc4, 0xc5, 0x37, 0xe7, 0xc9, 0x20, 0x8e, 0xbc, 0xee, 0x2,
+        0x3c, 0xa2, 0x32, 0x57, 0x96, 0xc9, 0x99, 0x62, 0x90, 0x4f, 0x24, 0xe5, 0x25, 0x6b, 0xe1,
+        0x2b, 0x8a, 0x3, 0xa3, 0xc7, 0x1e, 0xb2, 0xb2, 0xbe, 0x29, 0x51, 0xc1, 0xe2, 0x1e, 0xb7,
+        0x8, 0x15, 0xc9, 0xe0,
+    ];
+
+    const TOKEN_SECRET: &str = "test-secret-key!";
+
+    async fn ok_handler() -> HttpResponse {
+        HttpResponse::Ok().finish()
+    }
+
+    /// Build a test app mirroring production route + middleware layout.
+    /// Uses stub handlers — we're testing auth enforcement, not handler logic.
+    async fn create_route_auth_service() -> impl actix_service::Service<
+        actix_http::Request,
+        Response = ServiceResponse,
+        Error = actix_web::Error,
+    > {
+        let key = actix_web::cookie::Key::from(&SESSION_SECRET);
+        let session_mw = SessionMiddleware::builder(CookieSessionStore::default(), key)
+            .cookie_name(String::from("omnect-ui-session"))
+            .cookie_secure(true)
+            .session_lifecycle(BrowserSession::default())
+            .cookie_same_site(SameSite::Strict)
+            .cookie_content_security(CookieContentSecurity::Private)
+            .cookie_http_only(true)
+            .build();
+
+        let token_manager = TokenManager::new(TOKEN_SECRET);
+
+        test::init_service(
+            App::new().app_data(web::Data::new(token_manager)).service(
+                web::scope("")
+                    .wrap(session_mw)
+                    // Protected routes
+                    .route("/ws", web::get().to(ok_handler).wrap(AuthMw))
+                    .route("/network", web::post().to(ok_handler).wrap(AuthMw))
+                    .route("/republish", web::post().to(ok_handler).wrap(AuthMw))
+                    .route("/ack-rollback", web::post().to(ok_handler).wrap(AuthMw))
+                    .route(
+                        "/ack-factory-reset-result",
+                        web::post().to(ok_handler).wrap(AuthMw),
+                    )
+                    .route(
+                        "/ack-update-validation",
+                        web::post().to(ok_handler).wrap(AuthMw),
+                    )
+                    .route("/api/settings", web::get().to(ok_handler))
+                    .route("/api/settings", web::post().to(ok_handler).wrap(AuthMw))
+                    .route("/factory-reset", web::post().to(ok_handler).wrap(AuthMw))
+                    .route("/reboot", web::post().to(ok_handler).wrap(AuthMw))
+                    // Public routes
+                    .route("/version", web::get().to(ok_handler))
+                    .route("/healthcheck", web::get().to(ok_handler))
+                    .route("/require-set-password", web::get().to(ok_handler)),
+            ),
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn protected_routes_require_auth() {
+        let app = create_route_auth_service().await;
+
+        let protected = vec![
+            ("GET", "/ws"),
+            ("POST", "/network"),
+            ("POST", "/republish"),
+            ("POST", "/ack-rollback"),
+            ("POST", "/ack-factory-reset-result"),
+            ("POST", "/ack-update-validation"),
+            ("POST", "/api/settings"),
+            ("POST", "/factory-reset"),
+            ("POST", "/reboot"),
+        ];
+
+        for (method, path) in protected {
+            let req = match method {
+                "GET" => test::TestRequest::get().uri(path).to_request(),
+                "POST" => test::TestRequest::post().uri(path).to_request(),
+                _ => unreachable!(),
+            };
+            let resp = test::call_service(&app, req).await;
+            assert_eq!(
+                resp.status(),
+                StatusCode::UNAUTHORIZED,
+                "{method} {path} should require authentication"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn public_routes_dont_require_auth() {
+        let app = create_route_auth_service().await;
+
+        let public = vec![
+            ("GET", "/version"),
+            ("GET", "/healthcheck"),
+            ("GET", "/require-set-password"),
+            ("GET", "/api/settings"),
+        ];
+
+        for (method, path) in public {
+            let req = match method {
+                "GET" => test::TestRequest::get().uri(path).to_request(),
+                "POST" => test::TestRequest::post().uri(path).to_request(),
+                _ => unreachable!(),
+            };
+            let resp = test::call_service(&app, req).await;
+            assert!(
+                resp.status().is_success(),
+                "{method} {path} should be publicly accessible, got {}",
+                resp.status()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn protected_routes_succeed_with_valid_bearer() {
+        let app = create_route_auth_service().await;
+        let token_manager = TokenManager::new(TOKEN_SECRET);
+        let token = token_manager.create_token().unwrap();
+
+        let protected = vec![("GET", "/ws"), ("POST", "/network"), ("POST", "/republish")];
+
+        for (method, path) in protected {
+            let req_builder = match method {
+                "GET" => test::TestRequest::get().uri(path),
+                "POST" => test::TestRequest::post().uri(path),
+                _ => unreachable!(),
+            };
+            let req = req_builder
+                .insert_header(("Authorization", format!("Bearer {token}")))
+                .to_request();
+            let resp = test::call_service(&app, req).await;
+            assert!(
+                resp.status().is_success(),
+                "{method} {path} should succeed with valid bearer, got {}",
+                resp.status()
+            );
+        }
+    }
 }
