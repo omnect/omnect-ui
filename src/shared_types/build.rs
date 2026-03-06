@@ -1,10 +1,11 @@
 use anyhow::Result;
 use crux_core::typegen::TypeGen;
 use omnect_ui_core::{
-    events::{AuthEvent, DeviceEvent, UiEvent, WebSocketEvent},
+    events::{AuthEvent, DeviceEvent, UiEvent, WebSocketEvent, WifiEvent},
     types::{
         DeviceOperationState, FactoryResetStatus, NetworkChangeState, NetworkConfigRequest,
-        NetworkFormData, NetworkFormState, UploadState,
+        NetworkFormData, NetworkFormState, TimeoutSettings, UploadState, WifiConnectionState,
+        WifiConnectionStatus, WifiNetwork, WifiSavedNetwork, WifiScanState, WifiState,
     },
     App,
 };
@@ -22,6 +23,7 @@ fn main() -> Result<()> {
     gen.register_type::<DeviceEvent>()?;
     gen.register_type::<WebSocketEvent>()?;
     gen.register_type::<UiEvent>()?;
+    gen.register_type::<WifiEvent>()?;
 
     // Explicitly register other enums/structs to ensure all variants are traced
     gen.register_type::<FactoryResetStatus>()?;
@@ -31,6 +33,16 @@ fn main() -> Result<()> {
     gen.register_type::<UploadState>()?;
     gen.register_type::<NetworkConfigRequest>()?;
     gen.register_type::<NetworkFormData>()?;
+    gen.register_type::<TimeoutSettings>()?;
+    gen.register_type::<omnect_ui_core::types::WebSocketChannel>()?;
+
+    // Register WiFi types
+    gen.register_type::<WifiState>()?;
+    gen.register_type::<WifiScanState>()?;
+    gen.register_type::<WifiConnectionState>()?;
+    gen.register_type::<WifiConnectionStatus>()?;
+    gen.register_type::<WifiNetwork>()?;
+    gen.register_type::<WifiSavedNetwork>()?;
 
     // Register ODS types
     gen.register_type::<omnect_ui_core::types::OdsOnlineStatus>()?;

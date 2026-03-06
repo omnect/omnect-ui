@@ -6,7 +6,7 @@
  * @see ./core/state.ts - Singleton reactive state
  * @see ./core/effects.ts - Effect processing
  * @see ./core/http.ts - HTTP capability
- * @see ./core/centrifugo.ts - WebSocket capability
+ * @see ./core/websocket.ts - WebSocket capability
  * @see ./core/timers.ts - Timer management
  * @see ./core/sync.ts - ViewModel synchronization
  */
@@ -23,6 +23,12 @@ export type {
 	NetworkFormDataType,
 	OverlaySpinnerStateType,
 	FactoryResetStatusString,
+	WifiStateType,
+	WifiNetworkType,
+	WifiSavedNetworkType,
+	WifiConnectionStatusType,
+	WifiScanStateType,
+	WifiConnectionStateType,
 	SystemInfo,
 	NetworkStatus,
 	OnlineStatus,

@@ -37,8 +37,21 @@ export default defineConfig({
         https: {
             key: fs.readFileSync(path.resolve(__dirname, '../../temp/certs/server.key.pem')),
             cert: fs.readFileSync(path.resolve(__dirname, '../../temp/certs/server.cert.pem')),
+        },
+        proxy: {
+            '/ws': {
+                target: 'wss://localhost:8000',
+                ws: true,
+                secure: false
+            }
         }
     } : {
-        port: 5173
+        port: 5173,
+        proxy: {
+            '/ws': {
+                target: 'ws://localhost:8000',
+                ws: true
+            }
+        }
     }
 })

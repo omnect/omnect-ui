@@ -48,7 +48,7 @@ impl FirmwareService {
         const FLUSH_INTERVAL_BYTES: usize = 5 * 1024 * 1024;
         const FLUSH_INTERVAL_SECS: u64 = 10;
         const CHUNK_TIMEOUT_SECS: u64 = 30;
-        const TOTAL_TIMEOUT_SECS: u64 = 600;
+        const TOTAL_TIMEOUT_SECS: u64 = 900;
 
         info!("firmware upload started");
         let start = Instant::now();

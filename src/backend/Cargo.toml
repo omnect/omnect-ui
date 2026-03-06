@@ -19,12 +19,13 @@ actix-multipart = { version = "0.7", default-features = false, features = [
 ] }
 actix-server = { version = "2.6", default-features = false }
 actix-session = { version = "0.11", features = ["cookie-session"] }
-actix-web-static-files = { version = "4.1", features = ["static-files-03"] }
 actix-web = { version = "4.11", default-features = false, features = [
   "macros",
   "rustls-0_23",
 ] }
 actix-web-httpauth = { version = "0.8", default-features = false }
+actix-web-static-files = { version = "4.1", features = ["static-files-03"] }
+actix-ws = { version = "0.4", default-features = false }
 anyhow = { version = "1.0", default-features = false }
 argon2 = { version = "0.5", default-features = false, features = [
   "password-hash",
@@ -73,6 +74,7 @@ tokio = { version = "1.45", default-features = false, features = [
   "process",
 ] }
 trait-variant = { version = "0.1", default-features = false }
+url = { version = "2.5", default-features = false }
 uuid = { version = "1.17", default-features = false, features = ["v4"] }
 
 [features]

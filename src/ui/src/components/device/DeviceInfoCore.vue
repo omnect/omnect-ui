@@ -4,13 +4,14 @@
  *
  * This component uses the Crux architecture where:
  * - All state lives in the Core
- * - Shell handles only effects (HTTP, Centrifugo)
+ * - Shell handles only effects (HTTP, WebSocket)
  * - Components read from the reactive viewModel
  * - No local refs for data - all computed from Core state
  */
 import { computed } from 'vue'
 import { useCore } from '../../composables/useCore'
 import { useCoreInitialization } from '../../composables/useCoreInitialization'
+import KeyValuePair from '../ui-components/KeyValuePair.vue'
 
 const { viewModel } = useCore()
 
@@ -45,12 +46,12 @@ const displayItems = computed(() =>
 </script>
 
 <template>
-  <div class="flex flex-col gap-y-8">
-    <div class="text-h4 text-secondary border-b">Common Info</div>
-    <dl class="grid grid-cols-[1fr_3fr] gap-x-64 gap-y-8">
-      <div v-for="item of displayItems" :key="item.title">
-        <dt class="font-bold text-gray-900">{{ item.title }}</dt>
-        <dd class="text-gray-700 sm:col-span-2">{{ item.value }}</dd>
+  <div class="flex flex-col gap-y-4 w-full">
+    <div class="text-h4 text-secondary border-b pb-2 mb-4">Common Info</div>
+    <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 w-full">
+      <div v-for="item of displayItems" :key="item.title" class="grid grid-cols-[max-content_1fr] items-baseline border-b pb-1 gap-x-4">
+        <dt class="text-subtitle-2 text-medium-emphasis">{{ item.title }}</dt>
+        <dd class="text-body-1 font-weight-medium text-gray-900 text-right">{{ item.value }}</dd>
       </div>
     </dl>
   </div>

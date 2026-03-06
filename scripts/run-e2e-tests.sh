@@ -11,7 +11,7 @@ cd "$REPO_ROOT"
 cleanup() {
     echo "🧹 Cleaning up processes..."
     [ -n "$FRONTEND_PID" ] && kill $FRONTEND_PID 2>/dev/null || true
-    [ -n "$CENTRIFUGO_PID" ] && kill $CENTRIFUGO_PID 2>/dev/null || true
+    [ -n "$MOCK_WS_PID" ] && kill $MOCK_WS_PID 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -30,50 +30,79 @@ if ! command -v bun &> /dev/null; then
     exit 1
 fi
 
-# 2. Ensure Centrifugo is available
-./scripts/setup-centrifugo.sh
+# 2. Start mock WebSocket server
+echo "🚀 Starting Mock WebSocket server..."
+cat << 'EOF' > /tmp/mock-ws-server.mjs
+import fs from 'fs';
 
-# 3. Start Centrifugo directly (Backend is mocked, but we need real WS)
-echo "🚀 Starting Centrifugo..."
-# Using the config from backend/config/centrifugo_config.json
-CENTRIFUGO_CONFIG="src/backend/config/centrifugo_config.json"
+const server = Bun.serve({
+  port: 8000,
+  tls: {
+    key: Bun.file('temp/certs/server.key.pem'),
+    cert: Bun.file('temp/certs/server.cert.pem'),
+  },
+  async fetch(req, server) {
+    const url = new URL(req.url);
+    if (url.pathname === '/health') {
+      return new Response('OK');
+    }
+    if (req.method === 'POST' && url.pathname === '/api/internal/publish') {
+      const body = await req.text();
+      try {
+        const parsed = JSON.parse(body);
+        if (parsed.channel) {
+          global.lastMessages = global.lastMessages || new Map();
+          global.lastMessages.set(parsed.channel, body);
+        }
+      } catch (e) {}
+      server.publish('broadcast', body);
+      return new Response('OK');
+    }
+    if (url.pathname === '/ws') {
+      const upgraded = server.upgrade(req);
+      if (upgraded) return;
+      return new Response('Upgrade failed', { status: 400 });
+    }
+    return new Response('Not found', { status: 404 });
+  },
+  websocket: {
+    open(ws) {
+      ws.subscribe('broadcast');
+      if (global.lastMessages) {
+        for (const msg of global.lastMessages.values()) {
+          ws.send(msg);
+        }
+      }
+    },
+    message(ws, message) {},
+    close(ws) {},
+  }
+});
+console.log('Mock WS server running on 8000');
+EOF
 
 # Generate self-signed certs for testing if missing
 mkdir -p temp/certs
 if [ ! -f "temp/certs/server.cert.pem" ] || [ ! -r "temp/certs/server.key.pem" ]; then
     echo "🔐 Generating self-signed certificates..."
-    # Check if old certs exist with wrong permissions
-    if [ -f "temp/certs/server.cert.pem" ] && [ ! -w "temp/certs/server.cert.pem" ]; then
-        echo "❌ Error: Old certificates exist with wrong permissions (likely created by root)"
-        echo "   Please run: sudo rm -rf temp/certs"
-        exit 1
-    fi
     rm -f temp/certs/server.cert.pem temp/certs/server.key.pem
     openssl req -newkey rsa:2048 -nodes -keyout temp/certs/server.key.pem -x509 -days 365 -out temp/certs/server.cert.pem -subj "/CN=localhost" 2>/dev/null
     chmod 644 temp/certs/server.key.pem temp/certs/server.cert.pem
 fi
 
-# Env vars for Centrifugo
-export CENTRIFUGO_HTTP_SERVER_TLS_CERT_PEM="temp/certs/server.cert.pem"
-export CENTRIFUGO_HTTP_SERVER_TLS_KEY_PEM="temp/certs/server.key.pem"
-export CENTRIFUGO_HTTP_SERVER_PORT="8000"
-export CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY="secret"
-export CENTRIFUGO_HTTP_API_KEY="api_key"
-export CENTRIFUGO_LOG_LEVEL="info"
+bun run /tmp/mock-ws-server.mjs > /tmp/mock-ws.log 2>&1 &
+MOCK_WS_PID=$!
 
-./tools/centrifugo -c "$CENTRIFUGO_CONFIG" > /tmp/centrifugo.log 2>&1 &
-CENTRIFUGO_PID=$!
-
-echo "⏳ Waiting for Centrifugo..."
+echo "⏳ Waiting for Mock WS Server..."
 for i in {1..30}; do
     if curl -k -s https://localhost:8000/health > /dev/null; then
-        echo "✅ Centrifugo is ready!"
+        echo "✅ Mock WS Server is ready!"
         break
     fi
     if [ $i -eq 30 ]; then
-        echo "❌ Centrifugo failed to start."
-        cat /tmp/centrifugo.log
-        kill $CENTRIFUGO_PID || true
+        echo "❌ Mock WS Server failed to start."
+        cat /tmp/mock-ws.log
+        kill $MOCK_WS_PID || true
         exit 1
     fi
     sleep 1
@@ -94,7 +123,7 @@ if [ -d "dist" ]; then
     if [ ! -w "dist" ] || find dist -type d ! -writable 2>/dev/null | grep -q .; then
         echo "❌ Error: dist directory has wrong permissions (likely created by root)"
         echo "   Please run: sudo rm -rf src/ui/dist"
-        kill $CENTRIFUGO_PID || true
+        kill $MOCK_WS_PID || true
         exit 1
     fi
 fi
@@ -114,7 +143,7 @@ if bun run build-preview > /tmp/vite-build.log 2>&1; then
 else
     echo "❌ Frontend build failed!"
     cat /tmp/vite-build.log
-    kill $CENTRIFUGO_PID || true
+    kill $MOCK_WS_PID || true
     exit 1
 fi
 
@@ -135,7 +164,7 @@ for i in {1..30}; do
         echo "❌ Preview server failed to start."
         cat /tmp/vite.log
         kill $FRONTEND_PID || true
-        kill $CENTRIFUGO_PID || true
+        kill $MOCK_WS_PID || true
         exit 1
     fi
     sleep 1
@@ -149,7 +178,7 @@ if [ -d "test-results" ] && [ ! -w "test-results" ]; then
     echo "❌ Error: Playwright test-results directory has wrong permissions (likely created by root)"
     echo "   Please run: sudo rm -rf src/ui/test-results src/ui/playwright-report"
     kill $FRONTEND_PID || true
-    kill $CENTRIFUGO_PID || true
+    kill $MOCK_WS_PID || true
     exit 1
 fi
 

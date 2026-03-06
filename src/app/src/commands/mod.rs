@@ -1,1 +1,1 @@
-pub mod centrifugo;
+pub mod websocket;

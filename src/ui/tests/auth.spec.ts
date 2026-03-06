@@ -8,8 +8,10 @@ import {
   mockSetPasswordFailure,
   mockUpdatePasswordSuccess,
   mockUpdatePasswordFailure,
-  mockPortalAuth
+  mockPortalAuth,
+  mockTokenRefresh
 } from './fixtures/mock-api';
+import { mockHealthcheck, setupAndLogin } from './fixtures/test-setup';
 
 test.describe('Authentication', () => {
   test.beforeEach(async ({ page }) => {
@@ -110,6 +112,9 @@ test.describe('Authentication', () => {
     // This means CheckRequiresPasswordSet is never called, so
     // requires_password_set is never set to true in the Core model.
     await mockPortalAuth(page);
+    await page.route('**/require-set-password', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: 'true' });
+    });
     await mockSetPasswordSuccess(page);
 
     // Navigate directly to /set-password (bypasses Login.vue entirely)
@@ -131,6 +136,9 @@ test.describe('Authentication', () => {
     // the backend session was wiped (e.g. after factory reset). The router guard
     // now detects this before showing the form and redirects to Keycloak.
     await mockPortalAuth(page);
+    await page.route('**/require-set-password', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: 'true' });
+    });
     // Override the 200 mock from mockPortalAuth to simulate a stale session.
     await page.route('**/token/validate', async (route) => {
       await route.fulfill({ status: 401 });
@@ -144,6 +152,56 @@ test.describe('Authentication', () => {
 
     // Wait for the redirect to be triggered
     await redirectPromise;
+  });
+
+  test('re-triggers OIDC login when session expires during submission', async ({ page }) => {
+    // Simulate: OIDC user exists in localStorage (router guard passes)
+    // but backend rejects because portal_validated session flag is missing.
+    // The frontend should clear the stale OIDC user and redirect to Keycloak.
+    await mockPortalAuth(page);
+    await page.route('**/set-password', async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 401,
+          contentType: 'text/plain',
+          body: 'portal authentication required',
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    // Mock OIDC discovery so signinRedirect() can proceed
+    await page.route('**/.well-known/openid-configuration', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          issuer: 'http://localhost:8080',
+          authorization_endpoint: 'http://localhost:8080/auth',
+          token_endpoint: 'http://localhost:8080/token',
+          jwks_uri: 'http://localhost:8080/certs',
+          response_types_supported: ['code'],
+          subject_types_supported: ['public'],
+          id_token_signing_alg_values_supported: ['RS256'],
+        }),
+      });
+    });
+
+    await page.goto('/set-password');
+    await expect(page.getByRole('heading', { name: /set password/i })).toBeVisible();
+
+    // Intercept the Keycloak redirect to verify it happens
+    const oidcRedirect = page.waitForURL(/localhost:8080/, { timeout: 5000 }).catch(() => null);
+
+    await page.locator('input[type="password"]').nth(0).fill('new-password');
+    await page.locator('input[type="password"]').nth(1).fill('new-password');
+    await page.getByRole('button', { name: /set password/i }).click();
+
+    // Should redirect to Keycloak for re-authentication
+    await oidcRedirect;
+    // Page navigated away from the app — either to Keycloak or chrome-error (no real Keycloak)
+    await expect(page).not.toHaveURL(/localhost:5173/, { timeout: 5000 });
   });
 
   test('no auth errors on set-password page when WiFi is available', async ({ page }) => {
@@ -212,6 +270,99 @@ test.describe('Authentication', () => {
     // Verify success message and redirect to dashboard
     await expect(page.getByText(/password updated successfully/i)).toBeVisible();
     await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
+  });
+
+  test.describe('set-password route guard', () => {
+    test('redirects to /login when password already set and no Keycloak session', async ({ page }) => {
+      // Scenario 4: password exists, not authenticated, no Keycloak session.
+      // Guard must skip Keycloak entirely and send the user to the normal login page.
+      await mockRequireSetPassword(page); // returns false = password already set
+
+      await page.goto('/set-password');
+
+      await expect(page).toHaveURL(/\/login/);
+      await expect(page.getByPlaceholder(/enter your password/i)).toBeVisible();
+    });
+
+    test('redirects to /login when password already set even with valid Keycloak session', async ({ page }) => {
+      // Scenario 5: password exists, Keycloak session is valid, not authenticated.
+      // The presence of a Keycloak token must not allow re-entering the set-password flow.
+      await mockPortalAuth(page);         // valid OIDC user in localStorage
+      await mockRequireSetPassword(page); // returns false = password already set
+
+      await page.goto('/set-password');
+
+      await expect(page).toHaveURL(/\/login/);
+      await expect(page.getByPlaceholder(/enter your password/i)).toBeVisible();
+    });
+
+    test('redirects to / when navigating to /set-password while already authenticated', async ({ page }) => {
+      // Scenarios 6 & 7: session cookie restores authentication on load.
+      // Guard must short-circuit before the Keycloak check and redirect home.
+      await mockTokenRefresh(page, 200);  // valid session cookie → isAuthenticated = true
+      await mockRequireSetPassword(page);
+      await mockHealthcheck(page);
+
+      await page.addInitScript(() => {
+        sessionStorage.setItem('factoryResetResultAcked', 'true');
+        sessionStorage.setItem('updateValidationAcked', 'true');
+      });
+
+      // Pre-seed the session cookie to simulate a user who already logged in during
+      // a prior session. mockTokenRefresh validates cookie presence, so this is
+      // required for the 200 response to be issued.
+      await page.context().addCookies([{
+        name: 'omnect-ui-session',
+        value: 'mock-session-value',
+        domain: 'localhost',
+        path: '/',
+        httpOnly: true,
+        sameSite: 'Strict',
+      }]);
+
+      await page.goto('/set-password');
+
+      await expect(page).toHaveURL('/');
+    });
+  });
+
+  test.describe('route guards', () => {
+    const protectedRoutes = ['/', '/network', '/update', '/settings', '/update-password'];
+
+    for (const route of protectedRoutes) {
+      test(`redirects to /login when accessing ${route} without authentication`, async ({ page }) => {
+        await mockRequireSetPassword(page);
+        await mockTokenRefresh(page, 401);
+
+        await page.goto(route);
+
+        await expect(page).toHaveURL(/\/login(\?.*)?$/);
+        await expect(page.getByPlaceholder(/enter your password/i)).toBeVisible();
+      });
+    }
+
+    test('redirects to /login when accessing invalid route without authentication', async ({ page }) => {
+      await mockRequireSetPassword(page);
+      await mockTokenRefresh(page, 401);
+
+      await page.goto('/this-route-does-not-exist');
+
+      await expect(page).toHaveURL(/\/login$/);
+      await expect(page.getByPlaceholder(/enter your password/i)).toBeVisible();
+    });
+
+    test('redirects to / when accessing invalid route as authenticated user', async ({ page }) => {
+      await setupAndLogin(page);
+
+      // Register token refresh mock after login so session is restored when the
+      // second full navigation reinitialises the Core
+      await mockTokenRefresh(page, 200);
+
+      await page.goto('/this-route-does-not-exist');
+
+      await expect(page).toHaveURL(/\/$/);
+      await expect(page.getByText('Common Info')).toBeVisible();
+    });
   });
 
   test.describe('inline error display', () => {

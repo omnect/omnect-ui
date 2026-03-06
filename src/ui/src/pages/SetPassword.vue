@@ -6,6 +6,9 @@ import { useCore } from "../composables/useCore"
 import { useCoreInitialization } from "../composables/useCoreInitialization"
 import { usePasswordForm } from "../composables/usePasswordForm"
 import { useAuthNavigation } from "../composables/useAuthNavigation"
+import { removeUser, login } from "../auth/auth-service"
+
+const PORTAL_AUTH_ERROR = "portal authentication required"
 
 const { viewModel, setPassword } = useCore()
 const { password, repeatPassword, errorMsg, validatePasswords } = usePasswordForm()
@@ -23,6 +26,13 @@ watch(
 	{ flush: 'sync' }
 )
 
+watch(errorMsg, (msg) => {
+	if (msg === PORTAL_AUTH_ERROR) {
+		// Backend session lost — clear stale OIDC user and re-authenticate
+		removeUser().then(() => login())
+	}
+})
+
 const handleSubmit = async (): Promise<void> => {
 	if (!validatePasswords()) return
 	await setPassword(password.value)
@@ -32,11 +42,12 @@ const handleSubmit = async (): Promise<void> => {
 <template>
 	<v-sheet class="mx-auto pa-8 m-t-16 flex flex-col gap-y-16" border elevation="0" max-width="448" rounded="lg">
 		<OmnectLogo></OmnectLogo>
-		<h1>Set Password</h1>
+		<h1 class="text-h4 text-secondary border-b pb-2 mb-4">Set Password</h1>
 		<v-form @submit.prevent @submit="handleSubmit">
 			<PasswordField
 				v-model="password"
 				label="Password"
+				autofocus
 			/>
 			<PasswordField
 				v-model="repeatPassword"

@@ -27,6 +27,19 @@ export { NetworkConfigRequest } from '../../../../shared_types/generated/typescr
 
 // Import types and variant classes for conversions
 import {
+	WifiState,
+	WifiStateVariantunavailable,
+	WifiStateVariantready,
+	WifiConnectionState,
+	WifiConnectionStateVariantidle,
+	WifiConnectionStateVariantconnecting,
+	WifiConnectionStateVariantconnected,
+	WifiConnectionStateVariantfailed,
+	WifiScanState,
+	WifiScanStateVariantidle,
+	WifiScanStateVariantscanning,
+	WifiScanStateVariantfinished,
+	WifiScanStateVarianterror,
 	DeviceOperationState,
 	DeviceOperationStateVariantidle,
 	DeviceOperationStateVariantrebooting,
@@ -59,6 +72,13 @@ import {
 	UploadStateVariantcompleted,
 	UploadStateVariantfailed,
 	DeviceNetwork,
+	WebSocketChannel,
+	WebSocketChannelVariantOnlineStatusV1,
+	WebSocketChannelVariantSystemInfoV1,
+	WebSocketChannelVariantTimeoutsV1,
+	WebSocketChannelVariantNetworkStatusV1,
+	WebSocketChannelVariantFactoryResetV1,
+	WebSocketChannelVariantUpdateValidationStatusV1,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 
 // Re-export variant classes for external use
@@ -69,11 +89,32 @@ export {
 	FactoryResetStatus,
 	UploadState,
 	DeviceNetwork,
+	WifiState,
+	WebSocketChannel,
+	WebSocketChannelVariantOnlineStatusV1,
+	WebSocketChannelVariantSystemInfoV1,
+	WebSocketChannelVariantTimeoutsV1,
+	WebSocketChannelVariantNetworkStatusV1,
+	WebSocketChannelVariantFactoryResetV1,
+	WebSocketChannelVariantUpdateValidationStatusV1,
 }
 
 // ============================================================================
 // TypeScript Discriminated Union Types
 // ============================================================================
+
+/**
+ * Convert WebSocketChannel variant to string
+ */
+export function webSocketChannelToString(channel: WebSocketChannel): string {
+	if (channel instanceof WebSocketChannelVariantOnlineStatusV1) return 'OnlineStatusV1'
+	if (channel instanceof WebSocketChannelVariantSystemInfoV1) return 'SystemInfoV1'
+	if (channel instanceof WebSocketChannelVariantTimeoutsV1) return 'TimeoutsV1'
+	if (channel instanceof WebSocketChannelVariantNetworkStatusV1) return 'NetworkStatusV1'
+	if (channel instanceof WebSocketChannelVariantFactoryResetV1) return 'FactoryResetV1'
+	if (channel instanceof WebSocketChannelVariantUpdateValidationStatusV1) return 'UpdateValidationStatusV1'
+	return 'unknown'
+}
 
 export type DeviceOperationStateType =
 	| { type: 'idle' }
@@ -120,6 +161,56 @@ export interface OverlaySpinnerStateType {
 	progress: number | null
 	countdownSeconds: number | null
 }
+
+export interface TimeoutSettingsType {
+	rebootTimeoutSecs: number
+	factoryResetTimeoutSecs: number
+	firmwareUpdateTimeoutSecs: number
+	networkRollbackTimeoutSecs: number
+}
+
+export type WifiScanStateType =
+	| { type: 'idle' }
+	| { type: 'scanning' }
+	| { type: 'finished' }
+	| { type: 'error'; message: string }
+
+export type WifiConnectionStateType =
+	| { type: 'idle' }
+	| { type: 'connecting' }
+	| { type: 'connected' }
+	| { type: 'failed'; message: string }
+
+export interface WifiConnectionStatusType {
+	state: WifiConnectionStateType
+	ssid: string | null
+	ipAddress: string | null
+}
+
+export interface WifiNetworkType {
+	ssid: string
+	mac: string
+	channel: number
+	rssi: number
+}
+
+export interface WifiSavedNetworkType {
+	ssid: string
+	flags: string
+}
+
+export type WifiStateType =
+	| { type: 'unavailable' }
+	| {
+		type: 'ready'
+		interfaceName: string
+		status: WifiConnectionStatusType
+		scanState: WifiScanStateType
+		scanResults: WifiNetworkType[]
+		savedNetworks: WifiSavedNetworkType[]
+		scanPollAttempt: number
+		connectPollAttempt: number
+	}
 
 export type FactoryResetStatusString = 'unknown' | 'modeSupported' | 'modeUnsupported' | 'backupRestoreError' | 'configurationError'
 
@@ -191,11 +282,21 @@ export interface ViewModel {
 	shouldShowRollbackModal: boolean
 	defaultRollbackEnabled: boolean
 
+	// Version mismatch state (derived from healthcheck)
+	versionMismatch: boolean
+	versionMismatchMessage: string | null
+
 	// Firmware upload state
 	firmwareUploadState: UploadStateType
 
 	// Overlay spinner state
 	overlaySpinner: OverlaySpinnerStateType
+
+	// WiFi state
+	wifiState: WifiStateType
+
+	// User-configurable timeout settings
+	timeoutSettings: TimeoutSettingsType
 }
 
 // ============================================================================
@@ -351,4 +452,60 @@ export function convertUploadState(state: UploadState): UploadStateType {
 		return { type: 'failed', content: state.value }
 	}
 	return { type: 'idle' }
+}
+
+/**
+ * Convert WifiScanState variant to typed object
+ */
+export function convertWifiScanState(state: WifiScanState): WifiScanStateType {
+	if (state instanceof WifiScanStateVariantidle) return { type: 'idle' }
+	if (state instanceof WifiScanStateVariantscanning) return { type: 'scanning' }
+	if (state instanceof WifiScanStateVariantfinished) return { type: 'finished' }
+	if (state instanceof WifiScanStateVarianterror) return { type: 'error', message: state.value }
+	return { type: 'idle' }
+}
+
+/**
+ * Convert WifiConnectionState variant to typed object
+ */
+export function convertWifiConnectionState(state: WifiConnectionState): WifiConnectionStateType {
+	if (state instanceof WifiConnectionStateVariantidle) return { type: 'idle' }
+	if (state instanceof WifiConnectionStateVariantconnecting) return { type: 'connecting' }
+	if (state instanceof WifiConnectionStateVariantconnected) return { type: 'connected' }
+	if (state instanceof WifiConnectionStateVariantfailed) return { type: 'failed', message: state.value }
+	return { type: 'idle' }
+}
+
+/**
+ * Convert WifiState variant to typed object
+ */
+export function convertWifiState(state: WifiState): WifiStateType {
+	if (state instanceof WifiStateVariantunavailable) {
+		return { type: 'unavailable' }
+	}
+	if (state instanceof WifiStateVariantready) {
+		return {
+			type: 'ready',
+			interfaceName: state.interface_name,
+			status: {
+				state: convertWifiConnectionState(state.status.state),
+				ssid: state.status.ssid || null,
+				ipAddress: state.status.ipAddress || null,
+			},
+			scanState: convertWifiScanState(state.scan_state),
+			scanResults: state.scan_results.map(n => ({
+				ssid: n.ssid,
+				mac: n.mac,
+				channel: n.channel,
+				rssi: n.rssi,
+			})),
+			savedNetworks: state.saved_networks.map(n => ({
+				ssid: n.ssid,
+				flags: n.flags,
+			})),
+			scanPollAttempt: state.scan_poll_attempt,
+			connectPollAttempt: state.connect_poll_attempt,
+		}
+	}
+	return { type: 'unavailable' }
 }

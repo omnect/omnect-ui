@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { publishToCentrifugo } from './fixtures/centrifugo';
+import { publishToWebsocket } from './fixtures/websocket';
 import { setupAndLogin } from './fixtures/test-setup';
 
 test.describe('Device Info', () => {
@@ -20,7 +20,7 @@ test.describe('Device Info', () => {
     };
 
     // Publish to Centrifugo
-    await publishToCentrifugo('SystemInfoV1', systemInfo);
+    await publishToWebsocket('SystemInfoV1', systemInfo);
 
     // Assert values appear on dashboard
     // Adjust selectors based on actual UI

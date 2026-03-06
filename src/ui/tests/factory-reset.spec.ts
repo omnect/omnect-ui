@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { setupAndLogin } from './fixtures/test-setup';
 import { mockPortalAuth, mockSetPasswordSuccess } from './fixtures/mock-api';
-import { publishToCentrifugo } from './fixtures/centrifugo';
+import { publishToWebsocket } from './fixtures/websocket';
 
 test.describe('Device Factory Reset', () => {
   test.beforeEach(async ({ page }) => {
@@ -87,8 +87,8 @@ test.describe('Device Factory Reset', () => {
 
 test.describe('Device Factory Reset - Reconnection', () => {
   test('device returns online after factory reset, prompts set-password, and shows success modal', async ({ page }) => {
-    // factoryResetResultAcked: false on initial load so App.vue's watcher is not suppressed
-    // and the "Factory Reset Completed" modal can fire after the WebSocket message arrives.
+    // factoryResetResultAcked: false prevents sessionStorage suppression, so the factory reset
+    // modal can fire when the Centrifugo message arrives after reconnection.
     // mockPortalAuth must be called before setupAndLogin so its addInitScript populates
     // localStorage on page.goto('/'), satisfying the requiresPortalAuth guard on /set-password.
     await mockPortalAuth(page);
@@ -104,7 +104,6 @@ test.describe('Device Factory Reset - Reconnection', () => {
     });
 
     // Stateful healthcheck: first call fails (device offline), subsequent succeed (back online).
-    // factoryResetResultAcked remains false so the modal watcher stays active.
     let healthcheckCount = 0;
     await page.route('**/healthcheck', async (route) => {
       if (route.request().method() !== 'GET') { await route.continue(); return; }
@@ -119,8 +118,6 @@ test.describe('Device Factory Reset - Reconnection', () => {
             versionInfo: { current: '1.0.0', required: '1.0.0', mismatch: false },
             updateValidationStatus: { status: 'NoUpdate' },
             networkRollbackOccurred: false,
-            factoryResetResultAcked: false,
-            updateValidationAcked: true
           })
         });
       }
@@ -151,7 +148,7 @@ test.describe('Device Factory Reset - Reconnection', () => {
 
     // ODS publishes the factory reset result via Centrifugo after republishing.
     // status=0 maps to OdsFactoryResetResultStatus::ModeSupported → factoryResetIsSuccess=true.
-    await publishToCentrifugo('FactoryResetV1', {
+    await publishToWebsocket('FactoryResetV1', {
       keys: ['network'],
       result: { status: 0, error: '0', paths: ['/etc/systemd/network/'] },
     });
@@ -172,7 +169,7 @@ test.describe('Device Factory Reset - Reconnection', () => {
     });
 
     // Trigger the factory reset success modal via WebSocket (status: 0 = ModeSupported)
-    await publishToCentrifugo('FactoryResetV1', {
+    await publishToWebsocket('FactoryResetV1', {
       keys: ['network'],
       result: { status: 0, error: '0', paths: ['/etc/systemd/network/'] },
     });

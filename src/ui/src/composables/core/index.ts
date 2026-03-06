@@ -21,6 +21,7 @@ import {
 	authToken,
 	wasmModule,
 	initializationPromise,
+	websocketInstance,
 	setWasmModule,
 	setInitializationPromise,
 } from './state'
@@ -31,8 +32,8 @@ import { processEffects } from './effects'
 // Import timer management
 import { setEventSender as setTimerEventSender, initializeTimerWatchers, checkPendingNetworkChange } from './timers'
 
-// Import Centrifugo
-import { setEventSender as setCentrifugoEventSender } from './centrifugo'
+// Import WebSocket
+import { setEventSender as setWebSocketEventSender } from './websocket'
 
 // Import sync
 import { setEventSender as setSyncEventSender } from './sync'
@@ -48,11 +49,13 @@ import {
 	EventVariantDevice,
 	EventVariantWebSocket,
 	EventVariantUi,
+	EventVariantWifi,
 	AuthEventVariantLogin,
 	AuthEventVariantLogout,
 	AuthEventVariantSetPassword,
 	AuthEventVariantUpdatePassword,
 	AuthEventVariantCheckRequiresPasswordSet,
+	AuthEventVariantRestoreSession,
 	DeviceEventVariantReboot,
 	DeviceEventVariantFactoryResetRequest,
 	DeviceEventVariantSetNetworkConfig,
@@ -61,6 +64,7 @@ import {
 	DeviceEventVariantNetworkFormStartEdit,
 	DeviceEventVariantNetworkFormUpdate,
 	DeviceEventVariantNetworkFormReset,
+	DeviceEventVariantFetchInitialHealthcheck,
 	DeviceEventVariantAckRollback,
 	DeviceEventVariantAckFactoryResetResult,
 	DeviceEventVariantAckUpdateValidation,
@@ -69,6 +73,16 @@ import {
 	UiEventVariantClearError,
 	UiEventVariantClearSuccess,
 	UiEventVariantSetBrowserHostname,
+	UiEventVariantSaveSettings,
+	TimeoutSettings,
+	WifiEventVariantScan,
+	WifiEventVariantConnect,
+	WifiEventVariantDisconnect,
+	WifiEventVariantGetStatus,
+	WifiEventVariantGetSavedNetworks,
+	WifiEventVariantForgetNetwork,
+	WifiEventVariantScanPollTick,
+	WifiEventVariantConnectPollTick,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 
 // Re-export types for external use
@@ -80,6 +94,13 @@ export type {
 	NetworkFormDataType,
 	OverlaySpinnerStateType,
 	FactoryResetStatusString,
+	WifiStateType,
+	WifiNetworkType,
+	WifiSavedNetworkType,
+	WifiConnectionStatusType,
+	WifiScanStateType,
+	WifiConnectionStateType,
+	TimeoutSettingsType,
 	SystemInfo,
 	NetworkStatus,
 	OnlineStatus,
@@ -142,11 +163,18 @@ async function sendEventToCore(event: Event): Promise<void> {
 
 // Wire up event sender callbacks to break circular dependencies
 setTimerEventSender(sendEventToCore)
-setCentrifugoEventSender(sendEventToCore)
+setWebSocketEventSender(sendEventToCore)
 setSyncEventSender(sendEventToCore)
 
 // Initialize timer watchers
 initializeTimerWatchers()
+
+// When WebSocket connects, trigger a republish from ODS to sync initial state.
+// Since we use native WebSockets without history, this is essential for the first UI load.
+websocketInstance.onConnected(() => {
+	console.log('[useCore] WebSocket connected, triggering republish')
+	fetch('/republish', { method: 'POST' }).catch((e) => console.error('[useCore] Failed to trigger republish:', e))
+})
 
 // ============================================================================
 // Initialization
@@ -182,12 +210,30 @@ async function initializeCore(): Promise<void> {
 			// Check for pending network change from previous session
 			checkPendingNetworkChange()
 
+			// Attempt to restore session from server-side cookie before sending Initialize.
+			// The /token/refresh endpoint verifies the existing session cookie and issues a
+			// fresh JWT, avoiding a forced re-login on every page refresh.
+			// The content-type guard prevents accidentally treating SPA-fallback HTML (served
+			// by Vite for unmatched routes) as a valid token.
+			try {
+				const refreshRes = await fetch('token/refresh', { credentials: 'include' })
+				if (refreshRes.ok && refreshRes.headers.get('content-type')?.startsWith('text/plain')) {
+					const token = await refreshRes.text()
+					await sendEventToCore(new EventVariantAuth(new AuthEventVariantRestoreSession(token)))
+				}
+			} catch {
+				// Network error during restore — proceed without session; user will be prompted to log in.
+			}
+
 			// Send initial event
 			await sendEventToCore(new EventVariantInitialize())
 
 			// Send browser hostname for network connection detection
 			const hostname = window.location.hostname
 			await sendEventToCore(new EventVariantUi(new UiEventVariantSetBrowserHostname(hostname)))
+
+			// Fetch initial healthcheck (version mismatch detection, acked flags)
+			await sendEventToCore(new EventVariantDevice(new DeviceEventVariantFetchInitialHealthcheck()))
 
 			// Expose for E2E tests to spoof hostname
 			;(window as any).setBrowserHostname = (h: string) => {
@@ -289,11 +335,30 @@ export function useCore() {
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantNetworkFormUpdate(formDataJson))),
 		networkFormReset: (adapterName: string) =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantNetworkFormReset(adapterName))),
+		fetchInitialHealthcheck: () =>
+			sendEventToCore(new EventVariantDevice(new DeviceEventVariantFetchInitialHealthcheck())),
 		ackRollback: () =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAckRollback())),
 		ackFactoryResetResult: () =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAckFactoryResetResult())),
 		ackUpdateValidation: () =>
 			sendEventToCore(new EventVariantDevice(new DeviceEventVariantAckUpdateValidation())),
+
+		// Settings management
+		saveSettings: (settings: { rebootTimeoutSecs: number; factoryResetTimeoutSecs: number; firmwareUpdateTimeoutSecs: number; networkRollbackTimeoutSecs: number }) =>
+			sendEventToCore(new EventVariantUi(new UiEventVariantSaveSettings(
+				new TimeoutSettings(settings.rebootTimeoutSecs, settings.factoryResetTimeoutSecs, settings.firmwareUpdateTimeoutSecs, settings.networkRollbackTimeoutSecs)
+			))),
+
+		// WiFi management
+		wifiScan: () => sendEventToCore(new EventVariantWifi(new WifiEventVariantScan())),
+		wifiConnect: (ssid: string, password: string) =>
+			sendEventToCore(new EventVariantWifi(new WifiEventVariantConnect(ssid, password))),
+		wifiDisconnect: () => sendEventToCore(new EventVariantWifi(new WifiEventVariantDisconnect())),
+		wifiGetStatus: () => sendEventToCore(new EventVariantWifi(new WifiEventVariantGetStatus())),
+		wifiGetSavedNetworks: () =>
+			sendEventToCore(new EventVariantWifi(new WifiEventVariantGetSavedNetworks())),
+		wifiForgetNetwork: (ssid: string) =>
+			sendEventToCore(new EventVariantWifi(new WifiEventVariantForgetNetwork(ssid))),
 	}
 }

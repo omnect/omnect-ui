@@ -26,8 +26,3 @@ if ! pgrep -f "omnect-device-service" > /dev/null; then
 fi
 
 echo -e "${GREEN}✓${NC}"
-
-# Stop existing centrifugo processes
-echo -n "Stopping existing centrifugo processes... "
-killall centrifugo 2>/dev/null || true
-echo -e "${GREEN}✓${NC}"

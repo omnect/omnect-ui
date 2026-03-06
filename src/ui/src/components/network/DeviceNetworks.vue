@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
 import NetworkSettings from "./NetworkSettings.vue"
+import WifiPanel from "./WifiPanel.vue"
 import { useCore } from "../../composables/useCore"
 import { useCoreInitialization } from "../../composables/useCoreInitialization"
 
 const { viewModel, networkFormReset, networkFormStartEdit } = useCore()
+
+const isWifiAdapter = (adapterName: string) => {
+  return viewModel.wifiState.type === 'ready' && viewModel.wifiState.interfaceName === adapterName
+}
 
 useCoreInitialization()
 
@@ -74,29 +79,28 @@ const cancelTabChange = () => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-y-4 flex-wrap">
-    <div class="flex border-b gap-x-4 items-center">
-      <div class="text-h4 text-secondary">Network</div>
-    </div>
+  <div class="flex flex-col gap-y-4 flex-wrap w-full">
+    <div class="text-h4 text-secondary border-b pb-2 mb-4 w-full">Network</div>
     <div class="d-flex flex-row">
-      <v-tabs v-model="tab" color="primary" direction="vertical" class="border-r network-tabs">
-        <v-tab v-for="networkAdapter in networkStatus?.networkStatus" :value="networkAdapter.name" class="text-none">
-          <div class="d-flex align-center w-100 py-2">
+      <v-tabs v-model="tab" color="primary" direction="vertical" class="border-r network-tabs" density="compact">
+        <v-tab v-for="networkAdapter in networkStatus?.networkStatus" :value="networkAdapter.name" 
+          class="text-none px-3 min-w-0">
+          <div class="d-flex align-center gap-x-2 py-2">
             <v-icon 
               :icon="networkAdapter.online ? 'mdi-circle' : 'mdi-circle-outline'" 
               :color="networkAdapter.online ? 'success' : 'grey-lighten-1'"
-              size="x-small" 
-              class="mr-3"
+              size="x-small"
             ></v-icon>
             <span class="font-weight-medium">{{ networkAdapter.name }}</span>
-            <v-spacer></v-spacer>
-            <v-icon v-if="isCurrentConnection(networkAdapter)" icon="mdi-account-network" size="x-small" color="info" class="ml-3" title="Current Connection"></v-icon>
+            <v-icon v-if="isWifiAdapter(networkAdapter.name)" icon="mdi-wifi" size="x-small" color="info" title="WiFi"></v-icon>
+            <v-icon v-if="isCurrentConnection(networkAdapter)" icon="mdi-account-network" size="x-small" color="info" title="Current Connection"></v-icon>
           </div>
         </v-tab>
       </v-tabs>
       <v-window v-model="tab" class="flex-grow-1" direction="vertical">
         <v-window-item v-for="networkAdapter in networkStatus?.networkStatus" :key="networkAdapter.name" :value="networkAdapter.name">
           <NetworkSettings :networkAdapter="networkAdapter" :isCurrentConnection="isCurrentConnection(networkAdapter)" />
+          <WifiPanel v-if="isWifiAdapter(networkAdapter.name)" />
         </v-window-item>
       </v-window>
     </div>
@@ -119,7 +123,8 @@ const cancelTabChange = () => {
 </template>
 
 <style scoped>
-.network-tabs {
-  min-width: 180px;
+.network-tabs :deep(.v-tab) {
+  min-width: 0;
+  justify-content: flex-start;
 }
 </style>

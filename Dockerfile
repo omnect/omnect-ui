@@ -68,10 +68,6 @@ ARG TARGETARCH
 ARG OMNECT_UI_BUILD_ARG=""
 WORKDIR "/work"
 
-ARG CENTRIFUGO_VERSION=v6.6.2
-
-RUN curl -sSLf https://centrifugal.dev/install.sh | sh
-
 COPY --from=distroless /var/lib/dpkg/status.d /distroless_pkgs
 
 COPY Cargo.lock Cargo.toml ./
@@ -139,7 +135,6 @@ RUN mkdir /cert
 FROM ${DISTROLESS_IMAGE} AS base
 COPY --from=builder --chown=10000:10000 /cert /cert
 COPY --from=builder /work/omnect-ui-bin /omnect-ui
-COPY --from=builder /work/centrifugo /
 COPY --from=builder /copy/lib/ /lib/
 COPY --from=builder /copy/status.d /var/lib/dpkg/status.d
 # npm runtime metadata for SBOM generation (stripped of devDependencies)
@@ -147,7 +142,6 @@ COPY --from=vue-build /tmp/sbom-package.json /sbom/npm/package.json
 COPY --from=vue-build /usr/src/app/bun.lock /sbom/npm/bun.lock
 
 WORKDIR "/"
-COPY src/backend/config/centrifugo_config.json /
 
 ARG RUST_LOG="warn,omnect_ui=debug"
 ENV RUST_LOG=${RUST_LOG}

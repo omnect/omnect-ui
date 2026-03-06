@@ -5,6 +5,7 @@ pub mod macros;
 pub mod model;
 pub mod types;
 pub mod update;
+pub mod wifi_psk;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm;
@@ -13,7 +14,7 @@ use crux_core::Command;
 
 // Re-export core types
 pub use crate::{
-    commands::centrifugo::{CentrifugoOperation, CentrifugoOutput},
+    commands::websocket::{WebSocketOperation, WebSocketOutput},
     events::Event,
     http_helpers::{
         build_url, check_response_status, extract_error_message, extract_string_response,
@@ -29,10 +30,10 @@ pub use crux_http::Result as HttpResult;
 pub enum Effect {
     Render(crux_core::render::RenderOperation),
     Http(crux_http::protocol::HttpRequest),
-    Centrifugo(CentrifugoOperation),
+    WebSocket(WebSocketOperation),
 }
 
-pub type CentrifugoCmd = crate::commands::centrifugo::Centrifugo<Effect, Event>;
+pub type WebSocketCmd = crate::commands::websocket::WebSocket<Effect, Event>;
 pub type HttpCmd = crux_http::command::Http<Effect, Event>;
 
 /// The Core application
