@@ -297,6 +297,21 @@ mod tests {
 
             assert_eq!(model.reconnection_attempt, 0);
         }
+
+        #[test]
+        fn sends_get_to_healthcheck_endpoint() {
+            let mut model = Model {
+                device_operation_state: DeviceOperationState::Rebooting,
+                ..Default::default()
+            };
+            let mut cmd = handle_reconnection_check_tick(&mut model);
+
+            // http_get! produces a single Http effect (no render wrapper)
+            let (http_request, _) = cmd.expect_one_effect().expect_http().split();
+
+            assert_eq!(http_request.url, "https://relative/healthcheck");
+            assert_eq!(http_request.method, "GET");
+        }
     }
 
     mod reconnection_timeout {

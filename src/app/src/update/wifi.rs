@@ -526,6 +526,26 @@ mod tests {
         use super::*;
 
         #[test]
+        fn sends_get_to_availability_endpoint() {
+            let mut model = Model::default();
+            let mut cmd = handle(WifiEvent::CheckAvailability, &mut model);
+
+            // unauth_post! GET pattern produces render + http effects
+            let effects = [cmd.expect_effect(), cmd.expect_effect()];
+            let http_req = effects
+                .into_iter()
+                .find_map(|e| match e {
+                    Effect::Http(req) => Some(req),
+                    _ => None,
+                })
+                .expect("Expected Http effect");
+            let (http_request, _) = http_req.split();
+
+            assert_eq!(http_request.url, "https://relative/wifi/available");
+            assert_eq!(http_request.method, "GET");
+        }
+
+        #[test]
         fn check_availability_success_transitions_to_ready() {
             let mut model = Model::default();
             let result = Ok(WifiAvailability::Available {

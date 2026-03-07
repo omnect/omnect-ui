@@ -110,6 +110,30 @@ mod tests {
     use crate::types::{
         FactoryReset, FactoryResetStatus, OnlineStatus, OsInfo, SystemInfo, UpdateValidationStatus,
     };
+    use crate::WebSocketOperation;
+
+    mod subscribe {
+        use super::*;
+
+        #[test]
+        fn subscribe_to_channels_emits_subscribe_all_effect() {
+            let mut model = Model::default();
+            let mut cmd = handle(WebSocketEvent::SubscribeToChannels, &mut model);
+
+            // SubscribeToChannels produces a single WebSocket effect (no render wrapper)
+            let (operation, _) = cmd.expect_one_effect().expect_web_socket().split();
+            assert!(matches!(operation, WebSocketOperation::SubscribeAll));
+        }
+
+        #[test]
+        fn unsubscribe_from_channels_emits_unsubscribe_all_effect() {
+            let mut model = Model::default();
+            let mut cmd = handle(WebSocketEvent::UnsubscribeFromChannels, &mut model);
+
+            let (operation, _) = cmd.expect_one_effect().expect_web_socket().split();
+            assert!(matches!(operation, WebSocketOperation::UnsubscribeAll));
+        }
+    }
 
     mod system_info {
         use super::*;

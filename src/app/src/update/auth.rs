@@ -128,6 +128,37 @@ mod tests {
         use super::*;
 
         #[test]
+        fn posts_to_login_endpoint() {
+            let mut model = Model::default();
+            let mut cmd = handle(
+                AuthEvent::Login {
+                    password: "test_password".into(),
+                },
+                &mut model,
+            );
+
+            // Login produces render + http effects
+            let effects = [cmd.expect_effect(), cmd.expect_effect()];
+            let http_req = effects
+                .into_iter()
+                .find_map(|e| match e {
+                    Effect::Http(req) => Some(req),
+                    _ => None,
+                })
+                .expect("Expected Http effect");
+            let (http_request, _) = http_req.split();
+
+            assert_eq!(http_request.url, "https://relative/token/login");
+            assert_eq!(http_request.method, "POST");
+            assert!(
+                http_request
+                    .headers
+                    .iter()
+                    .any(|h| h.name.eq_ignore_ascii_case("authorization") && h.value.starts_with("Basic "))
+            );
+        }
+
+        #[test]
         fn sets_loading_state() {
             let mut model = Model::default();
 
@@ -200,6 +231,35 @@ mod tests {
 
     mod logout {
         use super::*;
+
+        #[test]
+        fn posts_to_logout_endpoint() {
+            let mut model = Model {
+                is_authenticated: true,
+                auth_token: Some("bearer-token".into()),
+                ..Default::default()
+            };
+            let mut cmd = handle(AuthEvent::Logout, &mut model);
+
+            let effects = [cmd.expect_effect(), cmd.expect_effect()];
+            let http_req = effects
+                .into_iter()
+                .find_map(|e| match e {
+                    Effect::Http(req) => Some(req),
+                    _ => None,
+                })
+                .expect("Expected Http effect");
+            let (http_request, _) = http_req.split();
+
+            assert_eq!(http_request.url, "https://relative/logout");
+            assert_eq!(http_request.method, "POST");
+            assert!(
+                http_request
+                    .headers
+                    .iter()
+                    .any(|h| h.name.eq_ignore_ascii_case("authorization") && h.value.starts_with("Bearer "))
+            );
+        }
 
         #[test]
         fn sets_loading_state() {
@@ -402,6 +462,28 @@ mod tests {
 
     mod check_requires_password_set {
         use super::*;
+
+        #[test]
+        fn sends_get_to_check_endpoint() {
+            let mut model = Model::default();
+            let mut cmd = handle(AuthEvent::CheckRequiresPasswordSet, &mut model);
+
+            let effects = [cmd.expect_effect(), cmd.expect_effect()];
+            let http_req = effects
+                .into_iter()
+                .find_map(|e| match e {
+                    Effect::Http(req) => Some(req),
+                    _ => None,
+                })
+                .expect("Expected Http effect");
+            let (http_request, _) = http_req.split();
+
+            assert_eq!(
+                http_request.url,
+                "https://relative/require-set-password"
+            );
+            assert_eq!(http_request.method, "GET");
+        }
 
         #[test]
         fn sets_loading_state() {
