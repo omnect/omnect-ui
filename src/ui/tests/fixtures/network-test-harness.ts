@@ -63,7 +63,7 @@ export interface SetNetworkConfigResponse {
  *
  * Provides utilities for:
  * - Mocking /network and /healthcheck endpoints
- * - Publishing network status via Centrifugo
+ * - Publishing network status via WebSocket
  * - Simulating rollback scenarios
  * - Creating test adapter configurations
  *
@@ -274,7 +274,7 @@ export class NetworkTestHarness {
   }
 
   /**
-   * Publish network status via Centrifugo WebSocket.
+   * Publish network status via WebSocket.
    * Updates are received by the UI and trigger network adapter list refresh.
    *
    * @param adapters - Array of network adapter configurations to publish
@@ -296,7 +296,7 @@ export class NetworkTestHarness {
    * Effects:
    * - Sets the networkRollbackOccurred flag (reported in healthcheck response)
    * - Reverts IP addresses to original values
-   * - Publishes updated network status via Centrifugo
+   * - Publishes updated network status via WebSocket
    *
    * @throws Error if rollback was not enabled when network config was applied
    */
@@ -564,7 +564,7 @@ export class NetworkTestHarness {
   /**
    * Intercept all traffic to a new IP address and proxy it to localhost.
    *
-   * - Shims `WebSocket` via `addInitScript` so Centrifugo connects to localhost.
+   * - Shims `WebSocket` via `addInitScript` so WebSocket connects to localhost.
    * - Routes all HTTP requests for `newIp` to the equivalent localhost path,
    *   with healthcheck responses reflecting current harness rollback state.
    *

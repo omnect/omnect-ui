@@ -17,9 +17,7 @@ use crate::{
         certificate::{CertificateService, CreateCertPayload},
         network::NetworkConfigService,
     },
-    wifi_commissioning_client::{
-        WifiAvailability, WifiCommissioningClient, WifiCommissioningServiceClient,
-    },
+    wifi_commissioning_client::{WifiAvailability, WifiCommissioningServiceClient},
 };
 use actix_multipart::form::MultipartFormConfig;
 use actix_server::ServerHandle;
@@ -292,9 +290,10 @@ fn optimal_worker_count() -> usize {
 }
 
 async fn initialize_wifi_client() -> (Option<WifiCommissioningServiceClient>, WifiAvailability) {
-    let unavailable = WifiAvailability {
-        available: false,
-        interface_name: None,
+    let unavailable = WifiAvailability::Unavailable {
+        socket_present: false,
+        version: None,
+        min_required_version: WifiCommissioningServiceClient::MIN_REQUIRED_VERSION.to_string(),
     };
 
     let config = &AppConfig::get().wifi;
@@ -303,20 +302,12 @@ async fn initialize_wifi_client() -> (Option<WifiCommissioningServiceClient>, Wi
         return (None, unavailable);
     };
 
-    // Probe the service to discover the WiFi interface name
-    match client.status().await {
-        Ok(status) => {
-            let availability = WifiAvailability {
-                available: true,
-                interface_name: status.interface_name,
-            };
-            info!("WiFi service available: {availability:?}");
-            (Some(client), availability)
-        }
-        Err(e) => {
-            log::error!("WiFi service probe failed: {e:#}");
-            (None, unavailable)
-        }
+    let availability = client.check_availability().await;
+
+    if matches!(availability, WifiAvailability::Available { .. }) {
+        (Some(client), availability)
+    } else {
+        (None, availability)
     }
 }
 
@@ -576,10 +567,7 @@ fn load_tls_config() -> Result<rustls::ServerConfig> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        middleware::{self, AuthMw},
-        services::auth::TokenManager,
-    };
+    use crate::{middleware::AuthMw, services::auth::TokenManager};
     use actix_http::StatusCode;
     use actix_session::{
         SessionMiddleware,

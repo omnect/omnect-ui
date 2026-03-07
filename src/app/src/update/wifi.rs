@@ -4,14 +4,12 @@ use crux_core::{render::render, Command};
 
 use crate::{
     auth_get, auth_post,
-    events::{
-        Event, WifiEvent, WifiSavedNetworksApiResponse, WifiScanResultsApiResponse,
-        WifiStatusApiResponse,
-    },
+    events::{Event, WifiEvent},
     model::Model,
     types::{
         WifiAvailability, WifiConnectionState, WifiConnectionStatus, WifiNetwork, WifiSavedNetwork,
-        WifiScanState, WifiState,
+        WifiSavedNetworksResponse, WifiScanResultsResponse, WifiScanState, WifiState,
+        WifiStatusResponse,
     },
     unauth_post, wifi_psk, Effect,
 };
@@ -32,6 +30,7 @@ macro_rules! with_ready_state {
             saved_networks: $saved,
             scan_poll_attempt: $scan_poll,
             connect_poll_attempt: $connect_poll,
+            ..
         } = &mut $model.wifi_state
         {
             $body
@@ -55,10 +54,13 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
         }
 
         WifiEvent::CheckAvailabilityResponse(result) => match result {
-            Ok(availability) if availability.available => {
-                let iface = availability.interface_name.unwrap_or_default();
+            Ok(WifiAvailability::Available {
+                interface_name,
+                version,
+            }) => {
                 model.wifi_state = WifiState::Ready {
-                    interface_name: iface,
+                    interface_name,
+                    version: Some(version),
                     status: WifiConnectionStatus::default(),
                     scan_state: WifiScanState::Idle,
                     scan_results: Vec::new(),
@@ -77,14 +79,25 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
                     render()
                 }
             }
-            Ok(_) => {
-                // WiFi not available
-                model.wifi_state = WifiState::Unavailable;
+            Ok(WifiAvailability::Unavailable {
+                socket_present,
+                version,
+                min_required_version,
+            }) => {
+                model.wifi_state = WifiState::Unavailable {
+                    socket_present,
+                    version,
+                    min_required_version,
+                };
                 render()
             }
             Err(e) => {
                 log::error!("WiFi availability check failed: {e}");
-                model.wifi_state = WifiState::Unavailable;
+                model.wifi_state = WifiState::Unavailable {
+                    socket_present: false,
+                    version: None,
+                    min_required_version: "0.1.0".to_string(), // Fallback
+                };
                 render()
             }
         },
@@ -151,7 +164,7 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
                     Wifi, WifiEvent, model,
                     "/wifi/scan/results",
                     ScanResultsResponse, "WiFi scan results",
-                    expect_json: WifiScanResultsApiResponse
+                    expect_json: WifiScanResultsResponse
                 )
             })
         }
@@ -175,14 +188,14 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
                                     best.entry(net.ssid.clone()).or_insert_with(|| WifiNetwork {
                                         ssid: net.ssid.clone(),
                                         mac: net.mac.clone(),
-                                        channel: net.ch,
+                                        ch: net.ch,
                                         rssi: net.rssi,
                                     });
                                 if net.rssi > entry.rssi {
                                     *entry = WifiNetwork {
                                         ssid: net.ssid,
                                         mac: net.mac,
-                                        channel: net.ch,
+                                        ch: net.ch,
                                         rssi: net.rssi,
                                     };
                                 }
@@ -321,7 +334,7 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
                     Wifi, WifiEvent, model,
                     "/wifi/status",
                     StatusResponse, "WiFi connect status",
-                    expect_json: WifiStatusApiResponse
+                    expect_json: WifiStatusResponse
                 )
             })
         }
@@ -413,7 +426,7 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
                 Wifi, WifiEvent, model,
                 "/wifi/status",
                 StatusResponse, "WiFi status",
-                expect_json: WifiStatusApiResponse
+                expect_json: WifiStatusResponse
             )
         }
 
@@ -421,8 +434,8 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
             auth_get!(
                 Wifi, WifiEvent, model,
                 "/wifi/networks",
-                SavedNetworksResponse, "WiFi saved networks",
-                expect_json: WifiSavedNetworksApiResponse
+                SavedNetworksResponse, "WiFi networks",
+                expect_json: WifiSavedNetworksResponse
             )
         }
 
@@ -497,6 +510,7 @@ mod tests {
             is_authenticated: true,
             wifi_state: WifiState::Ready {
                 interface_name: "wlan0".to_string(),
+                version: Some("0.1.0".to_string()),
                 status: WifiConnectionStatus::default(),
                 scan_state: WifiScanState::Idle,
                 scan_results: Vec::new(),
@@ -512,11 +526,11 @@ mod tests {
         use super::*;
 
         #[test]
-        fn available_response_transitions_to_ready() {
+        fn check_availability_success_transitions_to_ready() {
             let mut model = Model::default();
-            let result = Ok(WifiAvailability {
-                available: true,
-                interface_name: Some("wlan0".to_string()),
+            let result = Ok(WifiAvailability::Available {
+                version: "0.1.0".to_string(),
+                interface_name: "wlan0".to_string(),
             });
             let _ = handle(WifiEvent::CheckAvailabilityResponse(result), &mut model);
 
@@ -529,14 +543,22 @@ mod tests {
         }
 
         #[test]
-        fn unavailable_response_stays_unavailable() {
+        fn check_availability_unavailable_response() {
             let mut model = Model::default();
-            let result = Ok(WifiAvailability {
-                available: false,
-                interface_name: None,
+            let result = Ok(WifiAvailability::Unavailable {
+                socket_present: true,
+                version: Some("0.0.9".to_string()),
+                min_required_version: "0.1.0".to_string(),
             });
             let _ = handle(WifiEvent::CheckAvailabilityResponse(result), &mut model);
-            assert_eq!(model.wifi_state, WifiState::Unavailable);
+            assert_eq!(
+                model.wifi_state,
+                WifiState::Unavailable {
+                    socket_present: true,
+                    version: Some("0.0.9".to_string()),
+                    min_required_version: "0.1.0".to_string()
+                }
+            );
         }
 
         #[test]
@@ -544,13 +566,19 @@ mod tests {
             let mut model = Model::default();
             let result = Err("network error".to_string());
             let _ = handle(WifiEvent::CheckAvailabilityResponse(result), &mut model);
-            assert_eq!(model.wifi_state, WifiState::Unavailable);
+            assert_eq!(
+                model.wifi_state,
+                WifiState::Unavailable {
+                    socket_present: false,
+                    version: None,
+                    min_required_version: "0.1.0".to_string()
+                }
+            );
         }
     }
 
     mod scan {
         use super::*;
-        use crate::events::WifiNetworkApiResponse;
 
         #[test]
         fn scan_sets_scanning_state() {
@@ -627,23 +655,23 @@ mod tests {
             if let WifiState::Ready { scan_state, .. } = &mut model.wifi_state {
                 *scan_state = WifiScanState::Scanning;
             }
-            let response = WifiScanResultsApiResponse {
+            let response = WifiScanResultsResponse {
                 status: "ok".to_string(),
                 state: "finished".to_string(),
                 networks: vec![
-                    WifiNetworkApiResponse {
+                    WifiNetwork {
                         ssid: "MyNet".to_string(),
                         mac: "aa:bb:cc:dd:ee:ff".to_string(),
                         ch: 6,
                         rssi: -70,
                     },
-                    WifiNetworkApiResponse {
+                    WifiNetwork {
                         ssid: "MyNet".to_string(),
                         mac: "11:22:33:44:55:66".to_string(),
                         ch: 11,
                         rssi: -50,
                     },
-                    WifiNetworkApiResponse {
+                    WifiNetwork {
                         ssid: "Other".to_string(),
                         mac: "ff:ff:ff:ff:ff:ff".to_string(),
                         ch: 1,
@@ -674,7 +702,7 @@ mod tests {
             if let WifiState::Ready { scan_state, .. } = &mut model.wifi_state {
                 *scan_state = WifiScanState::Scanning;
             }
-            let response = WifiScanResultsApiResponse {
+            let response = WifiScanResultsResponse {
                 status: "ok".to_string(),
                 state: "scanning".to_string(),
                 networks: vec![],
@@ -797,11 +825,13 @@ mod tests {
             if let WifiState::Ready { status, .. } = &mut model.wifi_state {
                 status.state = WifiConnectionState::Connecting;
             }
-            let response = WifiStatusApiResponse {
+            // Fixed lines in test constructors
+            let response = WifiStatusResponse {
                 status: "ok".to_string(),
                 state: "connected".to_string(),
                 ssid: Some("MyNet".to_string()),
                 ip_address: Some("192.168.1.100".to_string()),
+                interface_name: Some("wlan0".to_string()),
             };
             let _ = handle(WifiEvent::StatusResponse(Ok(response)), &mut model);
 
@@ -818,11 +848,12 @@ mod tests {
             if let WifiState::Ready { status, .. } = &mut model.wifi_state {
                 status.state = WifiConnectionState::Connecting;
             }
-            let response = WifiStatusApiResponse {
+            let response = WifiStatusResponse {
                 status: "ok".to_string(),
                 state: "failed".to_string(),
                 ssid: None,
                 ip_address: None,
+                interface_name: None,
             };
             let _ = handle(WifiEvent::StatusResponse(Ok(response)), &mut model);
 
@@ -857,7 +888,6 @@ mod tests {
 
     mod forget_network {
         use super::*;
-        use crate::events::WifiSavedNetworkApiResponse;
 
         #[test]
         fn forget_error_logs_and_renders() {
@@ -872,14 +902,14 @@ mod tests {
         #[test]
         fn saved_networks_response_updates_state() {
             let mut model = model_with_ready_state();
-            let response = WifiSavedNetworksApiResponse {
+            let response = WifiSavedNetworksResponse {
                 status: "ok".to_string(),
                 networks: vec![
-                    WifiSavedNetworkApiResponse {
+                    WifiSavedNetwork {
                         ssid: "Home".to_string(),
                         flags: "[CURRENT]".to_string(),
                     },
-                    WifiSavedNetworkApiResponse {
+                    WifiSavedNetwork {
                         ssid: "Work".to_string(),
                         flags: "".to_string(),
                     },
@@ -901,7 +931,7 @@ mod tests {
         #[test]
         fn scan_on_unavailable_state_returns_done() {
             let mut model = Model::default();
-            assert_eq!(model.wifi_state, WifiState::Unavailable);
+            assert_eq!(model.wifi_state, WifiState::Unknown);
             let _ = handle(WifiEvent::Scan, &mut model);
             // Should not panic, just returns done
         }

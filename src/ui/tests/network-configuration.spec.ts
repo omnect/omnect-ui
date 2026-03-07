@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { NetworkTestHarness, DeviceNetwork } from './fixtures/network-test-harness';
 
-// Run all tests in this file serially to avoid Centrifugo channel interference
+// Run all tests in this file serially to avoid WebSocket channel interference
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Network Configuration - Comprehensive E2E Tests', () => {
@@ -558,7 +558,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await harness.navigateToAdapter(page, 'eth0');
 
       // Wait for the Core to fully initialize and load network status
-      // After reload, it takes a moment for Centrifugo to reconnect and publish status
+      // After reload, it takes a moment for WebSocket to reconnect and publish status
       await page.waitForTimeout(2000);
 
       // Set browser hostname again after reload to mark eth0 as current connection

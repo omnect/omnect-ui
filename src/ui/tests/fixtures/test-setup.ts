@@ -17,7 +17,7 @@ interface SetupOptions {
  * updateValidationAcked defaults to true so that Core's combined watcher suppresses
  * the update-validation modal in tests that don't exercise that flow. Without this,
  * Core defaults the field to false which would override the sessionStorage flag and
- * show the modal when Centrifugo replays a Recovered status from a prior test.
+ * show the modal when WebSocket replays a Recovered status from a prior test.
  */
 export async function mockHealthcheck(page: Page, options: { updateValidationAcked?: boolean } = {}): Promise<void> {
   const { updateValidationAcked = true } = options;

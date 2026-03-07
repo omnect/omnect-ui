@@ -129,54 +129,17 @@ pub enum WifiEvent {
     #[serde(skip)]
     ScanResponse(Result<(), String>),
     #[serde(skip)]
-    ScanResultsResponse(Result<WifiScanResultsApiResponse, String>),
+    ScanResultsResponse(Result<WifiScanResultsResponse, String>),
     #[serde(skip)]
     ConnectResponse(Result<(), String>),
     #[serde(skip)]
     DisconnectResponse(Result<(), String>),
     #[serde(skip)]
-    StatusResponse(Result<WifiStatusApiResponse, String>),
+    StatusResponse(Result<WifiStatusResponse, String>),
     #[serde(skip)]
-    SavedNetworksResponse(Result<WifiSavedNetworksApiResponse, String>),
+    SavedNetworksResponse(Result<WifiSavedNetworksResponse, String>),
     #[serde(skip)]
     ForgetNetworkResponse(Result<(), String>),
-}
-
-/// API response types for WiFi (match backend JSON shapes)
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct WifiScanResultsApiResponse {
-    pub status: String,
-    pub state: String,
-    pub networks: Vec<WifiNetworkApiResponse>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WifiNetworkApiResponse {
-    pub ssid: String,
-    pub mac: String,
-    pub ch: u16,
-    pub rssi: i16,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WifiStatusApiResponse {
-    pub status: String,
-    pub state: String,
-    pub ssid: Option<String>,
-    pub ip_address: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WifiSavedNetworksApiResponse {
-    pub status: String,
-    pub networks: Vec<WifiSavedNetworkApiResponse>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct WifiSavedNetworkApiResponse {
-    pub ssid: String,
-    pub flags: String,
 }
 
 /// Custom Debug for WifiEvent to redact password

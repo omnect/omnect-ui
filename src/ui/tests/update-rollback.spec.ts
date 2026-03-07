@@ -65,7 +65,7 @@ test.describe('Device Update Rollback', () => {
   test.beforeEach(async ({ page }) => {
     page.on('console', msg => console.log(`BROWSER CONSOLE: ${msg.type()} - ${msg.text()}`));
     
-    // Reset Centrifugo state from previous tests to prevent modals from appearing on login
+    // Reset WebSocket state from previous tests to prevent modals from appearing on login
     await publishToWebsocket('UpdateValidationStatusV1', { status: 'NoUpdate' });
 
     await setupAndLogin(page, { updateValidationAcked: false });
@@ -288,7 +288,7 @@ test.describe('Device Update Rollback', () => {
 
     page.on('console', msg => console.log(`BROWSER CONSOLE: ${msg.type()} - ${msg.text()}`));
 
-    // Stage first rollback in Centrifugo history so it replays immediately on subscription
+    // Stage first rollback in WebSocket history so it replays immediately on subscription
     await publishToWebsocket('UpdateValidationStatusV1', { status: 'Recovered' });
 
     // Login with updateValidationAcked: false — first rollback not yet acked
@@ -334,7 +334,7 @@ test.describe('Device Update Rollback', () => {
     await page.getByRole('button', { name: /log in/i }).click();
     await expect(page.getByText('Common Info')).toBeVisible();
 
-    // Centrifugo delivers Recovered. Combined watcher: ackedInHealthcheck=false → notAcked=true → modal shown
+    // WebSocket delivers Recovered. Combined watcher: ackedInHealthcheck=false → notAcked=true → modal shown
     await publishToWebsocket('UpdateValidationStatusV1', { status: 'Recovered' });
 
     const secondModal = page.getByText('Update Rolled Back');

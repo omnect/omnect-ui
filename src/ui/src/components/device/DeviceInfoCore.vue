@@ -18,27 +18,39 @@ const { viewModel } = useCore()
 useCoreInitialization()
 
 // All device info computed from the Core's viewModel
-const deviceInfo = computed(
-  () =>
-    new Map([
-      ['omnect Cloud Connection', viewModel.onlineStatus?.iothub ? 'connected' : 'disconnected'],
-      ['Hostname', viewModel.systemInfo?.hostname ?? 'n/a'],
-      ['omnect Secure OS variant', viewModel.systemInfo?.os.name ?? 'n/a'],
-      [
-        'Boot time',
-        viewModel.systemInfo?.bootTime
-          ? new Date(viewModel.systemInfo.bootTime).toLocaleString()
-          : 'n/a',
-      ],
-      ['omnect Secure OS version', String(viewModel.systemInfo?.os.version) ?? 'n/a'],
-      ['Wait online timeout (in seconds)', viewModel.timeouts?.waitOnlineTimeout.secs ?? 'n/a'],
-      [
-        'omnect device service version',
-        viewModel.systemInfo?.omnectDeviceServiceVersion ?? 'n/a',
-      ],
-      ['Azure SDK version', viewModel.systemInfo?.azureSdkVersion ?? 'n/a'],
-    ])
-)
+const deviceInfo = computed(() => {
+  const infoMap = new Map([
+    ['omnect Cloud Connection', viewModel.onlineStatus?.iothub ? 'connected' : 'disconnected'],
+    ['Hostname', viewModel.systemInfo?.hostname ?? 'n/a'],
+    ['omnect Secure OS variant', viewModel.systemInfo?.os.name ?? 'n/a'],
+    [
+      'Boot time',
+      viewModel.systemInfo?.bootTime
+        ? new Date(viewModel.systemInfo.bootTime).toLocaleString()
+        : 'n/a',
+    ],
+    ['omnect Secure OS version', String(viewModel.systemInfo?.os.version) ?? 'n/a'],
+    ['Wait online timeout (in seconds)', viewModel.timeouts?.waitOnlineTimeout.secs ?? 'n/a'],
+    [
+      'omnect device service version',
+      viewModel.systemInfo?.omnectDeviceServiceVersion ?? 'n/a',
+    ],
+    ['Azure SDK version', viewModel.systemInfo?.azureSdkVersion ?? 'n/a'],
+  ])
+
+  // Conditionally add WiFi commissioning service version
+  if (viewModel.wifiState) {
+    if (viewModel.wifiState.type === 'ready') {
+      infoMap.set('WiFi commissioning service version', viewModel.wifiState.version || 'unknown')
+    } else if (viewModel.wifiState.type === 'unavailable' && viewModel.wifiState.socketPresent) {
+      const versionStr = viewModel.wifiState.version || 'unknown'
+      const minReq = viewModel.wifiState.minRequiredVersion
+      infoMap.set('WiFi commissioning service version', `${versionStr} (minimum required: ${minReq})`)
+    }
+  }
+
+  return infoMap
+})
 
 const displayItems = computed(() =>
   Array.from(deviceInfo.value, ([title, value]) => ({ title, value }))

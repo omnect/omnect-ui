@@ -5,96 +5,16 @@ use anyhow::{Context, Result};
 use log::info;
 #[cfg(feature = "mock")]
 use mockall::automock;
+pub use omnect_ui_core::types::{
+    WifiAvailability, WifiConnectRequest, WifiConnectResponse, WifiDisconnectResponse,
+    WifiForgetRequest, WifiForgetResponse, WifiSavedNetworksResponse, WifiScanResultsResponse,
+    WifiScanStartedResponse, WifiStatusResponse, WifiVersionResponse,
+};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fmt::Debug;
 use std::path::Path;
 use trait_variant::make;
-
-// --- Request DTOs ---
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct WifiConnectRequest {
-    pub ssid: String,
-    pub psk: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct WifiForgetRequest {
-    pub ssid: String,
-}
-
-// --- Response DTOs ---
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct WifiScanStartedResponse {
-    pub status: String,
-    pub state: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct WifiScanResultsResponse {
-    pub status: String,
-    pub state: String,
-    pub networks: Vec<WifiNetwork>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct WifiNetwork {
-    pub ssid: String,
-    pub mac: String,
-    pub ch: u16,
-    pub rssi: i16,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct WifiConnectResponse {
-    pub status: String,
-    pub state: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct WifiDisconnectResponse {
-    pub status: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct WifiStatusResponse {
-    pub status: String,
-    pub state: String,
-    pub ssid: Option<String>,
-    pub ip_address: Option<String>,
-    pub interface_name: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct WifiSavedNetworksResponse {
-    pub status: String,
-    pub networks: Vec<WifiSavedNetwork>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct WifiSavedNetwork {
-    pub ssid: String,
-    pub flags: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct WifiForgetResponse {
-    pub status: String,
-}
-
-// --- Availability response (our own, not from the service) ---
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WifiAvailability {
-    pub available: bool,
-    pub interface_name: Option<String>,
-}
 
 // --- Client trait ---
 
@@ -108,6 +28,7 @@ pub trait WifiCommissioningClient {
     async fn status(&self) -> Result<WifiStatusResponse>;
     async fn saved_networks(&self) -> Result<WifiSavedNetworksResponse>;
     async fn forget_network(&self, request: WifiForgetRequest) -> Result<WifiForgetResponse>;
+    async fn version(&self) -> Result<WifiVersionResponse>;
 }
 
 #[cfg(feature = "mock")]
@@ -132,6 +53,75 @@ impl WifiCommissioningServiceClient {
     const STATUS_ENDPOINT: &str = "/api/v1/status";
     const NETWORKS_ENDPOINT: &str = "/api/v1/networks";
     const FORGET_ENDPOINT: &str = "/api/v1/networks/forget";
+    const VERSION_ENDPOINT: &str = "/api/v1/version";
+
+    pub const MIN_REQUIRED_VERSION: semver::Version = semver::Version::new(0, 1, 0);
+
+    pub async fn check_availability(&self) -> WifiAvailability {
+        let status_result = self.status().await;
+        let version_result = self.version().await;
+
+        match (status_result, version_result) {
+            (Ok(status), Ok(version_response)) => {
+                let is_version_compatible = match semver::Version::parse(&version_response.version)
+                {
+                    Ok(v) => v >= Self::MIN_REQUIRED_VERSION,
+                    Err(e) => {
+                        log::warn!(
+                            "Failed to parse WiFi service version '{}': {}",
+                            version_response.version,
+                            e
+                        );
+                        false
+                    }
+                };
+
+                if is_version_compatible {
+                    log::info!(
+                        "WiFi service available (version {})",
+                        version_response.version
+                    );
+
+                    if let Some(interface_name) = status.interface_name {
+                        return WifiAvailability::Available {
+                            version: version_response.version,
+                            interface_name,
+                        };
+                    } else {
+                        log::error!("WiFi service reported OK status but no interface name");
+                    }
+                } else {
+                    log::warn!(
+                        "WiFi service version '{}' is lower than required minimum {}",
+                        version_response.version,
+                        Self::MIN_REQUIRED_VERSION
+                    );
+                }
+
+                WifiAvailability::Unavailable {
+                    socket_present: true,
+                    version: Some(version_response.version),
+                    min_required_version: Self::MIN_REQUIRED_VERSION.to_string(),
+                }
+            }
+            (Err(e), _) => {
+                log::error!("WiFi service status probe failed: {e:#}");
+                WifiAvailability::Unavailable {
+                    socket_present: true,
+                    version: None,
+                    min_required_version: Self::MIN_REQUIRED_VERSION.to_string(),
+                }
+            }
+            (_, Err(e)) => {
+                log::error!("WiFi service version probe failed: {e:#}");
+                WifiAvailability::Unavailable {
+                    socket_present: true,
+                    version: None,
+                    min_required_version: Self::MIN_REQUIRED_VERSION.to_string(),
+                }
+            }
+        }
+    }
 
     /// Try to create a client. Returns `None` if the socket does not exist.
     pub fn try_new(socket_path: &Path) -> Option<Self> {
@@ -237,6 +227,11 @@ impl WifiCommissioningClient for WifiCommissioningServiceClient {
     async fn forget_network(&self, request: WifiForgetRequest) -> Result<WifiForgetResponse> {
         let body = self.post_json(Self::FORGET_ENDPOINT, request).await?;
         serde_json::from_str(&body).context("failed to parse forget response")
+    }
+
+    async fn version(&self) -> Result<WifiVersionResponse> {
+        let body = self.get(Self::VERSION_ENDPOINT).await?;
+        serde_json::from_str(&body).context("failed to parse version response")
     }
 }
 
@@ -367,6 +362,10 @@ mod tests {
             assert_eq!(
                 WifiCommissioningServiceClient::FORGET_ENDPOINT,
                 "/api/v1/networks/forget"
+            );
+            assert_eq!(
+                WifiCommissioningServiceClient::VERSION_ENDPOINT,
+                "/api/v1/version"
             );
         }
     }

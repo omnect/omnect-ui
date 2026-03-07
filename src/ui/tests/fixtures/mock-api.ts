@@ -6,7 +6,6 @@ export async function mockConfig(page: Page) {
     KEYCLOAK_URL: 'http://localhost:8080',
     REALM: 'omnect',
     CLIENT_ID: 'omnect-ui',
-    CENTRIFUGO_URL: 'wss://localhost:8000/connection/websocket'
   };
 
   // Add as init script so it's available even before config.js loads

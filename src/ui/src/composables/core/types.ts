@@ -28,6 +28,7 @@ export { NetworkConfigRequest } from '../../../../shared_types/generated/typescr
 // Import types and variant classes for conversions
 import {
 	WifiState,
+	WifiStateVariantunknown,
 	WifiStateVariantunavailable,
 	WifiStateVariantready,
 	WifiConnectionState,
@@ -200,10 +201,12 @@ export interface WifiSavedNetworkType {
 }
 
 export type WifiStateType =
-	| { type: 'unavailable' }
+	| { type: 'unknown' }
+	| { type: 'unavailable', socketPresent: boolean, version: string | null, minRequiredVersion: string }
 	| {
 		type: 'ready'
 		interfaceName: string
+		version: string | null
 		status: WifiConnectionStatusType
 		scanState: WifiScanStateType
 		scanResults: WifiNetworkType[]
@@ -480,32 +483,43 @@ export function convertWifiConnectionState(state: WifiConnectionState): WifiConn
  * Convert WifiState variant to typed object
  */
 export function convertWifiState(state: WifiState): WifiStateType {
+	if (state instanceof WifiStateVariantunknown) {
+		return { type: 'unknown' }
+	}
 	if (state instanceof WifiStateVariantunavailable) {
-		return { type: 'unavailable' }
+		const s = state as any
+		return {
+			type: 'unavailable',
+			socketPresent: s.socket_present,
+			version: s.version || null,
+			minRequiredVersion: s.min_required_version,
+		}
 	}
 	if (state instanceof WifiStateVariantready) {
+		const s = state as any
 		return {
 			type: 'ready',
-			interfaceName: state.interface_name,
+			interfaceName: s.interface_name,
+			version: s.version || null,
 			status: {
-				state: convertWifiConnectionState(state.status.state),
-				ssid: state.status.ssid || null,
-				ipAddress: state.status.ipAddress || null,
+				state: convertWifiConnectionState(s.status.state),
+				ssid: s.status.ssid || null,
+				ipAddress: s.status.ipAddress || null,
 			},
-			scanState: convertWifiScanState(state.scan_state),
-			scanResults: state.scan_results.map(n => ({
+			scanState: convertWifiScanState(s.scan_state),
+			scanResults: s.scan_results.map((n: any) => ({
 				ssid: n.ssid,
 				mac: n.mac,
-				channel: n.channel,
+				channel: n.ch,
 				rssi: n.rssi,
 			})),
-			savedNetworks: state.saved_networks.map(n => ({
+			savedNetworks: s.saved_networks.map((n: any) => ({
 				ssid: n.ssid,
 				flags: n.flags,
 			})),
-			scanPollAttempt: state.scan_poll_attempt,
-			connectPollAttempt: state.connect_poll_attempt,
+			scanPollAttempt: s.scan_poll_attempt,
+			connectPollAttempt: s.connect_poll_attempt,
 		}
 	}
-	return { type: 'unavailable' }
+	return { type: 'unknown' }
 }

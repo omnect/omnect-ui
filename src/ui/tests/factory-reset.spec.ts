@@ -88,7 +88,7 @@ test.describe('Device Factory Reset', () => {
 test.describe('Device Factory Reset - Reconnection', () => {
   test('device returns online after factory reset, prompts set-password, and shows success modal', async ({ page }) => {
     // factoryResetResultAcked: false prevents sessionStorage suppression, so the factory reset
-    // modal can fire when the Centrifugo message arrives after reconnection.
+    // modal can fire when the WebSocket message arrives after reconnection.
     // mockPortalAuth must be called before setupAndLogin so its addInitScript populates
     // localStorage on page.goto('/'), satisfying the requiresPortalAuth guard on /set-password.
     await mockPortalAuth(page);
@@ -146,7 +146,7 @@ test.describe('Device Factory Reset - Reconnection', () => {
     await page.getByRole('button', { name: /set password/i }).click();
     await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
 
-    // ODS publishes the factory reset result via Centrifugo after republishing.
+    // ODS publishes the factory reset result via WebSocket after republishing.
     // status=0 maps to OdsFactoryResetResultStatus::ModeSupported → factoryResetIsSuccess=true.
     await publishToWebsocket('FactoryResetV1', {
       keys: ['network'],

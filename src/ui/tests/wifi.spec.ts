@@ -13,7 +13,16 @@ async function mockWifiAvailable(page: Page, available = true, interfaceName = '
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ available, interfaceName: available ? interfaceName : null }),
+      body: JSON.stringify(available ? {
+        state: "available",
+        interface_name: interfaceName,
+        version: "0.1.0"
+      } : {
+        state: "unavailable",
+        socket_present: false,
+        version: "0.1.0",
+        min_required_version: "0.1.0"
+      }),
     });
   });
 }
@@ -166,21 +175,21 @@ async function setupMocks(page: Page, wifiAvailable = true) {
   await mockWifiSavedNetworks(page, []);
 }
 
-/** Login, publish network adapters via Centrifugo, navigate to Network page */
+/** Login, publish network adapters via WebSocket, navigate to Network page */
 async function loginAndNavigateWith(page: Page, adapters = defaultAdapters) {
   await page.goto('/');
   await page.getByPlaceholder(/enter your password/i).fill('password');
   await page.getByRole('button', { name: /log in/i }).click();
   await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
 
-  // Publish network adapter data via Centrifugo (after login so WebSocket is subscribed)
+  // Publish network adapter data via WebSocket (after login so WebSocket is subscribed)
   await publishToWebsocket('NetworkStatusV1', { network_status: adapters });
 
   // Navigate to network page
   await page.getByRole('link', { name: /network/i }).click();
   await expect(page.locator('.text-h4', { hasText: 'Network' })).toBeVisible({ timeout: 5000 });
 
-  // Wait for adapter tabs to appear from Centrifugo data
+  // Wait for adapter tabs to appear from WebSocket data
   await expect(page.getByRole('tab', { name: /eth0/i })).toBeVisible({ timeout: 10000 });
 }
 
