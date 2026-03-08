@@ -12,7 +12,9 @@ use crate::{
 /// Reconnection poll interval
 const RECONNECTION_POLL_INTERVAL_MS: u64 = 5000;
 
-use super::operations::{is_actual_update_result, is_update_complete};
+use super::operations::{
+    is_actual_update_result, is_update_complete, schedule_reconnection_countdown_tick,
+};
 
 /// Handle reconnection check tick - polls healthcheck endpoint
 pub fn handle_reconnection_check_tick(model: &mut Model) -> Command<Effect, Event> {
@@ -48,6 +50,26 @@ pub(super) fn schedule_reconnection_poll() -> Command<Effect, Event> {
     ));
     std::mem::forget(handle);
     timer.then_send(|_| Event::Device(DeviceEvent::ReconnectionCheckTick))
+}
+
+/// Handle reconnection countdown tick - decrements the displayed countdown each second
+pub fn handle_reconnection_countdown_tick(model: &mut Model) -> Command<Effect, Event> {
+    let is_active = matches!(
+        model.device_operation_state,
+        DeviceOperationState::Rebooting
+            | DeviceOperationState::FactoryResetting
+            | DeviceOperationState::Updating
+            | DeviceOperationState::WaitingReconnection { .. }
+    );
+    if is_active && model.overlay_spinner.countdown_seconds() > Some(0) {
+        model.overlay_spinner.decrement_countdown();
+        Command::all([
+            crux_core::render::render(),
+            schedule_reconnection_countdown_tick(),
+        ])
+    } else {
+        Command::done()
+    }
 }
 
 /// Handle reconnection timeout - device didn't come back online
@@ -970,6 +992,83 @@ mod tests {
                 // Derived state unchanged on error
                 assert!(model.version_mismatch);
             }
+        }
+    }
+
+    mod schedule_timers {
+        use super::*;
+        use crux_time::protocol::{Duration as TimeDuration, TimeRequest};
+
+        fn find_time_effect(cmd: &mut Command<Effect, Event>) -> Option<TimeRequest> {
+            cmd.effects().find_map(|e| {
+                if let Effect::Time(_) = e {
+                    let (time_request, _) = e.expect_time().split();
+                    Some(time_request)
+                } else {
+                    None
+                }
+            })
+        }
+
+        #[test]
+        fn schedule_reconnection_poll_emits_5000ms_time_effect() {
+            let mut cmd = schedule_reconnection_poll();
+            let time_request = find_time_effect(&mut cmd).expect("expected Time effect");
+            let TimeRequest::NotifyAfter { duration, .. } = time_request else {
+                panic!("expected NotifyAfter");
+            };
+            assert_eq!(duration, TimeDuration::from_millis(RECONNECTION_POLL_INTERVAL_MS));
+        }
+
+        #[test]
+        fn check_tick_reschedules_poll() {
+            let mut model = Model {
+                device_operation_state: DeviceOperationState::Rebooting,
+                ..Default::default()
+            };
+            let mut cmd = handle_reconnection_check_tick(&mut model);
+            let time_request = find_time_effect(&mut cmd).expect("expected Time effect");
+            let TimeRequest::NotifyAfter { duration, .. } = time_request else {
+                panic!("expected NotifyAfter");
+            };
+            assert_eq!(duration, TimeDuration::from_millis(RECONNECTION_POLL_INTERVAL_MS));
+        }
+
+        #[test]
+        fn countdown_tick_reschedules_when_active_and_nonzero() {
+            let mut model = Model {
+                device_operation_state: DeviceOperationState::Rebooting,
+                overlay_spinner: OverlaySpinnerState::new("Test").with_countdown(30),
+                ..Default::default()
+            };
+            let mut cmd = handle_reconnection_countdown_tick(&mut model);
+            let time_request = find_time_effect(&mut cmd).expect("expected Time effect");
+            let TimeRequest::NotifyAfter { duration, .. } = time_request else {
+                panic!("expected NotifyAfter");
+            };
+            assert_eq!(duration, TimeDuration::from_millis(1_000));
+        }
+
+        #[test]
+        fn countdown_tick_stops_when_countdown_is_zero() {
+            let mut model = Model {
+                device_operation_state: DeviceOperationState::Rebooting,
+                overlay_spinner: OverlaySpinnerState::new("Test").with_countdown(0),
+                ..Default::default()
+            };
+            let mut cmd = handle_reconnection_countdown_tick(&mut model);
+            assert!(find_time_effect(&mut cmd).is_none());
+        }
+
+        #[test]
+        fn countdown_tick_stops_when_idle() {
+            let mut model = Model {
+                device_operation_state: DeviceOperationState::Idle,
+                overlay_spinner: OverlaySpinnerState::new("Test").with_countdown(30),
+                ..Default::default()
+            };
+            let mut cmd = handle_reconnection_countdown_tick(&mut model);
+            assert!(find_time_effect(&mut cmd).is_none());
         }
     }
 }

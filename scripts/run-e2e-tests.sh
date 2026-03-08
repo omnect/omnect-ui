@@ -131,12 +131,11 @@ fi
 # Build the frontend for preview mode (eliminates Vite dev optimization issues)
 # Note: Using default base path (/) for preview server, not /static for production backend
 echo "🏗️  Building frontend..."
-# Faster polling for E2E tests
+# Cap Core crux_time poll ticks (≤5s) to 500ms and one-shot timeout timers (>5s)
+# to 2000ms so polls fire quickly while timeouts still allow multiple poll cycles first.
 export VITE_RECONNECTION_POLL_INTERVAL_MS=500
 export VITE_NEW_IP_POLL_INTERVAL_MS=500
-export VITE_REBOOT_TIMEOUT_MS=2000
-export VITE_FACTORY_RESET_TIMEOUT_MS=2000
-export VITE_FIRMWARE_UPDATE_TIMEOUT_MS=2000
+export VITE_RECONNECTION_TIMEOUT_MS=2000
 
 if bun run build-preview > /tmp/vite-build.log 2>&1; then
     echo "✅ Frontend build complete!"

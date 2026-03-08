@@ -80,7 +80,7 @@ test.describe('Device Factory Reset', () => {
     // Verify initial state
     await expect(page.getByText('The device is resetting')).toBeVisible();
 
-    // Wait for timeout (VITE_FACTORY_RESET_TIMEOUT_MS=2000ms, poll=500ms, allow buffer)
+    // Wait for Core-driven timeout (capped to 500ms by VITE_RECONNECTION_POLL_INTERVAL_MS TIMER_CAP_MS)
     await expect(page.getByText('Device did not come back online. You may need to re-accept the security certificate.')).toBeVisible({ timeout: 4000 });
   });
 });

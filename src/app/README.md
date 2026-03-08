@@ -9,36 +9,43 @@ The Crux Core follows the Model-View-Update pattern:
 - **Model** - The complete application state (auth, device info, network status, etc.)
 - **ViewModel** - Data needed by the UI to render
 - **Events** - Actions that can occur in the application
-- **Effects** - Side effects (HTTP requests, WebSocket, rendering)
+- **Effects** - Side effects (HTTP requests, WebSocket, Time/timers, rendering)
 
 ## Key Files
 
 - `src/lib.rs` - App struct, Effect enum, and re-exports
 - `src/model.rs` - Model and ViewModel structs
 - `src/events.rs` - Event enum definitions
+- `src/wasm.rs` - WASM FFI bindings
+- `src/macros.rs` - HTTP request macros (`auth_post!`, `unauth_post!`, `auth_post_basic!`, `http_get!`, `http_get_silent!`, `handle_response!`)
+- `src/http_helpers.rs` - HTTP response handling helper functions
+- `src/wifi_psk.rs` - WiFi PSK utilities
 - `src/types/` - Domain-based type definitions
   - `auth.rs` - Authentication types (AuthToken, password requests)
-  - `device.rs` - Device information types (SystemInfo, HealthcheckInfo)
-  - `network.rs` - Network configuration types and state
-  - `factory_reset.rs` - Factory reset types
-  - `update.rs` - Update validation types
   - `common.rs` - Common shared types
-- `src/http_helpers.rs` - HTTP response handling helper functions
-- `src/macros.rs` - HTTP request macros (`auth_post!`, `unauth_post!`, `auth_post_basic!`, `http_get!`, `http_get_silent!`, `handle_response!`)
+  - `device.rs` - Device information types (SystemInfo, HealthcheckInfo)
+  - `factory_reset.rs` - Factory reset types
+  - `network.rs` - Network configuration types and state
+  - `ods.rs` - ODS-specific DTOs
+  - `settings.rs` - Timeout settings types
+  - `update.rs` - Update validation types
+  - `websocket.rs` - WebSocket channel enum
+  - `wifi.rs` - WiFi types
 - `src/update/` - Domain-based event handlers
   - `mod.rs` - Main dispatcher
   - `auth.rs` - Authentication handlers (login, logout, password)
+  - `ui.rs` - UI action handlers (clear error/success)
+  - `websocket.rs` - WebSocket handlers
+  - `wifi.rs` - WiFi event handlers
   - `device/` - Device action handlers
     - `mod.rs` - Device event dispatcher
     - `operations.rs` - Device operations (reboot, factory reset, updates)
-    - `reconnection.rs` - Device reconnection handlers
+    - `reconnection.rs` - Reconnection polling and countdown, scheduled via `crux_time`
     - `network/` - Network configuration handlers
       - `mod.rs` - Module re-exports
       - `config.rs` - Network config request/response
       - `form.rs` - Form state management
-      - `verification.rs` - IP check and rollback logic
-  - `websocket.rs` - WebSocket handlers
-  - `ui.rs` - UI action handlers (clear error/success)
+      - `verification.rs` - IP reachability check and rollback logic, scheduled via `crux_time`
 - `src/commands/websocket.rs` - Custom WebSocket commands
 
 ## Building
@@ -67,8 +74,6 @@ wasm-pack build --target web --out-dir ../ui/src/core/pkg
 This will generate the WASM module in `src/ui/src/core/pkg/`.
 
 ### Generate TypeScript Types
-
-Make sure pnpm is in your PATH, then:
 
 ```bash
 cargo build -p shared_types

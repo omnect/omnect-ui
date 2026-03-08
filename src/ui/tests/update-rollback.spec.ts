@@ -266,7 +266,7 @@ test.describe('Device Update Rollback', () => {
     await expect(page.locator('#overlay .v-progress-circular')).toBeVisible();
     await expect(page.locator('#overlay .mdi-alert-circle-outline')).not.toBeVisible();
 
-    // After VITE_FIRMWARE_UPDATE_TIMEOUT_MS (2s in test build), spinner is replaced by warning icon
+    // After Core-driven timeout fires (capped to 500ms by TIMER_CAP_MS), spinner is replaced by warning icon
     await expect(page.locator('#overlay .mdi-alert-circle-outline')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#overlay .v-progress-circular')).not.toBeVisible();
 

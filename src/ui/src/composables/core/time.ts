@@ -5,12 +5,24 @@
  * Each pending timer is tracked by TimerId so it can be cancelled via Clear.
  */
 
-// When VITE_RECONNECTION_POLL_INTERVAL_MS is set (E2E test build), cap all crux_time
-// notify_after delays to that value so poll cycles complete without real wall-clock delays.
-// Production builds leave this undefined and use the actual Core-specified delays.
-const TIMER_CAP_MS: number | null = import.meta.env.VITE_RECONNECTION_POLL_INTERVAL_MS
+// When VITE_RECONNECTION_POLL_INTERVAL_MS is set (E2E test build), cap short crux_time
+// notify_after delays (poll ticks, countdown ticks) to that value so cycles complete
+// without real wall-clock delays. Production builds leave this undefined.
+const POLL_CAP_MS: number | null = import.meta.env.VITE_RECONNECTION_POLL_INTERVAL_MS
 	? Number(import.meta.env.VITE_RECONNECTION_POLL_INTERVAL_MS)
 	: null
+
+// When VITE_RECONNECTION_TIMEOUT_MS is set (E2E test build), cap long crux_time
+// notify_after delays (one-shot timeouts) separately from poll ticks. This allows
+// tests to fire timeouts faster while still giving polls multiple cycles first.
+// If not set, timeout timers are also capped by POLL_CAP_MS as a fallback.
+const TIMEOUT_CAP_MS: number | null = import.meta.env.VITE_RECONNECTION_TIMEOUT_MS
+	? Number(import.meta.env.VITE_RECONNECTION_TIMEOUT_MS)
+	: POLL_CAP_MS
+
+// Threshold: timers above this duration (ms) are treated as "timeout" timers
+// rather than "poll" timers. Poll ticks are ≤5000ms; operation timeouts are ≥60000ms.
+const TIMEOUT_THRESHOLD_MS = 5000
 
 import { wasmModule } from './state'
 import {
@@ -67,7 +79,8 @@ export async function executeTimeRequest(requestId: number, request: TimeRequest
 		const { id, duration } = request
 		// duration.nanos is total nanoseconds as BigInt; convert to milliseconds
 		const rawDelayMs = Number(duration.nanos / 1_000_000n)
-		const delayMs = TIMER_CAP_MS !== null ? Math.min(rawDelayMs, TIMER_CAP_MS) : rawDelayMs
+		const cap = rawDelayMs > TIMEOUT_THRESHOLD_MS ? TIMEOUT_CAP_MS : POLL_CAP_MS
+		const delayMs = cap !== null ? Math.min(rawDelayMs, cap) : rawDelayMs
 		const handle = setTimeout(async () => {
 			pendingTimers.delete(id.value)
 			await resolveTimer(requestId, new TimeResponseVariantdurationElapsed(id))

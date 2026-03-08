@@ -159,4 +159,11 @@ impl OverlaySpinnerState {
     pub fn countdown_seconds(&self) -> Option<u32> {
         self.countdown_seconds
     }
+
+    /// Decrement countdown by one second (saturating at zero)
+    pub fn decrement_countdown(&mut self) {
+        if let Some(s) = self.countdown_seconds {
+            self.countdown_seconds = Some(s.saturating_sub(1));
+        }
+    }
 }

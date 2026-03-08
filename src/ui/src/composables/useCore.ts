@@ -7,8 +7,8 @@
  * @see ./core/effects.ts - Effect processing
  * @see ./core/http.ts - HTTP capability
  * @see ./core/websocket.ts - WebSocket capability
- * @see ./core/timers.ts - Timer management
- * @see ./core/sync.ts - ViewModel synchronization
+ * @see ./core/time.ts - Time/timer capability (crux_time)
+ * @see ./core/sync.ts - ViewModel synchronization and navigation side-effects
  */
 
 // Re-export everything from core/index.ts

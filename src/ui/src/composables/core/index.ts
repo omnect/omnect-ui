@@ -29,9 +29,6 @@ import {
 // Import effects processing
 import { processEffects } from './effects'
 
-// Import timer management
-import { setEventSender as setTimerEventSender, initializeTimerWatchers } from './timers'
-
 // Import WebSocket
 import { setEventSender as setWebSocketEventSender } from './websocket'
 
@@ -160,12 +157,8 @@ async function sendEventToCore(event: Event): Promise<void> {
 }
 
 // Wire up event sender callbacks to break circular dependencies
-setTimerEventSender(sendEventToCore)
 setWebSocketEventSender(sendEventToCore)
 setSyncEventSender(sendEventToCore)
-
-// Initialize timer watchers
-initializeTimerWatchers()
 
 // When WebSocket connects, trigger a republish from ODS to sync initial state.
 // Since we use native WebSockets without history, this is essential for the first UI load.

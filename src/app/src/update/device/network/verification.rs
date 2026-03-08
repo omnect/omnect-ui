@@ -12,6 +12,40 @@ use crate::{
 /// New IP poll interval
 const NEW_IP_POLL_INTERVAL_MS: u64 = 5000;
 
+/// New IP countdown tick interval (1 second)
+const NEW_IP_COUNTDOWN_INTERVAL_MS: u64 = 1000;
+
+pub(super) fn schedule_new_ip_check_timeout(secs: u64) -> Command<Effect, Event> {
+    let (timer, handle) = TimeCmd::notify_after(std::time::Duration::from_secs(secs));
+    std::mem::forget(handle);
+    timer.then_send(|_| Event::Device(DeviceEvent::NewIpCheckTimeout))
+}
+
+pub(super) fn schedule_new_ip_countdown_tick() -> Command<Effect, Event> {
+    let (timer, handle) = TimeCmd::notify_after(std::time::Duration::from_millis(
+        NEW_IP_COUNTDOWN_INTERVAL_MS,
+    ));
+    std::mem::forget(handle);
+    timer.then_send(|_| Event::Device(DeviceEvent::NewIpCountdownTick))
+}
+
+/// Handle new IP countdown tick - decrements the displayed countdown each second
+pub fn handle_new_ip_countdown_tick(model: &mut Model) -> Command<Effect, Event> {
+    let is_active = matches!(
+        model.network_change_state,
+        NetworkChangeState::WaitingForNewIp { .. }
+    );
+    if is_active && model.overlay_spinner.countdown_seconds() > Some(0) {
+        model.overlay_spinner.decrement_countdown();
+        Command::all([
+            crux_core::render::render(),
+            schedule_new_ip_countdown_tick(),
+        ])
+    } else {
+        Command::done()
+    }
+}
+
 /// Helper to update network state and spinner based on configuration response
 pub fn update_network_state_and_spinner(
     model: &mut Model,
@@ -552,6 +586,91 @@ mod tests {
 
             assert!(!model.is_loading);
             assert!(model.error_message.is_some());
+        }
+    }
+
+    mod schedule_timers {
+        use super::*;
+        use crux_time::protocol::{Duration as TimeDuration, TimeRequest};
+
+        fn find_time_effect(cmd: &mut Command<Effect, Event>) -> Option<TimeRequest> {
+            cmd.effects().find_map(|e| {
+                if let Effect::Time(_) = e {
+                    let (time_request, _) = e.expect_time().split();
+                    Some(time_request)
+                } else {
+                    None
+                }
+            })
+        }
+
+        #[test]
+        fn schedule_new_ip_check_timeout_emits_time_effect_with_correct_duration() {
+            let mut cmd = schedule_new_ip_check_timeout(120);
+            let time_request = find_time_effect(&mut cmd).expect("expected Time effect");
+            let TimeRequest::NotifyAfter { duration, .. } = time_request else {
+                panic!("expected NotifyAfter");
+            };
+            assert_eq!(duration, TimeDuration::from_secs(120));
+        }
+
+        #[test]
+        fn schedule_new_ip_countdown_tick_emits_1000ms_time_effect() {
+            let mut cmd = schedule_new_ip_countdown_tick();
+            let time_request = find_time_effect(&mut cmd).expect("expected Time effect");
+            let TimeRequest::NotifyAfter { duration, .. } = time_request else {
+                panic!("expected NotifyAfter");
+            };
+            assert_eq!(
+                duration,
+                TimeDuration::from_millis(NEW_IP_COUNTDOWN_INTERVAL_MS)
+            );
+        }
+
+        #[test]
+        fn schedule_new_ip_poll_emits_5000ms_time_effect() {
+            let mut cmd = schedule_new_ip_poll();
+            let time_request = find_time_effect(&mut cmd).expect("expected Time effect");
+            let TimeRequest::NotifyAfter { duration, .. } = time_request else {
+                panic!("expected NotifyAfter");
+            };
+            assert_eq!(duration, TimeDuration::from_millis(NEW_IP_POLL_INTERVAL_MS));
+        }
+
+        #[test]
+        fn new_ip_countdown_tick_reschedules_when_waiting_and_nonzero() {
+            let mut model = Model {
+                network_change_state: NetworkChangeState::WaitingForNewIp {
+                    new_ip: "192.168.1.101".to_string(),
+                    old_ip: "192.168.1.100".to_string(),
+                    attempt: 0,
+                    rollback_timeout_seconds: 60,
+                    ui_port: 443,
+                    switching_to_dhcp: false,
+                },
+                overlay_spinner: OverlaySpinnerState::new("Test").with_countdown(30),
+                ..Default::default()
+            };
+            let mut cmd = handle_new_ip_countdown_tick(&mut model);
+            let time_request = find_time_effect(&mut cmd).expect("expected Time effect");
+            let TimeRequest::NotifyAfter { duration, .. } = time_request else {
+                panic!("expected NotifyAfter");
+            };
+            assert_eq!(
+                duration,
+                TimeDuration::from_millis(NEW_IP_COUNTDOWN_INTERVAL_MS)
+            );
+        }
+
+        #[test]
+        fn new_ip_countdown_tick_stops_when_idle() {
+            let mut model = Model {
+                network_change_state: NetworkChangeState::Idle,
+                overlay_spinner: OverlaySpinnerState::new("Test").with_countdown(30),
+                ..Default::default()
+            };
+            let mut cmd = handle_new_ip_countdown_tick(&mut model);
+            assert!(find_time_effect(&mut cmd).is_none());
         }
     }
 }

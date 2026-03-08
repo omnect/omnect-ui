@@ -5,6 +5,7 @@
  * the Crux Core's serialized state.
  */
 
+import { watch } from 'vue'
 import { viewModel, authToken, isSubscribed, wasmModule, websocketInstance } from './state'
 import {
 	factoryResetStatusToString,
@@ -33,23 +34,7 @@ export function setEventSender(callback: (event: Event) => Promise<void>): void 
 	sendEventCallback = callback
 }
 
-/**
- * Sync the overlay spinner state from Core.
- *
- * Must be called BEFORE updating deviceOperationState / networkChangeState so that
- * the `preserveCountdown` decision reads the previous (still-active) state values.
- */
 function syncOverlaySpinner(coreViewModel: GeneratedViewModel): void {
-	const isNetworkChangeActive = viewModel.networkChangeState.type === 'waitingForNewIp'
-	const isDeviceOpActive = viewModel.deviceOperationState.type === 'rebooting'
-		|| viewModel.deviceOperationState.type === 'factoryResetting'
-		|| viewModel.deviceOperationState.type === 'updating'
-		|| viewModel.deviceOperationState.type === 'waitingReconnection'
-	// Keep the Shell's countdown value when an active countdown interval is running;
-	// otherwise accept the value from Core (which starts null and is only set by Shell timers).
-	const preserveCountdown = (isNetworkChangeActive || isDeviceOpActive)
-		&& viewModel.overlaySpinner.countdownSeconds !== null
-
 	viewModel.overlaySpinner = {
 		overlay: coreViewModel.overlaySpinner.overlay,
 		title: coreViewModel.overlaySpinner.title,
@@ -58,11 +43,7 @@ function syncOverlaySpinner(coreViewModel: GeneratedViewModel): void {
 		progress: coreViewModel.overlaySpinner.progress !== null && coreViewModel.overlaySpinner.progress !== undefined
 			? coreViewModel.overlaySpinner.progress
 			: null,
-		countdownSeconds: preserveCountdown
-			? viewModel.overlaySpinner.countdownSeconds
-			: (coreViewModel.overlaySpinner.countdownSeconds !== null && coreViewModel.overlaySpinner.countdownSeconds !== undefined
-				? coreViewModel.overlaySpinner.countdownSeconds
-				: null),
+		countdownSeconds: coreViewModel.overlaySpinner.countdownSeconds ?? null,
 	}
 }
 
@@ -203,7 +184,6 @@ export function updateViewModelFromCore(): void {
 		// Sync the ref with the view model
 		authToken.value = viewModel.authToken
 
-		// Overlay spinner state (synced BEFORE device/network state so watchers can read countdown)
 		syncOverlaySpinner(coreViewModel)
 
 		// Device operation state - convert bincode variant to typed object
@@ -258,3 +238,18 @@ export function updateViewModelFromCore(): void {
 
 // Wire up the circular dependency: effects.ts needs to call updateViewModelFromCore
 setViewModelUpdater(updateViewModelFromCore)
+
+// Navigate to new IP when Core signals the new address is reachable.
+// This is a Shell-owned side-effect: Core owns the state, Shell owns navigation.
+watch(
+	() => viewModel.networkChangeState,
+	(newState) => {
+		if (newState?.type === 'newIpReachable') {
+			console.log(`[useCore] Redirecting to new IP: ${newState.newIp}:${newState.uiPort}`)
+			viewModel.successMessage = null
+			viewModel.errorMessage = null
+			window.location.href = `https://${newState.newIp}:${newState.uiPort}`
+		}
+	},
+	{ deep: true }
+)

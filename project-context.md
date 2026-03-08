@@ -233,8 +233,8 @@ omnect-ui/
 │   │       │       ├── effects.ts # Effect processing
 │   │       │       ├── http.ts   # HTTP capability
 │   │       │       ├── websocket.ts # WebSocket capability
-│       │   │       ├── timers.ts # Timer/Polling logic
-│       │   │       └── sync.ts   # ViewModel synchronization
+│   │       │       ├── time.ts   # Time/timer capability (crux_time)
+│   │       │       └── sync.ts   # ViewModel synchronization and navigation side-effects
 │       │   ├── pages/            # Route components
 │   │   │   ├── DeviceOverview.vue
 │   │   │   ├── DeviceUpdate.vue

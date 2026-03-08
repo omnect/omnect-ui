@@ -5,11 +5,13 @@ mod reconnection;
 pub use network::{
     handle_ack_factory_reset_result, handle_ack_rollback, handle_ack_update_validation,
     handle_network_form_start_edit, handle_network_form_update, handle_new_ip_check_tick,
-    handle_new_ip_check_timeout, handle_set_network_config, handle_set_network_config_response,
+    handle_new_ip_check_timeout, handle_new_ip_countdown_tick, handle_set_network_config,
+    handle_set_network_config_response,
 };
 pub use operations::handle_device_operation_response;
 pub use reconnection::{
-    handle_healthcheck_response, handle_reconnection_check_tick, handle_reconnection_timeout,
+    handle_healthcheck_response, handle_reconnection_check_tick,
+    handle_reconnection_countdown_tick, handle_reconnection_timeout,
 };
 
 use crux_core::Command;
@@ -158,14 +160,14 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
 
         DeviceEvent::HealthcheckResponse(result) => handle_healthcheck_response(result, model),
 
-        // Device reconnection events (reboot/factory reset/update)
-        // Shell sends these tick events based on watching device_operation_state
+        // Device reconnection events - tick events scheduled by Core via crux_time
         DeviceEvent::ReconnectionCheckTick => handle_reconnection_check_tick(model),
+        DeviceEvent::ReconnectionCountdownTick => handle_reconnection_countdown_tick(model),
         DeviceEvent::ReconnectionTimeout => handle_reconnection_timeout(model),
 
-        // Network IP change events
-        // Shell sends these tick events based on watching network_change_state
+        // Network IP change events - tick events scheduled by Core via crux_time
         DeviceEvent::NewIpCheckTick => handle_new_ip_check_tick(model),
+        DeviceEvent::NewIpCountdownTick => handle_new_ip_countdown_tick(model),
         DeviceEvent::NewIpCheckTimeout => handle_new_ip_check_timeout(model),
 
         // Acknowledge events
