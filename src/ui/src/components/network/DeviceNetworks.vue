@@ -25,6 +25,21 @@ const isCurrentConnection = (adapter: any) => {
   return viewModel.currentConnectionAdapter === adapter.name
 }
 
+// Auto-select preferred adapter when networkStatus first arrives
+watch(networkStatus, (status) => {
+  if (tab.value !== null || !status?.networkStatus?.length) return
+
+  const preferred =
+    viewModel.currentConnectionAdapter ??
+    status.networkStatus[0]?.name ??
+    null
+
+  if (preferred) {
+    tab.value = preferred
+    // watch(tab) below will fire and call networkFormStartEdit(preferred)
+  }
+}, { immediate: true })
+
 // Watch for tab changes and check for unsaved changes
 watch(tab, (newTab, oldTab) => {
   if (newTab === oldTab) return
