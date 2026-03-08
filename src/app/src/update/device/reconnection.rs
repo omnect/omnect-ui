@@ -1017,7 +1017,10 @@ mod tests {
             let TimeRequest::NotifyAfter { duration, .. } = time_request else {
                 panic!("expected NotifyAfter");
             };
-            assert_eq!(duration, TimeDuration::from_millis(RECONNECTION_POLL_INTERVAL_MS));
+            assert_eq!(
+                duration,
+                TimeDuration::from_millis(RECONNECTION_POLL_INTERVAL_MS)
+            );
         }
 
         #[test]
@@ -1031,7 +1034,10 @@ mod tests {
             let TimeRequest::NotifyAfter { duration, .. } = time_request else {
                 panic!("expected NotifyAfter");
             };
-            assert_eq!(duration, TimeDuration::from_millis(RECONNECTION_POLL_INTERVAL_MS));
+            assert_eq!(
+                duration,
+                TimeDuration::from_millis(RECONNECTION_POLL_INTERVAL_MS)
+            );
         }
 
         #[test]

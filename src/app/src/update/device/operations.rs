@@ -115,9 +115,9 @@ mod tests {
     }
 
     fn has_notify_after(effects: &[TimeRequest], expected: TimeDuration) -> bool {
-        effects.iter().any(|r| {
-            matches!(r, TimeRequest::NotifyAfter { duration, .. } if *duration == expected)
-        })
+        effects.iter().any(
+            |r| matches!(r, TimeRequest::NotifyAfter { duration, .. } if *duration == expected),
+        )
     }
 
     #[test]
