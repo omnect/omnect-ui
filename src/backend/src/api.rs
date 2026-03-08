@@ -73,13 +73,17 @@ where
         debug!("healthcheck() called");
 
         match api.service_client.healthcheck_info().await {
-            Ok(info) if info.version_info.mismatch => {
-                HttpResponse::ServiceUnavailable().json(&info)
-            }
-            Ok(info) => HttpResponse::Ok().json(&info),
+            Ok(info) if info.version_info.mismatch => HttpResponse::ServiceUnavailable()
+                .insert_header(("Access-Control-Allow-Origin", "*"))
+                .json(&info),
+            Ok(info) => HttpResponse::Ok()
+                .insert_header(("Access-Control-Allow-Origin", "*"))
+                .json(&info),
             Err(e) => {
                 error!("healthcheck failed: {e:#}");
-                HttpResponse::InternalServerError().body(e.to_string())
+                HttpResponse::InternalServerError()
+                    .insert_header(("Access-Control-Allow-Origin", "*"))
+                    .body(e.to_string())
             }
         }
     }

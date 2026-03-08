@@ -105,7 +105,11 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
     });
 
     test('rollback cancellation - new IP becomes reachable within timeout', async ({ page }) => {
-      await harness.mockHealthcheck(page, { healthcheckSuccessAfter: 2000 });
+      await harness.mockHealthcheck(page, { healthcheckSuccessAfter: 0 });
+
+      await page.route('https://192.168.1.150:5173/', async route => {
+        await route.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>Redirected</body></html>' });
+      });
 
       await harness.setup(page, {
         ipv4: {
@@ -124,13 +128,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible({ timeout: 10000 });
 
-      await page.waitForTimeout(3000);
-      await harness.simulateNewIpReachable();
-      await page.waitForTimeout(1000);
-
-      const rollbackState = harness.getRollbackState();
-      expect(rollbackState.enabled).toBe(false);
-      expect(rollbackState.occurred).toBe(false);
+      await page.waitForURL('https://192.168.1.150:5173/', { timeout: 10000 });
     });
 
     test('invalid IP address validation error', async ({ page }) => {
@@ -397,7 +395,15 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).not.toBeChecked();
     });
 
-    test('DHCP -> Static: Rollback should be ENABLED by default', async ({ page }) => {
+    test('DHCP -> Static (New IP): Rollback should be ENABLED by default and complete successfully', async ({ page }) => {
+      // Mock healthcheck to succeed after a short delay so we can see the countdown and then the redirect
+      await harness.mockHealthcheck(page, { healthcheckSuccessAfter: 0 });
+
+      // Mock the top-level navigation to the new IP so the test doesn't fail with network errors
+      await page.route('https://192.168.1.150:5173/', async route => {
+        await route.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>Redirected</body></html>' });
+      });
+
       await harness.setup(page, { ipv4: { addrs: [{ addr: 'localhost', dhcp: true, prefix_len: 24 }] } });
       await expect(page.getByLabel('DHCP')).toBeChecked();
 
@@ -407,6 +413,16 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
       await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
+
+      // Apply changes
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
+
+      // Verify overlay appears with countdown label
+      await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible({ timeout: 10000 });
+      expect(harness.getRollbackState().enabled).toBe(true);
+
+      // Verify that after healthcheck succeeds, the browser redirects to the new IP
+      await page.waitForURL('https://192.168.1.150:5173/', { timeout: 10000 });
     });
 
     test('DHCP -> Static (Same IP): Rollback should be ENABLED', async ({ page }) => {
@@ -428,6 +444,9 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Verify overlay appears with countdown label
       await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible({ timeout: 10000 });
+
+      // Healthcheck succeeds at the same IP (no redirect) — overlay should clear
+      await expect(page.locator('#overlay')).not.toBeVisible({ timeout: 15000 });
     });
 
     test('Rollback should show MODAL not SNACKBAR when connection is restored at old IP', async ({ page }) => {

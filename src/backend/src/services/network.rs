@@ -260,9 +260,16 @@ impl NetworkConfigService {
     fn trigger_server_restart() -> Result<()> {
         let tx = SERVER_RESTART_TX
             .get()
-            .context("failed to trigger restart: channel not initialized")?;
+            .context("failed to trigger restart: channel not initialized")?
+            .clone();
 
-        tx.send(()).context("failed to send restart signal")?;
+        // Spawn a task to delay the restart signal so the HTTP response has time to be sent to the client
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            if let Err(e) = tx.send(()) {
+                error!("failed to send restart signal after delay: {}", e);
+            }
+        });
 
         Ok(())
     }

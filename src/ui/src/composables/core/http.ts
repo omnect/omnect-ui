@@ -50,7 +50,11 @@ export async function executeHttpRequest(
 		const fetchOptions: RequestInit = {
 			method: httpRequest.method,
 			headers,
-			credentials: 'include',
+				// same-origin: cookies are sent for same-origin requests (all authenticated API calls)
+			// and omitted for cross-origin ones (e.g. healthcheck poll on the new IP during network
+			// reconfiguration). This allows Access-Control-Allow-Origin: * on /healthcheck to work —
+			// browsers reject wildcard CORS when credentials mode is 'include'.
+			credentials: 'same-origin',
 		}
 
 		if (httpRequest.method !== 'GET' && httpRequest.method !== 'HEAD' && httpRequest.body.length > 0) {
