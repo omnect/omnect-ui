@@ -1,12 +1,12 @@
 use crux_core::Command;
 
 use crate::{
-    auth_post, build_url,
+    Effect, auth_post, build_url,
     events::{Event, UiEvent},
     handle_response, http_get,
     model::Model,
     types::TimeoutSettings,
-    update_field, Effect,
+    update_field,
 };
 
 /// Handle UI-related events (clear messages, settings, etc.)

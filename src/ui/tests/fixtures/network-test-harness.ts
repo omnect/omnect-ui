@@ -3,10 +3,10 @@ import { publishToWebsocket } from './websocket';
 import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './mock-api';
 
 /**
- * Polling interval used by the application for healthcheck requests.
- * This must match NEW_IP_POLL_INTERVAL_MS in src/ui/src/composables/core/timers.ts
+ * Polling interval used by the Core for new-IP healthcheck requests.
+ * This matches NEW_IP_POLL_INTERVAL_MS in src/app/src/update/device/network/verification.rs.
  */
-export const HEALTHCHECK_POLL_INTERVAL_MS = Number(process.env.VITE_NEW_IP_POLL_INTERVAL_MS) || 5000;
+export const HEALTHCHECK_POLL_INTERVAL_MS = 5000;
 
 /**
  * Default rollback timeout in seconds if not specified

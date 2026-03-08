@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use serde_repr::Deserialize_repr;
 
 use crate::types::{
-    DeviceNetwork, Duration, FactoryReset, FactoryResetResult, FactoryResetStatus,
-    InternetProtocol, IpAddress, NetworkStatus, OnlineStatus, OsInfo, SystemInfo, Timeouts,
+    DeviceNetwork, FactoryReset, FactoryResetResult, FactoryResetStatus, InternetProtocol,
+    IpAddress, NetworkStatus, OnlineStatus, OsInfo, SystemInfo, TimeoutDuration, Timeouts,
     UpdateValidationStatus,
 };
 
@@ -85,7 +85,7 @@ pub struct OdsTimeouts {
 impl From<OdsTimeouts> for Timeouts {
     fn from(ods: OdsTimeouts) -> Self {
         Self {
-            wait_online_timeout: Duration {
+            wait_online_timeout: TimeoutDuration {
                 nanos: ods.wait_online_timeout.nanos as u32,
                 secs: ods.wait_online_timeout.secs,
             },

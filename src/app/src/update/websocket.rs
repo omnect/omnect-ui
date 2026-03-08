@@ -3,17 +3,18 @@ use std::collections::HashMap;
 use crux_core::Command;
 
 use crate::{
+    Effect, WebSocketCmd,
     events::{Event, WebSocketEvent},
     model::Model,
     parse_ods_update,
     types::{
+        NetworkFormData, NetworkFormState,
         ods::{
             OdsFactoryReset, OdsNetworkStatus, OdsOnlineStatus, OdsSystemInfo, OdsTimeouts,
             OdsUpdateValidationStatus,
         },
-        NetworkFormData, NetworkFormState,
     },
-    update_field, Effect, WebSocketCmd,
+    update_field,
 };
 
 /// Handle WebSocket and WebSocket-related events
@@ -87,30 +88,29 @@ fn sync_network_form_from_status(m: &mut Model) {
     } else {
         None
     };
-    if let Some(adapter_name) = maybe_adapter_name {
-        if let Some(form_data) = m
+    if let Some(adapter_name) = maybe_adapter_name
+        && let Some(form_data) = m
             .network_status
             .as_ref()
             .and_then(|ns| ns.network_status.iter().find(|n| n.name == adapter_name))
             .map(NetworkFormData::from)
-        {
-            m.network_form_state = NetworkFormState::Editing {
-                adapter_name,
-                form_data: form_data.clone(),
-                original_data: form_data,
-                errors: HashMap::new(),
-            };
-        }
+    {
+        m.network_form_state = NetworkFormState::Editing {
+            adapter_name,
+            form_data: form_data.clone(),
+            original_data: form_data,
+            errors: HashMap::new(),
+        };
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::WebSocketOperation;
     use crate::types::{
         FactoryReset, FactoryResetStatus, OnlineStatus, OsInfo, SystemInfo, UpdateValidationStatus,
     };
-    use crate::WebSocketOperation;
 
     mod subscribe {
         use super::*;
@@ -237,7 +237,7 @@ mod tests {
 
     mod timeouts {
         use super::*;
-        use crate::types::Duration;
+        use crate::types::TimeoutDuration;
         use crate::types::Timeouts;
 
         #[test]
@@ -247,7 +247,7 @@ mod tests {
             let json = r#"{"wait_online_timeout": {"nanos": 0, "secs": 300}}"#;
 
             let expected_timeouts = Timeouts {
-                wait_online_timeout: Duration {
+                wait_online_timeout: TimeoutDuration {
                     nanos: 0,
                     secs: 300,
                 },

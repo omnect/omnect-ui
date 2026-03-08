@@ -10,11 +10,13 @@
 import { wasmModule } from './state'
 import { executeHttpRequest, setEffectsProcessor as setHttpEffectsProcessor } from './http'
 import { executeWebSocketOperation, setEffectsProcessor as setWebSocketEffectsProcessor } from './websocket'
+import { executeTimeRequest, setEffectsProcessor as setTimeEffectsProcessor } from './time'
 import {
 	Request as CruxRequest,
 	EffectVariantRender,
 	EffectVariantHttp,
 	EffectVariantWebSocket,
+	EffectVariantTime,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 import { BincodeDeserializer } from '../../../../shared_types/generated/typescript/bincode/mod'
 
@@ -78,12 +80,19 @@ export async function processEffects(effectsBytes: Uint8Array): Promise<void> {
 			executeWebSocketOperation(request.id, websocketOperation).catch((error) => {
 				console.error('Failed to execute WebSocket operation:', error)
 			})
+		} else if (effect instanceof EffectVariantTime) {
+			// Time effect: Schedule a timer and resolve when it fires
+			const timeRequest = effect.value
+			executeTimeRequest(request.id, timeRequest).catch((error) => {
+				console.error('Failed to execute Time request:', error)
+			})
 		} else {
 			console.warn('Unknown effect type:', effect)
 		}
 	}
 }
 
-// Wire up the circular dependency: http.ts and websocket.ts need to call processEffects
+// Wire up the circular dependency: http.ts, websocket.ts, and time.ts need to call processEffects
 setHttpEffectsProcessor(processEffects)
 setWebSocketEffectsProcessor(processEffects)
+setTimeEffectsProcessor(processEffects)

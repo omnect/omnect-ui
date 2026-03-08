@@ -17,9 +17,9 @@ pub use crate::{
     commands::websocket::{WebSocketOperation, WebSocketOutput},
     events::Event,
     http_helpers::{
-        build_url, check_response_status, extract_error_message, extract_string_response,
+        BASE_URL, build_url, check_response_status, extract_error_message, extract_string_response,
         handle_auth_error, handle_request_error, is_response_success, map_http_error,
-        parse_json_response, process_json_response, process_status_response, BASE_URL,
+        parse_json_response, process_json_response, process_status_response,
     },
     model::Model,
     types::*,
@@ -31,10 +31,12 @@ pub enum Effect {
     Render(crux_core::render::RenderOperation),
     Http(crux_http::protocol::HttpRequest),
     WebSocket(WebSocketOperation),
+    Time(crux_time::protocol::TimeRequest),
 }
 
 pub type WebSocketCmd = crate::commands::websocket::WebSocket<Effect, Event>;
 pub type HttpCmd = crux_http::command::Http<Effect, Event>;
+pub type TimeCmd = crux_time::command::Time<Effect, Event>;
 
 /// The Core application
 #[derive(Default)]

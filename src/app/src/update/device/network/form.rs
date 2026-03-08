@@ -1,10 +1,10 @@
 use crux_core::Command;
 use std::collections::HashMap;
 
+use crate::Effect;
 use crate::events::Event;
 use crate::model::Model;
-use crate::types::{is_valid_ipv4, subnet_to_cidr, NetworkFormData, NetworkFormState};
-use crate::Effect;
+use crate::types::{NetworkFormData, NetworkFormState, is_valid_ipv4, subnet_to_cidr};
 
 /// Handle network form start edit - initialize form with current network adapter data
 pub fn handle_network_form_start_edit(
@@ -12,26 +12,25 @@ pub fn handle_network_form_start_edit(
     model: &mut Model,
 ) -> Command<Effect, Event> {
     // Find the network adapter and copy its data to form state
-    if let Some(network_status) = &model.network_status {
-        if let Some(adapter) = network_status
+    if let Some(network_status) = &model.network_status
+        && let Some(adapter) = network_status
             .network_status
             .iter()
             .find(|n| n.name == adapter_name)
-        {
-            let form_data = NetworkFormData::from(adapter);
+    {
+        let form_data = NetworkFormData::from(adapter);
 
-            model.network_form_state = NetworkFormState::Editing {
-                adapter_name: adapter_name.clone(),
-                form_data: form_data.clone(),
-                original_data: form_data,
-                errors: HashMap::new(),
-            };
-            // Clear dirty flag when starting a fresh edit
-            model.network_form_dirty = false;
-            // Clear rollback modal flags
-            model.should_show_rollback_modal = false;
-            model.default_rollback_enabled = false;
-        }
+        model.network_form_state = NetworkFormState::Editing {
+            adapter_name: adapter_name.clone(),
+            form_data: form_data.clone(),
+            original_data: form_data,
+            errors: HashMap::new(),
+        };
+        // Clear dirty flag when starting a fresh edit
+        model.network_form_dirty = false;
+        // Clear rollback modal flags
+        model.should_show_rollback_modal = false;
+        model.default_rollback_enabled = false;
     }
 
     crux_core::render::render()

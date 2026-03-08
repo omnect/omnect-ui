@@ -6,7 +6,7 @@
 use lazy_static::lazy_static;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crux_core::{bridge::Bridge, Core};
+use crux_core::{Core, bridge::Bridge};
 
 use crate::App;
 

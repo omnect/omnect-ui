@@ -74,10 +74,10 @@ pub fn subnet_to_cidr(subnet: &str) -> Option<u32> {
 /// Accepts "/24" or "24" format, returns prefix length if valid
 pub fn parse_netmask(mask: &str) -> Option<u32> {
     let cleaned = mask.trim_start_matches('/');
-    if let Ok(prefix_len) = cleaned.parse::<u32>() {
-        if prefix_len <= 32 {
-            return Some(prefix_len);
-        }
+    if let Ok(prefix_len) = cleaned.parse::<u32>()
+        && prefix_len <= 32
+    {
+        return Some(prefix_len);
     }
     None
 }

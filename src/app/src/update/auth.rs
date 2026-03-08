@@ -1,13 +1,13 @@
 use base64::prelude::*;
-use crux_core::{render::render, Command};
+use crux_core::{Command, render::render};
 
 use crate::{
-    auth_post, auth_post_basic,
+    Effect, auth_post, auth_post_basic,
     events::{AuthEvent, Event, WifiEvent},
     handle_response,
     model::Model,
     types::{AuthToken, SetPasswordRequest, UpdatePasswordRequest, WifiState},
-    unauth_post, Effect,
+    unauth_post,
 };
 
 /// Handle authentication-related events
@@ -154,7 +154,8 @@ mod tests {
                 http_request
                     .headers
                     .iter()
-                    .any(|h| h.name.eq_ignore_ascii_case("authorization") && h.value.starts_with("Basic "))
+                    .any(|h| h.name.eq_ignore_ascii_case("authorization")
+                        && h.value.starts_with("Basic "))
             );
         }
 
@@ -257,7 +258,8 @@ mod tests {
                 http_request
                     .headers
                     .iter()
-                    .any(|h| h.name.eq_ignore_ascii_case("authorization") && h.value.starts_with("Bearer "))
+                    .any(|h| h.name.eq_ignore_ascii_case("authorization")
+                        && h.value.starts_with("Bearer "))
             );
         }
 
@@ -478,10 +480,7 @@ mod tests {
                 .expect("Expected Http effect");
             let (http_request, _) = http_req.split();
 
-            assert_eq!(
-                http_request.url,
-                "https://relative/require-set-password"
-            );
+            assert_eq!(http_request.url, "https://relative/require-set-password");
             assert_eq!(http_request.method, "GET");
         }
 

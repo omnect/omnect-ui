@@ -3,7 +3,7 @@
 //! These types define the interface between the Core and the Shell for WebSocket operations.
 
 use crate::types::websocket::WebSocketChannel;
-use crux_core::{capability::Operation, command, Command};
+use crux_core::{Command, capability::Operation, command};
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 

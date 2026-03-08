@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use crux_core::{render::render, Command};
+use crux_core::{Command, render::render};
 
 use crate::{
-    auth_get, auth_post,
+    Effect, TimeCmd, auth_get, auth_post,
     events::{Event, WifiEvent},
     model::Model,
     types::{
@@ -11,13 +11,17 @@ use crate::{
         WifiSavedNetworksResponse, WifiScanResultsResponse, WifiScanState, WifiState,
         WifiStatusResponse,
     },
-    unauth_post, wifi_psk, Effect,
+    unauth_post, wifi_psk,
 };
 
 /// Max scan poll attempts (500ms each → 30s total)
 const SCAN_POLL_MAX_ATTEMPTS: u32 = 60;
 /// Max connect poll attempts (1s each → 30s total)
 const CONNECT_POLL_MAX_ATTEMPTS: u32 = 30;
+/// WiFi scan poll interval
+const WIFI_SCAN_POLL_INTERVAL_MS: u64 = 500;
+/// WiFi connect poll interval
+const WIFI_CONNECT_POLL_INTERVAL_MS: u64 = 1000;
 
 /// Helper to get mutable reference to the Ready variant fields
 macro_rules! with_ready_state {
@@ -139,8 +143,8 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
                     }
                 )
             } else {
-                // Scan started; Shell will drive polling via ScanPollTick
-                render()
+                // Scan accepted; schedule first poll tick
+                Command::all([render(), schedule_scan_poll()])
             }
         }
 
@@ -160,12 +164,15 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
                     return render();
                 }
                 *scan_poll += 1;
-                auth_get!(
-                    Wifi, WifiEvent, model,
-                    "/wifi/scan/results",
-                    ScanResultsResponse, "WiFi scan results",
-                    expect_json: WifiScanResultsResponse
-                )
+                Command::all([
+                    auth_get!(
+                        Wifi, WifiEvent, model,
+                        "/wifi/scan/results",
+                        ScanResultsResponse, "WiFi scan results",
+                        expect_json: WifiScanResultsResponse
+                    ),
+                    schedule_scan_poll(),
+                ])
             })
         }
 
@@ -308,9 +315,9 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
                     }
                 )
             } else {
-                // Connect request accepted; Shell will drive polling via ConnectPollTick
+                // Connect accepted; schedule first poll tick
                 model.stop_loading();
-                render()
+                Command::all([render(), schedule_connect_poll()])
             }
         }
 
@@ -330,12 +337,15 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
                     return render();
                 }
                 *connect_poll += 1;
-                auth_get!(
-                    Wifi, WifiEvent, model,
-                    "/wifi/status",
-                    StatusResponse, "WiFi connect status",
-                    expect_json: WifiStatusResponse
-                )
+                Command::all([
+                    auth_get!(
+                        Wifi, WifiEvent, model,
+                        "/wifi/status",
+                        StatusResponse, "WiFi connect status",
+                        expect_json: WifiStatusResponse
+                    ),
+                    schedule_connect_poll(),
+                ])
             })
         }
 
@@ -497,6 +507,21 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
             }
         }
     }
+}
+
+fn schedule_scan_poll() -> Command<Effect, Event> {
+    let (timer, handle) =
+        TimeCmd::notify_after(std::time::Duration::from_millis(WIFI_SCAN_POLL_INTERVAL_MS));
+    std::mem::forget(handle);
+    timer.then_send(|_| Event::Wifi(WifiEvent::ScanPollTick))
+}
+
+fn schedule_connect_poll() -> Command<Effect, Event> {
+    let (timer, handle) = TimeCmd::notify_after(std::time::Duration::from_millis(
+        WIFI_CONNECT_POLL_INTERVAL_MS,
+    ));
+    std::mem::forget(handle);
+    timer.then_send(|_| Event::Wifi(WifiEvent::ConnectPollTick))
 }
 
 #[cfg(test)]

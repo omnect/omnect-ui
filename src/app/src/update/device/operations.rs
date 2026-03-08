@@ -1,8 +1,10 @@
 use crux_core::Command;
 
+use crate::Effect;
 use crate::model::Model;
 use crate::types::{DeviceOperationState, OverlaySpinnerState};
-use crate::Effect;
+
+use super::reconnection::schedule_reconnection_poll;
 
 /// Check if an error message indicates a network error
 pub fn is_network_error(error: &str) -> bool {
@@ -60,6 +62,7 @@ pub fn handle_device_operation_response(
             spinner = spinner.with_text(text);
         }
         model.overlay_spinner = spinner;
+        return Command::all([crux_core::render::render(), schedule_reconnection_poll()]);
     } else if let Err(e) = result {
         model.set_error(e);
         model.overlay_spinner.clear();

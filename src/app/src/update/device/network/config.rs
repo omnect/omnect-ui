@@ -2,14 +2,13 @@ use crux_core::Command;
 use std::collections::HashMap;
 
 use crate::{
-    auth_post,
+    Effect, auth_post,
     events::Event,
     model::Model,
-    types::{subnet_to_cidr, NetworkChangeState, NetworkConfigRequest, NetworkFormState},
-    Effect,
+    types::{NetworkChangeState, NetworkConfigRequest, NetworkFormState, subnet_to_cidr},
 };
 
-use super::verification::update_network_state_and_spinner;
+use super::verification::{schedule_new_ip_poll, update_network_state_and_spinner};
 
 /// Success message for network configuration update
 const NETWORK_CONFIG_SUCCESS: &str = "Network configuration updated";
@@ -24,10 +23,10 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
             let is_server_addr = model.is_current_adapter(&config_req.name);
 
             // If we are in editing state, we might need to fix up the netmask from the form's subnet_mask
-            if let NetworkFormState::Editing { form_data, .. } = &model.network_form_state {
-                if form_data.name == config_req.name {
-                    config_req.netmask = subnet_to_cidr(&form_data.subnet_mask);
-                }
+            if let NetworkFormState::Editing { form_data, .. } = &model.network_form_state
+                && form_data.name == config_req.name
+            {
+                config_req.netmask = subnet_to_cidr(&form_data.subnet_mask);
             }
 
             // Store network change state for later use
@@ -85,6 +84,9 @@ pub fn handle_set_network_config_response(
 
     match result {
         Ok(response) => {
+            // Track whether we need to start new IP polling
+            let mut start_new_ip_poll = false;
+
             // Check if we are applying a config that changes IP/DHCP
             if let NetworkChangeState::ApplyingConfig {
                 new_ip,
@@ -114,6 +116,16 @@ pub fn handle_set_network_config_response(
                         false,
                     );
                 }
+                // Poll only if we have a known target IP (not DHCP)
+                if matches!(
+                    model.network_change_state,
+                    NetworkChangeState::WaitingForNewIp {
+                        switching_to_dhcp: false,
+                        ..
+                    }
+                ) {
+                    start_new_ip_poll = true;
+                }
             } else {
                 // Not changing current connection's IP - just clear state
                 model.network_change_state = NetworkChangeState::Idle;
@@ -141,7 +153,12 @@ pub fn handle_set_network_config_response(
 
             // Clear rollback modal flag after config is applied
             model.should_show_rollback_modal = false;
-            crux_core::render::render()
+
+            if start_new_ip_poll {
+                Command::all([crux_core::render::render(), schedule_new_ip_poll()])
+            } else {
+                crux_core::render::render()
+            }
         }
         Err(e) => {
             model.set_error(e);

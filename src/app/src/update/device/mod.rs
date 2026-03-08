@@ -15,7 +15,7 @@ pub use reconnection::{
 use crux_core::Command;
 
 use crate::{
-    auth_post,
+    Effect, auth_post,
     events::{DeviceEvent, Event},
     handle_response,
     model::Model,
@@ -23,7 +23,6 @@ use crate::{
         DeviceOperationState, FactoryResetRequest, LoadUpdateRequest, OverlaySpinnerState,
         RunUpdateRequest, UpdateManifest, UploadState,
     },
-    Effect,
 };
 
 /// Handle device action events (reboot, factory reset, network, updates)
@@ -224,9 +223,9 @@ fn build_initial_healthcheck_cmd() -> Command<Effect, Event> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::UpdateManifest;
     use crate::events::DeviceEvent;
     use crate::types::{DeviceOperationState, UploadState};
-    use crate::UpdateManifest;
 
     mod reboot {
         use super::*;
@@ -313,11 +312,13 @@ mod tests {
 
             assert!(!model.is_loading);
             assert!(model.error_message.is_some());
-            assert!(model
-                .error_message
-                .as_ref()
-                .unwrap()
-                .contains("Invalid factory reset mode"));
+            assert!(
+                model
+                    .error_message
+                    .as_ref()
+                    .unwrap()
+                    .contains("Invalid factory reset mode")
+            );
         }
 
         #[test]
@@ -427,11 +428,13 @@ mod tests {
                 UploadState::Failed(_)
             ));
             assert!(model.error_message.is_some());
-            assert!(model
-                .error_message
-                .as_ref()
-                .unwrap()
-                .contains("Upload failed"));
+            assert!(
+                model
+                    .error_message
+                    .as_ref()
+                    .unwrap()
+                    .contains("Upload failed")
+            );
             assert!(!model.overlay_spinner.is_visible());
         }
     }

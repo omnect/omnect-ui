@@ -1,13 +1,16 @@
 use crux_core::Command;
 
 use crate::{
+    Effect, TimeCmd,
     events::Event,
     http_get,
     http_helpers::build_url,
     model::Model,
     types::{DeviceOperationState, NetworkChangeState, OverlaySpinnerState, UploadState},
-    Effect,
 };
+
+/// Reconnection poll interval
+const RECONNECTION_POLL_INTERVAL_MS: u64 = 5000;
 
 use super::operations::{is_actual_update_result, is_update_complete};
 
@@ -26,14 +29,25 @@ pub fn handle_reconnection_check_tick(model: &mut Model) -> Command<Effect, Even
 
     model.reconnection_attempt += 1;
 
-    // Send healthcheck request
-    http_get!(
-        Device,
-        DeviceEvent,
-        &build_url("/healthcheck"),
-        HealthcheckResponse,
-        crate::types::HealthcheckInfo
-    )
+    Command::all([
+        http_get!(
+            Device,
+            DeviceEvent,
+            &build_url("/healthcheck"),
+            HealthcheckResponse,
+            crate::types::HealthcheckInfo
+        ),
+        schedule_reconnection_poll(),
+    ])
+}
+
+pub(super) fn schedule_reconnection_poll() -> Command<Effect, Event> {
+    use crate::events::DeviceEvent;
+    let (timer, handle) = TimeCmd::notify_after(std::time::Duration::from_millis(
+        RECONNECTION_POLL_INTERVAL_MS,
+    ));
+    std::mem::forget(handle);
+    timer.then_send(|_| Event::Device(DeviceEvent::ReconnectionCheckTick))
 }
 
 /// Handle reconnection timeout - device didn't come back online
@@ -127,13 +141,12 @@ fn advance_device_operation_state(
 
                 // Clear stale firmware page state so the update page is fresh on re-login.
                 // Only when an actual update ran — "NoUpdate" preserves the loaded manifest.
-                if is_updating {
-                    if let Ok(info) = &result {
-                        if is_actual_update_result(info) {
-                            model.update_manifest = None;
-                            model.firmware_upload_state = UploadState::Idle;
-                        }
-                    }
+                if is_updating
+                    && let Ok(info) = &result
+                    && is_actual_update_result(info)
+                {
+                    model.update_manifest = None;
+                    model.firmware_upload_state = UploadState::Idle;
                 }
             }
             // else: device never went offline - keep checking
@@ -165,13 +178,12 @@ fn advance_device_operation_state(
 
                     // Clear stale firmware page state so the update page is fresh on re-login.
                     // Only when an actual update ran — "NoUpdate" preserves the loaded manifest.
-                    if is_update {
-                        if let Ok(info) = &result {
-                            if is_actual_update_result(info) {
-                                model.update_manifest = None;
-                                model.firmware_upload_state = UploadState::Idle;
-                            }
-                        }
+                    if is_update
+                        && let Ok(info) = &result
+                        && is_actual_update_result(info)
+                    {
+                        model.update_manifest = None;
+                        model.firmware_upload_state = UploadState::Idle;
                     }
                 }
                 // else: device never went offline - keep checking
@@ -306,8 +318,19 @@ mod tests {
             };
             let mut cmd = handle_reconnection_check_tick(&mut model);
 
-            // http_get! produces a single Http effect (no render wrapper)
-            let (http_request, _) = cmd.expect_one_effect().expect_http().split();
+            // Command::all([http_get!(...), schedule_poll()]) produces Http + Time effects;
+            // find the Http one.
+            let http_effect = cmd
+                .effects()
+                .find_map(|e| {
+                    if let Effect::Http(_) = e {
+                        Some(e.expect_http())
+                    } else {
+                        None
+                    }
+                })
+                .expect("expected Http effect");
+            let (http_request, _) = http_effect.split();
 
             assert_eq!(http_request.url, "https://relative/healthcheck");
             assert_eq!(http_request.method, "GET");

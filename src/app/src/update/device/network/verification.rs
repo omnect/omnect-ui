@@ -1,12 +1,16 @@
 use crux_core::Command;
 
 use crate::{
+    Effect, TimeCmd,
     events::{DeviceEvent, Event, UiEvent},
     http_get_silent,
     model::Model,
     types::{HealthcheckInfo, NetworkChangeState, OverlaySpinnerState},
-    unauth_post, Effect,
+    unauth_post,
 };
+
+/// New IP poll interval
+const NEW_IP_POLL_INTERVAL_MS: u64 = 5000;
 
 /// Helper to update network state and spinner based on configuration response
 pub fn update_network_state_and_spinner(
@@ -77,15 +81,18 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
             // If switching to DHCP, we don't know the new IP, so we can't poll it.
             // We just wait for the timeout (rollback) or for the user to manually navigate.
             if !*switching_to_dhcp {
-                // Try to reach the new IP
+                // Try to reach the new IP, then reschedule
                 let url = format!("https://{new_ip}:{ui_port}/healthcheck");
-                http_get_silent!(
-                    url,
-                    on_success: Event::Device(DeviceEvent::HealthcheckResponse(Ok(
-                        HealthcheckInfo::default()
-                    ))),
-                    on_error: Event::Ui(UiEvent::ClearSuccess)
-                )
+                Command::all([
+                    http_get_silent!(
+                        url,
+                        on_success: Event::Device(DeviceEvent::HealthcheckResponse(Ok(
+                            HealthcheckInfo::default()
+                        ))),
+                        on_error: Event::Ui(UiEvent::ClearSuccess)
+                    ),
+                    schedule_new_ip_poll(),
+                ])
             } else {
                 crux_core::render::render()
             }
@@ -96,17 +103,19 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
             attempt,
         } => {
             *attempt += 1;
-            // Poll the old IP to see if rollback completed
+            // Poll the old IP to see if rollback completed, then reschedule
             let url = format!("https://{old_ip}:{ui_port}/healthcheck");
-            // Use http_get! to parse the response body (needed for network_rollback_occurred flag)
             use crate::http_get;
-            http_get!(
-                Device,
-                DeviceEvent,
-                &url,
-                HealthcheckResponse,
-                crate::types::HealthcheckInfo
-            )
+            Command::all([
+                http_get!(
+                    Device,
+                    DeviceEvent,
+                    &url,
+                    HealthcheckResponse,
+                    crate::types::HealthcheckInfo
+                ),
+                schedule_new_ip_poll(),
+            ])
         }
         _ => crux_core::render::render(),
     }
@@ -114,6 +123,8 @@ pub fn handle_new_ip_check_tick(model: &mut Model) -> Command<Effect, Event> {
 
 /// Handle new IP check timeout - new IP didn't become reachable in time
 pub fn handle_new_ip_check_timeout(model: &mut Model) -> Command<Effect, Event> {
+    let mut start_old_ip_poll = false;
+
     if let NetworkChangeState::WaitingForNewIp {
         new_ip,
         old_ip,
@@ -134,6 +145,7 @@ pub fn handle_new_ip_check_timeout(model: &mut Model) -> Command<Effect, Event> 
                 .set_text("Rollback in progress. Verifying original address...");
             // Ensure spinner is spinning (not timed out state)
             model.overlay_spinner.set_loading();
+            start_old_ip_poll = true;
         } else {
             model.network_change_state = NetworkChangeState::NewIpTimeout {
                 new_ip: new_ip.clone(),
@@ -150,7 +162,18 @@ pub fn handle_new_ip_check_timeout(model: &mut Model) -> Command<Effect, Event> 
         }
     }
 
-    crux_core::render::render()
+    if start_old_ip_poll {
+        Command::all([crux_core::render::render(), schedule_new_ip_poll()])
+    } else {
+        crux_core::render::render()
+    }
+}
+
+pub(super) fn schedule_new_ip_poll() -> Command<Effect, Event> {
+    let (timer, handle) =
+        TimeCmd::notify_after(std::time::Duration::from_millis(NEW_IP_POLL_INTERVAL_MS));
+    std::mem::forget(handle);
+    timer.then_send(|_| Event::Device(DeviceEvent::NewIpCheckTick))
 }
 
 /// Handle acknowledge factory reset result - clear the result

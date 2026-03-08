@@ -4,11 +4,11 @@ mod ui;
 mod websocket;
 mod wifi;
 
-use crux_core::{render::render, Command};
+use crux_core::{Command, render::render};
 
+use crate::Effect;
 use crate::events::Event;
 use crate::model::Model;
-use crate::Effect;
 
 /// Main update dispatcher - routes events to domain-specific handlers
 pub fn update(event: Event, model: &mut Model) -> Command<Effect, Event> {

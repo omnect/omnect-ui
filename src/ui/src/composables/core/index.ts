@@ -30,7 +30,7 @@ import {
 import { processEffects } from './effects'
 
 // Import timer management
-import { setEventSender as setTimerEventSender, initializeTimerWatchers, checkPendingNetworkChange } from './timers'
+import { setEventSender as setTimerEventSender, initializeTimerWatchers } from './timers'
 
 // Import WebSocket
 import { setEventSender as setWebSocketEventSender } from './websocket'
@@ -81,8 +81,6 @@ import {
 	WifiEventVariantGetStatus,
 	WifiEventVariantGetSavedNetworks,
 	WifiEventVariantForgetNetwork,
-	WifiEventVariantScanPollTick,
-	WifiEventVariantConnectPollTick,
 } from '../../../../shared_types/generated/typescript/types/shared_types'
 
 // Re-export types for external use
@@ -206,9 +204,6 @@ async function initializeCore(): Promise<void> {
 
 			// Only set initialized flag after WASM is fully loaded
 			isInitialized.value = true
-
-			// Check for pending network change from previous session
-			checkPendingNetworkChange()
 
 			// Attempt to restore session from server-side cookie before sending Initialize.
 			// The /token/refresh endpoint verifies the existing session cookie and issues a

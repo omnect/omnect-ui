@@ -42,10 +42,10 @@ macro_rules! update_field {
 
 // Re-export http_helpers functions for macro use
 pub use crate::http_helpers::{
-    build_url, check_response_status, extract_error_message, extract_string_response,
+    BASE_URL, build_url, check_response_status, extract_error_message, extract_string_response,
     handle_auth_error, handle_request_error, is_response_success, map_http_error,
     parse_json_response, parse_json_response_any_status, process_json_response,
-    process_status_response, BASE_URL,
+    process_status_response,
 };
 
 /// Macro for unauthenticated POST requests with standard error handling.

@@ -26,10 +26,10 @@ pub struct OnlineStatus {
     pub iothub: bool,
 }
 
-/// Duration type for timeouts
+/// TimeoutDuration type for timeouts
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct Duration {
+pub struct TimeoutDuration {
     pub nanos: u32,
     pub secs: u64,
 }
@@ -38,7 +38,7 @@ pub struct Duration {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Timeouts {
-    pub wait_online_timeout: Duration,
+    pub wait_online_timeout: TimeoutDuration,
 }
 
 /// Overlay spinner state (UI state)

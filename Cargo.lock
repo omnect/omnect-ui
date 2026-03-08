@@ -824,6 +824,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "crux_time"
+version = "0.15.0-rc3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef4fc7f6d025a0d723073c07ebb21737fb1ad7baf269a8246ce6587c7f363e70"
+dependencies = [
+ "crux_core",
+ "facet",
+ "futures",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "crypto-bigint"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2296,6 +2309,7 @@ dependencies = [
  "crux_core",
  "crux_http",
  "crux_macros",
+ "crux_time",
  "getrandom 0.3.4",
  "hex",
  "hmac",
