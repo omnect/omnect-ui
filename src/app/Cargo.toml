@@ -29,7 +29,6 @@ crux_macros = { version = "0.8.0-rc3", default-features = false }
 crux_time = { version = "0.15.0-rc3", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 hmac = { version = "0.12", default-features = false }
-lazy_static = { version = "1.4", default-features = false }
 log = { version = "0.4", default-features = false }
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }

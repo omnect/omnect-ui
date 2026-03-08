@@ -2313,7 +2313,6 @@ dependencies = [
  "getrandom 0.3.4",
  "hex",
  "hmac",
- "lazy_static",
  "log",
  "pbkdf2",
  "serde",

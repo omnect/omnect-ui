@@ -118,8 +118,7 @@ where
     /// Build the request into a Command RequestBuilder
     pub fn build(
         self,
-    ) -> command::RequestBuilder<Effect, Event, impl std::future::Future<Output = WebSocketOutput>>
-    {
+    ) -> command::RequestBuilder<Effect, Event, impl Future<Output = WebSocketOutput>> {
         command::RequestBuilder::new(move |ctx| async move {
             Command::request_from_shell(self.operation)
                 .into_future(ctx)

@@ -3,16 +3,14 @@
 //! This module provides the interface between JavaScript and the Crux Core.
 //! It exposes functions for processing events and retrieving the view model.
 
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crux_core::{Core, bridge::Bridge};
 
 use crate::App;
 
-lazy_static! {
-    static ref CORE: Bridge<App> = Bridge::new(Core::new());
-}
+static CORE: LazyLock<Bridge<App>> = LazyLock::new(|| Bridge::new(Core::new()));
 
 /// Initialize the WASM module and set up logging
 ///
