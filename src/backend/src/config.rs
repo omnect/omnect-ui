@@ -189,7 +189,7 @@ impl KeycloakConfig {
 impl DeviceServiceConfig {
     fn load() -> Result<Self> {
         let socket_path = env::var("DEVICE_SERVICE_SOCKET_PATH")
-            .unwrap_or_else(|_| "/socket/device-service.sock".to_string())
+            .unwrap_or_else(|_| "/omnect-device-service/api.sock".to_string())
             .into();
 
         Ok(Self { socket_path })
@@ -258,7 +258,7 @@ impl IoTEdgeConfig {
 impl WifiConfig {
     fn load() -> Self {
         let socket_path = env::var("WIFI_COMMISSIONING_SOCKET_PATH")
-            .unwrap_or_else(|_| "/socket/wifi-commissioning.sock".to_string())
+            .unwrap_or_else(|_| "/wifi-commissioning-service/api.sock".to_string())
             .into();
 
         Self { socket_path }
