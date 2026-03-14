@@ -23,11 +23,11 @@ export default defineConfig({
 	},
 	build: {
 		chunkSizeWarningLimit: 1000,
-		rollupOptions: {
+		rolldownOptions: {
 			output: {
-				manualChunks: {
-					vue: ["vue", "vue-router", "@vueuse/core"],
-					vuetify: ["vuetify"]
+				manualChunks(id) {
+					if (id.includes("vuetify")) return "vuetify"
+					if (id.includes("vue") || id.includes("@vueuse")) return "vue"
 				}
 			}
 		}
