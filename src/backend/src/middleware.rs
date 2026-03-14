@@ -372,7 +372,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
+    #[expect(clippy::await_holding_lock)]
     async fn middleware_correct_user_credentials_should_succeed_and_return_valid_token() {
         let _lock = PasswordService::lock_for_test();
 
@@ -393,7 +393,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
+    #[expect(clippy::await_holding_lock)]
     async fn middleware_invalid_user_credentials_should_return_unauthorized_error() {
         let _lock = PasswordService::lock_for_test();
 
@@ -453,7 +453,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    #[allow(clippy::await_holding_lock)]
+    #[expect(clippy::await_holding_lock)]
     async fn middleware_basic_auth_preserves_request_body() {
         let _lock = PasswordService::lock_for_test();
 

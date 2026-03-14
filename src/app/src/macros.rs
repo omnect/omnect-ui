@@ -578,7 +578,7 @@ macro_rules! handle_response {
         $model.stop_loading();
         match $result {
             Ok($value) => {
-                #[allow(clippy::redundant_locals)]
+                #[expect(clippy::redundant_locals)]
                 let $success_model = $model;
                 $success_body
             }
@@ -597,7 +597,7 @@ macro_rules! handle_response {
         $model.stop_loading();
         match $result {
             Ok($value) => {
-                #[allow(clippy::redundant_locals)]
+                #[expect(clippy::redundant_locals)]
                 let $success_model = $model;
                 $success_body
                 $model.success_message = Some($msg.to_string());
@@ -617,7 +617,6 @@ macro_rules! handle_response {
         $model.clear_error();
         match $result {
             Ok($value) => {
-                #[allow(clippy::redundant_locals)]
                 let $success_model = $model;
                 $success_body
             }

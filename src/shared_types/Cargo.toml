@@ -2,7 +2,7 @@
 name = "shared_types"
 description = "TypeGen for omnect-ui-core types"
 readme = "../../README.md"
-edition = "2021"
+edition.workspace = true
 
 authors.workspace = true
 homepage.workspace = true
