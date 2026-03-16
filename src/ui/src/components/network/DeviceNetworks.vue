@@ -36,7 +36,8 @@ watch(networkStatus, (status) => {
 
   if (preferred) {
     tab.value = preferred
-    // watch(tab) below will fire and call networkFormStartEdit(preferred)
+    // Call directly: when immediate fires with pre-loaded data, watch(tab) is not yet registered
+    networkFormStartEdit(preferred)
   }
 }, { immediate: true })
 
