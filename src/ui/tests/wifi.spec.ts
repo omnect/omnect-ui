@@ -351,6 +351,35 @@ test.describe('WiFi Management', () => {
     await expect(page.getByText('Not connected')).toBeVisible({ timeout: 10000 });
   });
 
+  test('forget dialog shows warning when forgetting the current network', async ({ page }) => {
+    await setupMocks(page);
+    await page.unroute('**/wifi/networks');
+    await mockWifiSavedNetworks(page, savedNetworks); // HomeNetwork is [CURRENT]
+    await loginAndNavigateWith(page);
+
+    await page.getByRole('tab', { name: /wlan0/i }).click();
+    await expect(page.locator('[data-cy="wifi-saved-HomeNetwork"]')).toBeVisible({ timeout: 10000 });
+
+    await page.locator('[data-cy="wifi-forget-HomeNetwork"]').click();
+
+    await expect(page.locator('[data-cy="wifi-forget-current-warning"]')).toBeVisible();
+  });
+
+  test('forget dialog shows no warning for a non-current saved network', async ({ page }) => {
+    await setupMocks(page);
+    await page.unroute('**/wifi/networks');
+    await mockWifiSavedNetworks(page, savedNetworks); // OldNetwork has no flags
+    await loginAndNavigateWith(page);
+
+    await page.getByRole('tab', { name: /wlan0/i }).click();
+    await expect(page.locator('[data-cy="wifi-saved-OldNetwork"]')).toBeVisible({ timeout: 10000 });
+
+    await page.locator('[data-cy="wifi-forget-OldNetwork"]').click();
+
+    await expect(page.getByText('Forget Network')).toBeVisible();
+    await expect(page.locator('[data-cy="wifi-forget-current-warning"]')).not.toBeVisible();
+  });
+
   test('saved networks and forget', async ({ page }) => {
     await setupMocks(page);
     await page.unroute('**/wifi/networks');

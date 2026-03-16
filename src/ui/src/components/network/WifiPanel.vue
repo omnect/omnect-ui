@@ -20,6 +20,7 @@ const connectDialogOpen = ref(false)
 const connectDialogSsid = ref("")
 const forgetDialogOpen = ref(false)
 const forgetDialogSsid = ref("")
+const forgetDialogIsCurrentConnection = ref(false)
 
 const wifi = computed(() => {
   if (viewModel.wifiState.type !== 'ready') return null
@@ -40,6 +41,8 @@ const openConnectDialog = (ssid: string) => {
 
 const openForgetDialog = (ssid: string) => {
   forgetDialogSsid.value = ssid
+  forgetDialogIsCurrentConnection.value =
+    wifi.value?.savedNetworks.find(n => n.ssid === ssid)?.flags.includes('CURRENT') ?? false
   forgetDialogOpen.value = true
 }
 </script>
@@ -141,6 +144,6 @@ const openForgetDialog = (ssid: string) => {
 
     <!-- Dialogs -->
     <WifiConnectDialog v-model="connectDialogOpen" :ssid="connectDialogSsid" />
-    <WifiForgetDialog v-model="forgetDialogOpen" :ssid="forgetDialogSsid" />
+    <WifiForgetDialog v-model="forgetDialogOpen" :ssid="forgetDialogSsid" :is-current-connection="forgetDialogIsCurrentConnection" />
   </div>
 </template>

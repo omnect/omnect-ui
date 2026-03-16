@@ -6,6 +6,7 @@ const { wifiForgetNetwork } = useCore()
 const props = defineProps<{
   modelValue: boolean
   ssid: string
+  isCurrentConnection?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -27,6 +28,18 @@ const cancel = () => {
     <v-card>
       <v-card-title class="text-h5">Forget Network</v-card-title>
       <v-card-text>
+        <v-alert
+          v-if="isCurrentConnection"
+          type="warning"
+          variant="tonal"
+          density="compact"
+          class="mb-4"
+          data-cy="wifi-forget-current-warning"
+        >
+          This is your active connection. Forgetting it will disconnect the device from the
+          network. If you are accessing this interface via Wi-Fi, you will lose access
+          immediately.
+        </v-alert>
         Are you sure you want to forget the network <strong>{{ ssid }}</strong>?
       </v-card-text>
       <v-card-actions>
