@@ -549,6 +549,7 @@ export class NetworkTestHarness {
     await this.mockNetworkConfig(page);
     await this.mockHealthcheck(page);
     await this.mockAckRollback(page);
+    await page.route('**/version', route => route.fulfill({ status: 200, body: '0.0.0-test' }));
 
     await page.addInitScript(() => {
       sessionStorage.setItem('factoryResetResultAcked', 'true');

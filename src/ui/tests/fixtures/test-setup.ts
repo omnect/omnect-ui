@@ -49,6 +49,7 @@ export async function setupAndLogin(page: Page, options: SetupOptions = {}) {
   await mockLoginSuccess(page);
   await mockRequireSetPassword(page);
   await mockHealthcheck(page, { updateValidationAcked });
+  await page.route('**/version', route => route.fulfill({ status: 200, body: '0.0.0-test' }));
 
   // Mock initial network config to avoid errors
   await page.route('**/network', async (route) => {
