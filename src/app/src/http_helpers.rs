@@ -195,8 +195,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crux_http::http::StatusCode;
-    use crux_http::testing::ResponseBuilder;
+    use crux_http::{http::StatusCode, testing::ResponseBuilder};
 
     fn make_response(status: StatusCode, body: &[u8]) -> Response<Vec<u8>> {
         ResponseBuilder::with_status(status)

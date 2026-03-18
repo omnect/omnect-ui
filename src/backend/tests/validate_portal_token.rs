@@ -1,6 +1,5 @@
 use actix_web::{App, http::header::ContentType, test, web};
-use omnect_ui::api::Api;
-use omnect_ui::keycloak_client::TokenClaims;
+use omnect_ui::{api::Api, keycloak_client::TokenClaims};
 
 #[mockall_double::double]
 use omnect_ui::{

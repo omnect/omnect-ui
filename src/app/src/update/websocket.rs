@@ -107,9 +107,12 @@ fn sync_network_form_from_status(m: &mut Model) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::WebSocketOperation;
-    use crate::types::{
-        FactoryReset, FactoryResetStatus, OnlineStatus, OsInfo, SystemInfo, UpdateValidationStatus,
+    use crate::{
+        WebSocketOperation,
+        types::{
+            FactoryReset, FactoryResetStatus, OnlineStatus, OsInfo, SystemInfo,
+            UpdateValidationStatus,
+        },
     };
 
     mod subscribe {
@@ -237,8 +240,7 @@ mod tests {
 
     mod timeouts {
         use super::*;
-        use crate::types::TimeoutDuration;
-        use crate::types::Timeouts;
+        use crate::types::{TimeoutDuration, Timeouts};
 
         #[test]
         fn updates_timeouts() {

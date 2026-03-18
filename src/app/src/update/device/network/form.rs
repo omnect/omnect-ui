@@ -1,10 +1,12 @@
 use crux_core::Command;
 use std::collections::HashMap;
 
-use crate::Effect;
-use crate::events::Event;
-use crate::model::Model;
-use crate::types::{NetworkFormData, NetworkFormState, is_valid_ipv4, subnet_to_cidr};
+use crate::{
+    Effect,
+    events::Event,
+    model::Model,
+    types::{NetworkFormData, NetworkFormState, is_valid_ipv4, subnet_to_cidr},
+};
 
 /// Handle network form start edit - initialize form with current network adapter data
 pub fn handle_network_form_start_edit(

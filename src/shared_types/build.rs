@@ -1,13 +1,13 @@
 use anyhow::Result;
 use crux_core::typegen::TypeGen;
 use omnect_ui_core::{
+    App,
     events::{AuthEvent, DeviceEvent, UiEvent, WebSocketEvent, WifiEvent},
     types::{
         DeviceOperationState, FactoryResetStatus, NetworkChangeState, NetworkConfigRequest,
         NetworkFormData, NetworkFormState, TimeoutSettings, UploadState, WifiConnectionState,
         WifiConnectionStatus, WifiNetwork, WifiSavedNetwork, WifiScanState, WifiState,
     },
-    App,
 };
 use std::path::PathBuf;
 

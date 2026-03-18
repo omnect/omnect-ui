@@ -225,9 +225,11 @@ fn build_initial_healthcheck_cmd() -> Command<Effect, Event> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::UpdateManifest;
-    use crate::events::DeviceEvent;
-    use crate::types::{DeviceOperationState, UploadState};
+    use crate::{
+        UpdateManifest,
+        events::DeviceEvent,
+        types::{DeviceOperationState, UploadState},
+    };
 
     mod reboot {
         use super::*;

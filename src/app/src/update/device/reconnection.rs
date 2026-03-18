@@ -256,10 +256,12 @@ fn advance_network_change_state(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Model;
-    use crate::types::{
-        DeviceOperationState, HealthcheckInfo, NetworkChangeState, UpdateValidationStatus,
-        VersionInfo,
+    use crate::{
+        model::Model,
+        types::{
+            DeviceOperationState, HealthcheckInfo, NetworkChangeState, UpdateValidationStatus,
+            VersionInfo,
+        },
     };
 
     fn create_healthcheck(status: &str, mismatch: bool) -> HealthcheckInfo {

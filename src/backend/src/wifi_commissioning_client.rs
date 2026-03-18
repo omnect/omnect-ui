@@ -12,8 +12,7 @@ pub use omnect_ui_core::types::{
 };
 use reqwest::Client;
 use serde::Serialize;
-use std::fmt::Debug;
-use std::path::Path;
+use std::{fmt::Debug, path::Path};
 use trait_variant::make;
 
 // --- Client trait ---

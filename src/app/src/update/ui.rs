@@ -51,8 +51,10 @@ pub fn handle(event: UiEvent, model: &mut Model) -> Command<Effect, Event> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::UiEvent;
-    use crate::types::{DeviceNetwork, InternetProtocol, IpAddress, NetworkStatus};
+    use crate::{
+        events::UiEvent,
+        types::{DeviceNetwork, InternetProtocol, IpAddress, NetworkStatus},
+    };
 
     #[test]
     fn clear_error_removes_error_message() {

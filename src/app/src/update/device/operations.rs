@@ -1,9 +1,11 @@
 use crux_core::Command;
 
-use crate::events::{DeviceEvent, Event};
-use crate::model::Model;
-use crate::types::{DeviceOperationState, OverlaySpinnerState};
-use crate::{Effect, TimeCmd};
+use crate::{
+    Effect, TimeCmd,
+    events::{DeviceEvent, Event},
+    model::Model,
+    types::{DeviceOperationState, OverlaySpinnerState},
+};
 
 use super::reconnection::schedule_reconnection_poll;
 
@@ -97,8 +99,10 @@ pub fn handle_device_operation_response(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::DeviceEvent;
-    use crate::types::{DEFAULT_FACTORY_RESET_TIMEOUT_SECS, DEFAULT_REBOOT_TIMEOUT_SECS};
+    use crate::{
+        events::DeviceEvent,
+        types::{DEFAULT_FACTORY_RESET_TIMEOUT_SECS, DEFAULT_REBOOT_TIMEOUT_SECS},
+    };
     use crux_time::protocol::{Duration as TimeDuration, TimeRequest};
 
     fn collect_time_effects(cmd: &mut Command<Effect, Event>) -> Vec<TimeRequest> {

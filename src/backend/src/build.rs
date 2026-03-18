@@ -1,5 +1,4 @@
-use std::io;
-use std::path::Path;
+use std::{io, path::Path};
 
 fn main() {
     // Tell Cargo to only rerun this build script if specific files change

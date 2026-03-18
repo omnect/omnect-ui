@@ -79,6 +79,13 @@ scripts/build-frontend.sh
 cargo test --features mock
 ```
 
+### Formatting (Rust)
+
+```bash
+# Requires nightly toolchain (rustfmt.toml uses unstable options)
+cargo +nightly fmt
+```
+
 ### End-to-End (e2e tests)
 
 ```bash
