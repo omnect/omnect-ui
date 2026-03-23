@@ -258,7 +258,7 @@ impl IoTEdgeConfig {
 impl WifiConfig {
     fn load() -> Self {
         let socket_path = env::var("WIFI_COMMISSIONING_SOCKET_PATH")
-            .unwrap_or_else(|_| "/wifi-commissioning-service/api.sock".to_string())
+            .unwrap_or_else(|_| "/wifi-commissioning-service/wlan0/api.sock".to_string())
             .into();
 
         Self { socket_path }
