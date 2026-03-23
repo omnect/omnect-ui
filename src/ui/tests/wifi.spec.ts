@@ -279,6 +279,32 @@ test.describe('WiFi Management', () => {
     await expect(eth0Tab.locator('.mdi-wifi')).not.toBeVisible();
   });
 
+  test('WiFi panel not shown on wlan0 when service reports different interface', async ({ page }) => {
+    await setupMocks(page);
+    // Override: service reports wlan1 as the WiFi interface
+    await page.unroute('**/wifi/available');
+    await mockWifiAvailable(page, true, 'wlan1');
+
+    const adaptersWithWlan1 = [
+      ...defaultAdapters,
+      {
+        name: 'wlan1',
+        mac: 'aa:bb:cc:dd:ee:f2',
+        online: false,
+        ipv4: { addrs: [], dns: [], gateways: [] },
+      },
+    ];
+    await loginAndNavigateWith(page, adaptersWithWlan1);
+
+    // wlan0 tab must NOT show WiFi panel (service reports wlan1)
+    await page.getByRole('tab', { name: /wlan0/i }).click();
+    await expect(page.getByText('WiFi Connection')).not.toBeVisible();
+
+    // wlan1 tab must show WiFi panel
+    await page.getByRole('tab', { name: /wlan1/i }).click();
+    await expect(page.getByText('WiFi Connection')).toBeVisible({ timeout: 10000 });
+  });
+
   test('scan flow - discovers networks', async ({ page }) => {
     await setupMocks(page);
     await mockWifiScanStart(page);
