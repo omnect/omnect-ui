@@ -19,7 +19,7 @@ actix-multipart = { version = "0.7", default-features = false, features = [
 ] }
 actix-server = { version = "2.6", default-features = false }
 actix-session = { version = "0.11", features = ["cookie-session"] }
-actix-web = { version = "4.11", default-features = false, features = [
+actix-web = { version = "4.13", default-features = false, features = [
   "macros",
   "rustls-0_23",
 ] }
@@ -66,7 +66,7 @@ serde_json = { version = "1.0", default-features = false, features = [
 serde_repr = { version = "0.1", default-features = false }
 serde_valid = { version = "2.0", default-features = false }
 static-files = { version = "0.3", default-features = false }
-tokio = { version = "1.45", default-features = false, features = [
+tokio = { version = "1.50", default-features = false, features = [
   "fs",
   "io-util",
   "macros",
@@ -75,16 +75,16 @@ tokio = { version = "1.45", default-features = false, features = [
 ] }
 trait-variant = { version = "0.1", default-features = false }
 url = { version = "2.5", default-features = false }
-uuid = { version = "1.17", default-features = false, features = ["v4"] }
+uuid = { version = "1.22", default-features = false, features = ["v4"] }
 
 [features]
 mock = ["dep:mockall"]
 
 [dev-dependencies]
-actix-http = "3.11"
+actix-http = "3.12"
 actix-service = "2.0"
 mockall_double = "0.3"
-tempfile = "3.20"
+tempfile = "3.27"
 
 [build-dependencies]
 static-files = { version = "0.3", default-features = false }

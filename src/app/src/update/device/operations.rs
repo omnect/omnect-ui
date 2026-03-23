@@ -99,10 +99,7 @@ pub fn handle_device_operation_response(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        events::DeviceEvent,
-        types::{DEFAULT_FACTORY_RESET_TIMEOUT_SECS, DEFAULT_REBOOT_TIMEOUT_SECS},
-    };
+    use crate::types::{DEFAULT_FACTORY_RESET_TIMEOUT_SECS, DEFAULT_REBOOT_TIMEOUT_SECS};
     use crux_time::protocol::{Duration as TimeDuration, TimeRequest};
 
     fn collect_time_effects(cmd: &mut Command<Effect, Event>) -> Vec<TimeRequest> {
