@@ -20,7 +20,6 @@ struct Claims {
 ///
 /// Handles creation and verification of JWT tokens used for:
 /// - Session authentication
-/// - Centrifugo WebSocket authentication
 ///
 /// This struct is cheap to clone (uses Arc internally) and can be safely
 /// shared across threads and added to application data.

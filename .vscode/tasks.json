@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "check_ods_and_centrifugo",
+            "label": "check_ods",
             "type": "shell",
             "command": "${workspaceFolder}/.vscode/tasks.sh",
             "problemMatcher": [],

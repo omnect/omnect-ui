@@ -2,12 +2,11 @@ mod auth;
 mod device;
 mod ui;
 mod websocket;
+mod wifi;
 
-use crux_core::{render::render, Command};
+use crux_core::{Command, render::render};
 
-use crate::events::Event;
-use crate::model::Model;
-use crate::Effect;
+use crate::{Effect, events::Event, model::Model};
 
 /// Main update dispatcher - routes events to domain-specific handlers
 pub fn update(event: Event, model: &mut Model) -> Command<Effect, Event> {
@@ -17,11 +16,16 @@ pub fn update(event: Event, model: &mut Model) -> Command<Effect, Event> {
     match event {
         Event::Initialize => {
             model.start_loading();
-            render()
+            Command::all([
+                render(),
+                wifi::handle(crate::events::WifiEvent::CheckAvailability, model),
+                ui::handle(crate::events::UiEvent::LoadSettings, model),
+            ])
         }
         Event::Auth(auth_event) => auth::handle(auth_event, model),
         Event::Device(device_event) => device::handle(device_event, model),
         Event::WebSocket(ws_event) => websocket::handle(ws_event, model),
         Event::Ui(ui_event) => ui::handle(ui_event, model),
+        Event::Wifi(wifi_event) => wifi::handle(wifi_event, model),
     }
 }

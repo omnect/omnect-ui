@@ -17,7 +17,7 @@ esac
 # Configuration
 IMAGE_TAG="${IMAGE_TAG:-local}"
 UI_PORT="${UI_PORT:-1977}"
-CENTRIFUGO_PORT="${CENTRIFUGO_PORT:-8000}"
+PUBLISH_PORT="${PUBLISH_PORT:-8000}"
 
 # Build image using the main build script
 echo "Building image for $ARCH architecture..."
@@ -41,13 +41,11 @@ docker run --rm \
   -u "$(id -u):$(id -g)" \
   -e RUST_LOG=debug \
   -e UI_PORT="$UI_PORT" \
+  -e PUBLISH_PORT="$PUBLISH_PORT" \
   -e SOCKET_PATH=/socket/api.sock \
-  -e CENTRIFUGO_ADMIN_ENABLED=true \
-  -e CENTRIFUGO_ADMIN_PASSWORD=123 \
-  -e CENTRIFUGO_ADMIN_SECRET=123 \
   -e DATA_DIR_PATH=/data \
   -e KEYCLOAK_URL=https://keycloak.omnect.conplement.cloud/realms/cp-dev \
   -e TENANT=cp \
   -p "${UI_PORT}:${UI_PORT}" \
-  -p "${CENTRIFUGO_PORT}:${CENTRIFUGO_PORT}" \
+  -p "${PUBLISH_PORT}:${PUBLISH_PORT}" \
   "$IMAGE_NAME"

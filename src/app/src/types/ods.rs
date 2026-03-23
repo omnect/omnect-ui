@@ -1,7 +1,7 @@
 //! External Data Transfer Objects (DTOs) for omnect-device-service (ODS)
 //!
 //! These types represent the "wire format" of JSON payloads received from ODS
-//! over WebSocket/Centrifugo.
+//! over WebSocket/WebSocket.
 //!
 //! ### Why separate types?
 //! 1. **Wire Format Isolation**: ODS uses `snake_case` variants, while our internal
@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use serde_repr::Deserialize_repr;
 
 use crate::types::{
-    DeviceNetwork, Duration, FactoryReset, FactoryResetResult, FactoryResetStatus,
-    InternetProtocol, IpAddress, NetworkStatus, OnlineStatus, OsInfo, SystemInfo, Timeouts,
+    DeviceNetwork, FactoryReset, FactoryResetResult, FactoryResetStatus, InternetProtocol,
+    IpAddress, NetworkStatus, OnlineStatus, OsInfo, SystemInfo, TimeoutDuration, Timeouts,
     UpdateValidationStatus,
 };
 
@@ -85,7 +85,7 @@ pub struct OdsTimeouts {
 impl From<OdsTimeouts> for Timeouts {
     fn from(ods: OdsTimeouts) -> Self {
         Self {
-            wait_online_timeout: Duration {
+            wait_online_timeout: TimeoutDuration {
                 nanos: ods.wait_online_timeout.nanos as u32,
                 secs: ods.wait_online_timeout.secs,
             },

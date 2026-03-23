@@ -1,8 +1,7 @@
-import { test, expect, Page } from '@playwright/test';
-import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './fixtures/mock-api';
+import { test, expect } from '@playwright/test';
 import { NetworkTestHarness, DeviceNetwork } from './fixtures/network-test-harness';
 
-// Run all tests in this file serially to avoid Centrifugo channel interference
+// Run all tests in this file serially to avoid WebSocket channel interference
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Network Configuration - Comprehensive E2E Tests', () => {
@@ -10,17 +9,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
   test.beforeEach(async ({ page }) => {
     harness = new NetworkTestHarness();
-    await mockConfig(page);
-    await mockLoginSuccess(page);
-    await mockRequireSetPassword(page);
-    await harness.mockNetworkConfig(page);
-    await harness.mockHealthcheck(page);
-    await harness.mockAckRollback(page);
-
-    await page.goto('/');
-    await page.getByPlaceholder(/enter your password/i).fill('password');
-    await page.getByRole('button', { name: /log in/i }).click();
-    await expect(page.getByText('Common Info')).toBeVisible({ timeout: 10000 });
+    await harness.setupWithLogin(page);
   });
 
   test.afterEach(() => {
@@ -116,7 +105,11 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
     });
 
     test('rollback cancellation - new IP becomes reachable within timeout', async ({ page }) => {
-      await harness.mockHealthcheck(page, { healthcheckSuccessAfter: 2000 });
+      await harness.mockHealthcheck(page, { healthcheckSuccessAfter: 0 });
+
+      await page.route('https://192.168.1.150:5173/', async route => {
+        await route.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>Redirected</body></html>' });
+      });
 
       await harness.setup(page, {
         ipv4: {
@@ -135,13 +128,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible({ timeout: 10000 });
 
-      await page.waitForTimeout(3000);
-      await harness.simulateNewIpReachable();
-      await page.waitForTimeout(1000);
-
-      const rollbackState = harness.getRollbackState();
-      expect(rollbackState.enabled).toBe(false);
-      expect(rollbackState.occurred).toBe(false);
+      await page.waitForURL('https://192.168.1.150:5173/', { timeout: 10000 });
     });
 
     test('invalid IP address validation error', async ({ page }) => {
@@ -408,7 +395,15 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).not.toBeChecked();
     });
 
-    test('DHCP -> Static: Rollback should be ENABLED by default', async ({ page }) => {
+    test('DHCP -> Static (New IP): Rollback should be ENABLED by default and complete successfully', async ({ page }) => {
+      // Mock healthcheck to succeed after a short delay so we can see the countdown and then the redirect
+      await harness.mockHealthcheck(page, { healthcheckSuccessAfter: 0 });
+
+      // Mock the top-level navigation to the new IP so the test doesn't fail with network errors
+      await page.route('https://192.168.1.150:5173/', async route => {
+        await route.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>Redirected</body></html>' });
+      });
+
       await harness.setup(page, { ipv4: { addrs: [{ addr: 'localhost', dhcp: true, prefix_len: 24 }] } });
       await expect(page.getByLabel('DHCP')).toBeChecked();
 
@@ -418,6 +413,16 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible();
       await expect(page.getByRole('checkbox', { name: /Enable automatic rollback/i })).toBeChecked();
+
+      // Apply changes
+      await page.locator('[data-cy=network-confirm-apply-button]').click();
+
+      // Verify overlay appears with countdown label
+      await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible({ timeout: 10000 });
+      expect(harness.getRollbackState().enabled).toBe(true);
+
+      // Verify that after healthcheck succeeds, the browser redirects to the new IP
+      await page.waitForURL('https://192.168.1.150:5173/', { timeout: 10000 });
     });
 
     test('DHCP -> Static (Same IP): Rollback should be ENABLED', async ({ page }) => {
@@ -439,6 +444,9 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
 
       // Verify overlay appears with countdown label
       await expect(page.locator('#overlay').getByText('Automatic rollback in:')).toBeVisible({ timeout: 10000 });
+
+      // Healthcheck succeeds at the same IP (no redirect) — overlay should clear
+      await expect(page.locator('#overlay')).not.toBeVisible({ timeout: 15000 });
     });
 
     test('Rollback should show MODAL not SNACKBAR when connection is restored at old IP', async ({ page }) => {
@@ -478,68 +486,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
     test('Rollback modal should close on second apply after a rollback', async ({ page }) => {
       test.setTimeout(60000); // Increase timeout for rollback scenario
 
-      // Shim WebSocket to redirect 192.168.1.150 to localhost
-      await page.addInitScript(() => {
-          const OriginalWebSocket = window.WebSocket;
-          // @ts-ignore
-          window.WebSocket = function(url, protocols) {
-              if (typeof url === 'string' && url.includes('192.168.1.150')) {
-                  url = url.replace('192.168.1.150', 'localhost');
-              }
-              return new OriginalWebSocket(url, protocols);
-          };
-          window.WebSocket.prototype = OriginalWebSocket.prototype;
-          window.WebSocket.CONNECTING = OriginalWebSocket.CONNECTING;
-          window.WebSocket.OPEN = OriginalWebSocket.OPEN;
-          window.WebSocket.CLOSING = OriginalWebSocket.CLOSING;
-          window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
-      });
-
-      // Mock the redirect to the new IP to prevent navigation failure
-      await page.route(/.*192\.168\.1\.150.*/, async (route) => {
-          const url = new URL(route.request().url());
-
-          // Handle healthcheck separately to avoid CORS and ensure correct response
-          if (url.pathname.includes('/healthcheck')) {
-              await route.fulfill({
-                  status: 200,
-                  contentType: 'application/json',
-                  headers: {
-                      'Access-Control-Allow-Origin': 'https://localhost:5173',
-                      'Access-Control-Allow-Credentials': 'true',
-                  },
-                  body: JSON.stringify({
-                      versionInfo: { required: '>=0.39.0', current: '0.40.0', mismatch: false },
-                      updateValidationStatus: { status: 'valid' },
-                      networkRollbackOccurred: harness.getRollbackState().occurred,
-                  }),
-              });
-              return;
-          }
-
-          // For other requests (main page, assets), proxy to localhost
-          const originalUrl = page.url();
-          const originalPort = new URL(originalUrl).port || '5173';
-          const originalProtocol = new URL(originalUrl).protocol;
-
-          const newUrl = `${originalProtocol}//localhost:${originalPort}${url.pathname}${url.search}`;
-
-          try {
-              const response = await page.request.fetch(newUrl, {
-                  method: route.request().method(),
-                  headers: route.request().headers(),
-                  data: route.request().postDataBuffer(),
-                  ignoreHTTPSErrors: true
-              });
-
-              await route.fulfill({
-                  response: response
-              });
-          } catch (e) {
-              console.error('Failed to proxy request:', e);
-              await route.abort();
-          }
-      });
+      await harness.mockNewIpProxy(page, '192.168.1.150');
 
       await page.unroute('**/network');
       await harness.mockNetworkConfig(page, { rollbackTimeoutSeconds: 10 }); // Short timeout
@@ -630,7 +577,7 @@ test.describe('Network Configuration - Comprehensive E2E Tests', () => {
       await harness.navigateToAdapter(page, 'eth0');
 
       // Wait for the Core to fully initialize and load network status
-      // After reload, it takes a moment for Centrifugo to reconnect and publish status
+      // After reload, it takes a moment for WebSocket to reconnect and publish status
       await page.waitForTimeout(2000);
 
       // Set browser hostname again after reload to mark eth0 as current connection

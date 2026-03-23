@@ -23,11 +23,11 @@ export default defineConfig({
 	},
 	build: {
 		chunkSizeWarningLimit: 1000,
-		rollupOptions: {
+		rolldownOptions: {
 			output: {
-				manualChunks: {
-					vue: ["vue", "vue-router", "@vueuse/core"],
-					vuetify: ["vuetify"]
+				manualChunks(id) {
+					if (id.includes("vuetify")) return "vuetify"
+					if (id.includes("vue") || id.includes("@vueuse")) return "vue"
 				}
 			}
 		}
@@ -37,8 +37,21 @@ export default defineConfig({
         https: {
             key: fs.readFileSync(path.resolve(__dirname, '../../temp/certs/server.key.pem')),
             cert: fs.readFileSync(path.resolve(__dirname, '../../temp/certs/server.cert.pem')),
+        },
+        proxy: {
+            '/ws': {
+                target: 'wss://localhost:8000',
+                ws: true,
+                secure: false
+            }
         }
     } : {
-        port: 5173
+        port: 5173,
+        proxy: {
+            '/ws': {
+                target: 'ws://localhost:8000',
+                ws: true
+            }
+        }
     }
 })

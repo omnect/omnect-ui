@@ -3,7 +3,8 @@
 //! Handles token validation and role-based access control independent of HTTP concerns.
 
 use crate::{
-    config::AppConfig, keycloak_client::SingleSignOnProvider,
+    config::AppConfig,
+    keycloak_client::{SingleSignOnProvider, TokenClaims},
     omnect_device_service_client::DeviceServiceClient,
 };
 use anyhow::{Result, bail, ensure};
@@ -39,27 +40,33 @@ impl AuthorizationService {
     {
         let claims = single_sign_on.verify_token(token).await?;
         let tenant = &AppConfig::get().tenant;
+        Self::validate_tenant(&claims, tenant)?;
+        Self::validate_role(&claims, service_client).await
+    }
 
-        // Validate tenant authorization
+    fn validate_tenant(claims: &TokenClaims, tenant: &str) -> Result<()> {
         let Some(tenant_list) = &claims.tenant_list else {
             bail!("failed to authorize user: no tenant list in token");
         };
         ensure!(
-            tenant_list.contains(tenant),
+            tenant_list.contains(&tenant.to_string()),
             "failed to authorize user: insufficient permissions for tenant"
         );
+        Ok(())
+    }
 
-        // Validate role-based authorization
+    async fn validate_role<ServiceClient: DeviceServiceClient>(
+        claims: &TokenClaims,
+        service_client: &ServiceClient,
+    ) -> Result<()> {
         let Some(roles) = &claims.roles else {
             bail!("failed to authorize user: no roles in token");
         };
 
-        // FleetAdministrator has full access
         if roles.iter().any(|r| r == "FleetAdministrator") {
             return Ok(());
         }
 
-        // FleetOperator requires fleet validation
         if roles.iter().any(|r| r == "FleetOperator") {
             let Some(fleet_list) = &claims.fleet_list else {
                 bail!("failed to authorize user: no fleet list in token");
@@ -104,57 +111,56 @@ mod tests {
         }
     }
 
+    async fn run_auth(claims: TokenClaims) -> anyhow::Result<()> {
+        let mut sso_mock = SingleSignOnProvider::default();
+        sso_mock.expect_verify_token().returning(move |_| {
+            let c = claims.clone();
+            Box::pin(async move { Ok(c) })
+        });
+        let device_mock = DeviceServiceClient::default();
+        AuthorizationService::validate_token_and_claims(&sso_mock, &device_mock, "valid_token")
+            .await
+    }
+
+    async fn run_auth_with_fleet(
+        claims: TokenClaims,
+        fleet_id: &'static str,
+    ) -> anyhow::Result<()> {
+        let mut sso_mock = SingleSignOnProvider::default();
+        sso_mock.expect_verify_token().returning(move |_| {
+            let c = claims.clone();
+            Box::pin(async move { Ok(c) })
+        });
+        let mut device_mock = DeviceServiceClient::default();
+        device_mock
+            .expect_fleet_id()
+            .returning(move || Box::pin(async move { Ok(fleet_id.to_string()) }));
+        AuthorizationService::validate_token_and_claims(&sso_mock, &device_mock, "valid_token")
+            .await
+    }
+
     mod fleet_administrator {
         use super::*;
 
         #[tokio::test]
         async fn with_valid_tenant_succeeds() {
-            let mut sso_mock = SingleSignOnProvider::default();
-            sso_mock.expect_verify_token().returning(|_| {
-                Box::pin(async {
-                    Ok(create_claims(
-                        Some(vec!["FleetAdministrator"]),
-                        Some(vec!["cp"]),
-                        None,
-                    ))
-                })
-            });
-
-            let device_mock = DeviceServiceClient::default();
-
-            let result = AuthorizationService::validate_token_and_claims(
-                &sso_mock,
-                &device_mock,
-                "valid_token",
-            )
+            let result = run_auth(create_claims(
+                Some(vec!["FleetAdministrator"]),
+                Some(vec!["cp"]),
+                None,
+            ))
             .await;
-
             assert!(result.is_ok());
         }
 
         #[tokio::test]
         async fn with_invalid_tenant_fails() {
-            let mut sso_mock = SingleSignOnProvider::default();
-            sso_mock.expect_verify_token().returning(|_| {
-                Box::pin(async {
-                    Ok(create_claims(
-                        Some(vec!["FleetAdministrator"]),
-                        Some(vec!["invalid_tenant"]),
-                        None,
-                    ))
-                })
-            });
-
-            let device_mock = DeviceServiceClient::default();
-
-            let result = AuthorizationService::validate_token_and_claims(
-                &sso_mock,
-                &device_mock,
-                "valid_token",
-            )
+            let result = run_auth(create_claims(
+                Some(vec!["FleetAdministrator"]),
+                Some(vec!["invalid_tenant"]),
+                None,
+            ))
             .await;
-
-            assert!(result.is_err());
             assert!(
                 result
                     .unwrap_err()
@@ -165,26 +171,12 @@ mod tests {
 
         #[tokio::test]
         async fn with_multiple_tenants_including_valid_succeeds() {
-            let mut sso_mock = SingleSignOnProvider::default();
-            sso_mock.expect_verify_token().returning(|_| {
-                Box::pin(async {
-                    Ok(create_claims(
-                        Some(vec!["FleetAdministrator"]),
-                        Some(vec!["other_tenant", "cp", "another_tenant"]),
-                        None,
-                    ))
-                })
-            });
-
-            let device_mock = DeviceServiceClient::default();
-
-            let result = AuthorizationService::validate_token_and_claims(
-                &sso_mock,
-                &device_mock,
-                "valid_token",
-            )
+            let result = run_auth(create_claims(
+                Some(vec!["FleetAdministrator"]),
+                Some(vec!["other_tenant", "cp", "another_tenant"]),
+                None,
+            ))
             .await;
-
             assert!(result.is_ok());
         }
     }
@@ -194,58 +186,29 @@ mod tests {
 
         #[tokio::test]
         async fn with_matching_fleet_succeeds() {
-            let mut sso_mock = SingleSignOnProvider::default();
-            sso_mock.expect_verify_token().returning(|_| {
-                Box::pin(async {
-                    Ok(create_claims(
-                        Some(vec!["FleetOperator"]),
-                        Some(vec!["cp"]),
-                        Some(vec!["fleet-123"]),
-                    ))
-                })
-            });
-
-            let mut device_mock = DeviceServiceClient::default();
-            device_mock
-                .expect_fleet_id()
-                .returning(|| Box::pin(async { Ok("fleet-123".to_string()) }));
-
-            let result = AuthorizationService::validate_token_and_claims(
-                &sso_mock,
-                &device_mock,
-                "valid_token",
+            let result = run_auth_with_fleet(
+                create_claims(
+                    Some(vec!["FleetOperator"]),
+                    Some(vec!["cp"]),
+                    Some(vec!["fleet-123"]),
+                ),
+                "fleet-123",
             )
             .await;
-
             assert!(result.is_ok());
         }
 
         #[tokio::test]
         async fn with_non_matching_fleet_fails() {
-            let mut sso_mock = SingleSignOnProvider::default();
-            sso_mock.expect_verify_token().returning(|_| {
-                Box::pin(async {
-                    Ok(create_claims(
-                        Some(vec!["FleetOperator"]),
-                        Some(vec!["cp"]),
-                        Some(vec!["fleet-456"]),
-                    ))
-                })
-            });
-
-            let mut device_mock = DeviceServiceClient::default();
-            device_mock
-                .expect_fleet_id()
-                .returning(|| Box::pin(async { Ok("fleet-123".to_string()) }));
-
-            let result = AuthorizationService::validate_token_and_claims(
-                &sso_mock,
-                &device_mock,
-                "valid_token",
+            let result = run_auth_with_fleet(
+                create_claims(
+                    Some(vec!["FleetOperator"]),
+                    Some(vec!["cp"]),
+                    Some(vec!["fleet-456"]),
+                ),
+                "fleet-123",
             )
             .await;
-
-            assert!(result.is_err());
             assert!(
                 result
                     .unwrap_err()
@@ -256,55 +219,26 @@ mod tests {
 
         #[tokio::test]
         async fn with_multiple_fleets_including_match_succeeds() {
-            let mut sso_mock = SingleSignOnProvider::default();
-            sso_mock.expect_verify_token().returning(|_| {
-                Box::pin(async {
-                    Ok(create_claims(
-                        Some(vec!["FleetOperator"]),
-                        Some(vec!["cp"]),
-                        Some(vec!["fleet-456", "fleet-123", "fleet-789"]),
-                    ))
-                })
-            });
-
-            let mut device_mock = DeviceServiceClient::default();
-            device_mock
-                .expect_fleet_id()
-                .returning(|| Box::pin(async { Ok("fleet-123".to_string()) }));
-
-            let result = AuthorizationService::validate_token_and_claims(
-                &sso_mock,
-                &device_mock,
-                "valid_token",
+            let result = run_auth_with_fleet(
+                create_claims(
+                    Some(vec!["FleetOperator"]),
+                    Some(vec!["cp"]),
+                    Some(vec!["fleet-456", "fleet-123", "fleet-789"]),
+                ),
+                "fleet-123",
             )
             .await;
-
             assert!(result.is_ok());
         }
 
         #[tokio::test]
         async fn without_fleet_list_fails() {
-            let mut sso_mock = SingleSignOnProvider::default();
-            sso_mock.expect_verify_token().returning(|_| {
-                Box::pin(async {
-                    Ok(create_claims(
-                        Some(vec!["FleetOperator"]),
-                        Some(vec!["cp"]),
-                        None,
-                    ))
-                })
-            });
-
-            let device_mock = DeviceServiceClient::default();
-
-            let result = AuthorizationService::validate_token_and_claims(
-                &sso_mock,
-                &device_mock,
-                "valid_token",
-            )
+            let result = run_auth(create_claims(
+                Some(vec!["FleetOperator"]),
+                Some(vec!["cp"]),
+                None,
+            ))
             .await;
-
-            assert!(result.is_err());
             assert!(
                 result
                     .unwrap_err()
@@ -315,27 +249,12 @@ mod tests {
 
         #[tokio::test]
         async fn with_invalid_tenant_fails() {
-            let mut sso_mock = SingleSignOnProvider::default();
-            sso_mock.expect_verify_token().returning(|_| {
-                Box::pin(async {
-                    Ok(create_claims(
-                        Some(vec!["FleetOperator"]),
-                        Some(vec!["invalid_tenant"]),
-                        Some(vec!["fleet-123"]),
-                    ))
-                })
-            });
-
-            let device_mock = DeviceServiceClient::default();
-
-            let result = AuthorizationService::validate_token_and_claims(
-                &sso_mock,
-                &device_mock,
-                "valid_token",
-            )
+            let result = run_auth(create_claims(
+                Some(vec!["FleetOperator"]),
+                Some(vec!["invalid_tenant"]),
+                Some(vec!["fleet-123"]),
+            ))
             .await;
-
-            assert!(result.is_err());
             assert!(
                 result
                     .unwrap_err()
@@ -350,27 +269,12 @@ mod tests {
 
         #[tokio::test]
         async fn with_valid_tenant_fails() {
-            let mut sso_mock = SingleSignOnProvider::default();
-            sso_mock.expect_verify_token().returning(|_| {
-                Box::pin(async {
-                    Ok(create_claims(
-                        Some(vec!["FleetObserver"]),
-                        Some(vec!["cp"]),
-                        None,
-                    ))
-                })
-            });
-
-            let device_mock = DeviceServiceClient::default();
-
-            let result = AuthorizationService::validate_token_and_claims(
-                &sso_mock,
-                &device_mock,
-                "valid_token",
-            )
+            let result = run_auth(create_claims(
+                Some(vec!["FleetObserver"]),
+                Some(vec!["cp"]),
+                None,
+            ))
             .await;
-
-            assert!(result.is_err());
             assert!(
                 result
                     .unwrap_err()
@@ -385,21 +289,8 @@ mod tests {
 
         #[tokio::test]
         async fn without_tenant_list_fails() {
-            let mut sso_mock = SingleSignOnProvider::default();
-            sso_mock.expect_verify_token().returning(|_| {
-                Box::pin(async { Ok(create_claims(Some(vec!["FleetAdministrator"]), None, None)) })
-            });
-
-            let device_mock = DeviceServiceClient::default();
-
-            let result = AuthorizationService::validate_token_and_claims(
-                &sso_mock,
-                &device_mock,
-                "valid_token",
-            )
-            .await;
-
-            assert!(result.is_err());
+            let result =
+                run_auth(create_claims(Some(vec!["FleetAdministrator"]), None, None)).await;
             assert!(
                 result
                     .unwrap_err()
@@ -410,21 +301,7 @@ mod tests {
 
         #[tokio::test]
         async fn without_roles_fails() {
-            let mut sso_mock = SingleSignOnProvider::default();
-            sso_mock
-                .expect_verify_token()
-                .returning(|_| Box::pin(async { Ok(create_claims(None, Some(vec!["cp"]), None)) }));
-
-            let device_mock = DeviceServiceClient::default();
-
-            let result = AuthorizationService::validate_token_and_claims(
-                &sso_mock,
-                &device_mock,
-                "valid_token",
-            )
-            .await;
-
-            assert!(result.is_err());
+            let result = run_auth(create_claims(None, Some(vec!["cp"]), None)).await;
             assert!(
                 result
                     .unwrap_err()
@@ -443,17 +320,13 @@ mod tests {
             sso_mock
                 .expect_verify_token()
                 .returning(|_| Box::pin(async { Err(anyhow::anyhow!("invalid token signature")) }));
-
             let device_mock = DeviceServiceClient::default();
-
             let result = AuthorizationService::validate_token_and_claims(
                 &sso_mock,
                 &device_mock,
                 "invalid_token",
             )
             .await;
-
-            assert!(result.is_err());
             assert!(
                 result
                     .unwrap_err()

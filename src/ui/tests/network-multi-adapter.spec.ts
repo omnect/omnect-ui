@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { mockConfig, mockLoginSuccess, mockRequireSetPassword } from './fixtures/mock-api';
 import { NetworkTestHarness } from './fixtures/network-test-harness';
 
 test.describe('Network Multi-Adapter Rollback Modal', () => {
@@ -7,17 +6,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
   test.beforeEach(async ({ page }) => {
     harness = new NetworkTestHarness();
-    await mockConfig(page);
-    await mockLoginSuccess(page);
-    await mockRequireSetPassword(page);
-    await harness.mockNetworkConfig(page);
-    await harness.mockHealthcheck(page);
-    await harness.mockAckRollback(page);
-
-    await page.goto('/');
-    await page.getByPlaceholder(/enter your password/i).fill('password');
-    await page.getByRole('button', { name: /log in/i }).click();
-    await expect(page.getByText('Common Info')).toBeVisible();
+    await harness.setupWithLogin(page);
   });
 
   test.afterEach(() => {
@@ -25,70 +14,74 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
   });
 
   test.describe('2-Adapter Scenarios', () => {
-    test('rollback modal only appears for current connection adapter', async ({ page }) => {
-      // Setup two adapters: eth0 (current connection) and wlan0 (not current)
+    test('rollback modal appears for current connection adapter', async ({ page }) => {
       await harness.setup(page, [
         {
           name: 'eth0',
           ipv4: {
             addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
             dns: ['8.8.8.8'],
-            gateways: ['192.168.1.1']
-          }
+            gateways: ['192.168.1.1'],
+          },
         },
         {
           name: 'wlan0',
           ipv4: {
             addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }],
             dns: ['8.8.8.8'],
-            gateways: ['192.168.2.1']
-          }
-        }
+            gateways: ['192.168.2.1'],
+          },
+        },
       ]);
 
-      // Part 1: Test current connection adapter (eth0) - SHOULD show rollback modal
       await page.getByRole('tab', { name: 'eth0' }).click();
       await expect(page.getByText('This is your current connection')).toBeVisible();
 
-      const eth0IpInput = page.getByRole('textbox', { name: /IP Address/i }).first();
-      await expect(eth0IpInput).toHaveValue('localhost');
-
-      await eth0IpInput.fill('192.168.1.150');
+      const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      await expect(ipInput).toHaveValue('localhost');
+      await ipInput.fill('192.168.1.150');
       await page.waitForTimeout(300);
 
       await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
 
-      // Rollback modal SHOULD appear for current connection adapter
-      const rollbackModal = page.getByText('Confirm Network Configuration Change');
-      await expect(rollbackModal).toBeVisible({ timeout: 3000 });
+      await expect(page.getByText('Confirm Network Configuration Change')).toBeVisible({ timeout: 3000 });
 
-      // Cancel the modal
+      // Clean up to leave the harness in a neutral state
       await page.getByRole('button', { name: /cancel/i }).click();
-      await expect(rollbackModal).not.toBeVisible();
-
-      // Reset the form
       await page.locator('.v-window-item--active [data-cy=network-discard-button]').click();
-      await page.waitForTimeout(300);
+    });
 
-      // Part 2: Test non-current adapter (wlan0) - should NOT show rollback modal
-      await page.getByRole('tab', { name: 'wlan0' }).click();
+    test('rollback modal does not appear for non-current adapter (background update)', async ({ page }) => {
+      // Navigate to wlan0 directly; verify background updates to eth0 don't trigger rollback modal
+      await harness.setup(page, [
+        {
+          name: 'eth0',
+          ipv4: {
+            addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
+            dns: ['8.8.8.8'],
+            gateways: ['192.168.1.1'],
+          },
+        },
+        {
+          name: 'wlan0',
+          ipv4: {
+            addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }],
+            dns: ['8.8.8.8'],
+            gateways: ['192.168.2.1'],
+          },
+        },
+      ], 'wlan0');
+
       await expect(page.getByText('This is your current connection')).not.toBeVisible();
+      await page.waitForTimeout(500); // Wait for NetworkFormStartEdit to be processed
 
-      // Wait for tab to fully activate and NetworkFormStartEdit to be called
-      await page.waitForTimeout(500);
-
-      // Trigger a WebSocket update to the hidden adapter
-      // This simulates what happens in production when network status changes
+      // Simulate eth0 going offline while the user is on the wlan0 tab
       await harness.publishNetworkStatus([
         {
           name: 'eth0',
           mac: '00:11:22:33:44:55',
-          online: false, // Changed from true to false
-          ipv4: {
-            addrs: [], // Empty because offline
-            dns: [],
-            gateways: []
-          }
+          online: false,
+          ipv4: { addrs: [], dns: [], gateways: [] },
         },
         {
           name: 'wlan0',
@@ -97,34 +90,23 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
           ipv4: {
             addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }],
             dns: ['8.8.8.8'],
-            gateways: ['192.168.2.1']
-          }
-        }
+            gateways: ['192.168.2.1'],
+          },
+        },
       ]);
-
-      // Wait for WebSocket update to propagate
       await page.waitForTimeout(300);
 
-      const wlan0IpInput = page.getByRole('textbox', { name: /IP Address/i }).first();
-      await expect(wlan0IpInput).toHaveValue('192.168.2.100');
-
-      // Clear and fill with new value
-      await wlan0IpInput.click();
-      await wlan0IpInput.clear();
-      await wlan0IpInput.fill('192.168.2.150');
+      const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      await expect(ipInput).toHaveValue('192.168.2.100');
+      await ipInput.click();
+      await ipInput.clear();
+      await ipInput.fill('192.168.2.150');
       await page.waitForTimeout(500);
-
-      await expect(wlan0IpInput).toHaveValue('192.168.2.150');
 
       const saveButton = page.locator('.v-window-item--active [data-cy=network-apply-button]');
       await saveButton.click();
 
-      // Rollback modal should NOT appear for non-current adapter
-      // Verify that background updates to other adapters don't trigger the rollback modal
-      // and ensure only the active adapter's state affects the UI.
-      await expect(rollbackModal).not.toBeVisible({ timeout: 2000 });
-
-      // Should proceed directly to saving (no rollback modal blocking it)
+      await expect(page.getByText('Confirm Network Configuration Change')).not.toBeVisible({ timeout: 2000 });
       await expect(saveButton).toBeDisabled({ timeout: 10000 });
       await expect(page.getByText('Network configuration updated')).toBeVisible();
     });
@@ -133,11 +115,11 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await harness.setup(page, [
         {
           name: 'eth0',
-          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }] }
+          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }], dns: ['8.8.8.8'], gateways: ['192.168.1.1'] }
         },
         {
           name: 'wlan0',
-          ipv4: { addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }] }
+          ipv4: { addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }], dns: ['8.8.8.8'], gateways: ['192.168.2.1'] }
         }
       ]);
 
@@ -271,16 +253,16 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await harness.setup(page, [
         {
           name: 'eth0',
-          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }] }
+          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }], dns: ['8.8.8.8'], gateways: ['192.168.1.1'] }
         },
         {
           name: 'wlan0',
-          ipv4: { addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }] }
+          ipv4: { addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }], dns: ['8.8.8.8'], gateways: ['192.168.2.1'] }
         },
         {
           name: 'eth1',
           mac: '00:11:22:33:44:56',
-          ipv4: { addrs: [{ addr: '10.0.0.50', dhcp: false, prefix_len: 24 }] }
+          ipv4: { addrs: [{ addr: '10.0.0.50', dhcp: false, prefix_len: 24 }], dns: ['8.8.8.8'], gateways: ['10.0.0.1'] }
         }
       ]);
 
@@ -349,7 +331,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await harness.setup(page, [
         {
           name: 'eth0',
-          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }] }
+          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }], dns: ['8.8.8.8'], gateways: ['192.168.1.1'] }
         },
         {
           name: 'wlan0',
@@ -384,7 +366,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
           name: 'eth0',
           mac: '00:11:22:33:44:55',
           online: true,
-          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }] }
+          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }], dns: ['8.8.8.8'], gateways: ['192.168.1.1'] }
         },
         {
           name: 'wlan0',
@@ -415,11 +397,11 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await harness.setup(page, [
         {
           name: 'eth0',
-          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }] }
+          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }], dns: ['8.8.8.8'], gateways: ['192.168.1.1'] }
         },
         {
           name: 'wlan0',
-          ipv4: { addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }] }
+          ipv4: { addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }], dns: ['8.8.8.8'], gateways: ['192.168.2.1'] }
         }
       ]);
 
@@ -462,16 +444,16 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await harness.setup(page, [
         {
           name: 'eth0',
-          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }] }
+          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }], dns: ['8.8.8.8'], gateways: ['192.168.1.1'] }
         },
         {
           name: 'wlan0',
-          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }] } // Same IP!
+          ipv4: { addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }], dns: ['8.8.8.8'], gateways: ['192.168.1.1'] } // Same IP!
         },
         {
           name: 'eth1',
           mac: '00:11:22:33:44:56',
-          ipv4: { addrs: [{ addr: '10.0.0.50', dhcp: false, prefix_len: 24 }] }
+          ipv4: { addrs: [{ addr: '10.0.0.50', dhcp: false, prefix_len: 24 }], dns: ['8.8.8.8'], gateways: ['10.0.0.1'] }
         }
       ]);
 
@@ -776,5 +758,233 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await expect(offlineChip).toBeVisible({ timeout: 5000 });
       await expect(onlineChip).not.toBeVisible();
     });
+  });
+});
+
+test.describe('2nd Adapter Dirty State Detection', () => {
+  let harness: NetworkTestHarness;
+
+  test.beforeEach(async ({ page }) => {
+    harness = new NetworkTestHarness();
+    await harness.setupWithLogin(page);
+  });
+
+  test.afterEach(() => {
+    harness.reset();
+  });
+
+  const TWO_ADAPTERS = [
+    {
+      name: 'eth0',
+      ipv4: {
+        addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
+        dns: ['8.8.8.8'],
+        gateways: ['192.168.1.1'],
+      },
+    },
+    {
+      name: 'wlan0',
+      mac: '00:11:22:33:44:66',
+      ipv4: {
+        addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }],
+        dns: ['8.8.8.8'],
+        gateways: ['192.168.2.1'],
+      },
+    },
+  ];
+
+  test('editing auto-selected adapter works without explicit tab click (regression: immediate watcher)', async ({ page }) => {
+    // Regression test for 45927e3: when network data is already loaded (Centrifugo replay),
+    // watch(networkStatus, { immediate: true }) sets tab.value before watch(tab) is registered.
+    // The subsequent explicit click on the same tab is a no-op (newTab === oldTab), so
+    // networkFormStartEdit was never called and Core stayed in Idle state.
+    await harness.publishNetworkStatus(TWO_ADAPTERS.map(a => harness.createAdapter(a.name, a)));
+    await harness.navigateToNetwork(page);
+    // Do NOT click any tab — rely solely on the auto-selection from the immediate watcher.
+    // eth0 has addr 'localhost' so it is the currentConnectionAdapter and will be auto-selected.
+    await page.waitForTimeout(300);
+
+    const ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
+    await expect(ipInput).toHaveValue('localhost');
+    await ipInput.fill('192.168.1.150');
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeEnabled({ timeout: 3000 });
+  });
+
+  test('DHCP toggle on 2nd adapter marks form dirty', async ({ page }) => {
+    await harness.setup(page, TWO_ADAPTERS, 'wlan0');
+    await page.waitForTimeout(300);
+
+    await page.locator('.v-window-item--active').getByLabel('DHCP').click({ force: true });
+    await page.waitForTimeout(300);
+
+    const applyButton = page.locator('.v-window-item--active [data-cy=network-apply-button]');
+    await expect(applyButton).toBeEnabled({ timeout: 3000 });
+
+    const discardButton = page.locator('.v-window-item--active [data-cy=network-discard-button]');
+    await expect(discardButton).toBeEnabled();
+
+    await expect(page.locator('.v-window-item--active').getByText('You have unsaved changes')).toBeVisible();
+  });
+
+  test('IP change on 2nd adapter marks form dirty', async ({ page }) => {
+    await harness.setup(page, TWO_ADAPTERS, 'wlan0');
+    await page.waitForTimeout(300);
+
+    const ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
+    await ipInput.fill('192.168.2.200');
+    await page.waitForTimeout(300);
+
+    const applyButton = page.locator('.v-window-item--active [data-cy=network-apply-button]');
+    await expect(applyButton).toBeEnabled({ timeout: 3000 });
+
+    await expect(page.locator('.v-window-item--active').getByText('You have unsaved changes')).toBeVisible();
+  });
+
+  test('discard on 2nd adapter resets dirty state and restores original value', async ({ page }) => {
+    await harness.setup(page, TWO_ADAPTERS, 'wlan0');
+    await page.waitForTimeout(300);
+
+    const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+    await ipInput.fill('192.168.2.200');
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeEnabled();
+
+    await page.locator('.v-window-item--active [data-cy=network-discard-button]').click();
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeDisabled({ timeout: 3000 });
+    await expect(ipInput).toHaveValue('192.168.2.100');
+  });
+
+  test('DHCP toggle on 2nd adapter after WebSocket resync does not block dirty detection', async ({ page }) => {
+    // This test reproduces the isSyncingFromCore race: a WebSocket NetworkStatus update while
+    // the form is clean triggers syncLocalFieldsFromCore (isSyncingFromCore=true). If the user
+    // interacts during that window, the change was silently dropped and dirty never set.
+    await harness.setup(page, TWO_ADAPTERS, 'wlan0');
+    await page.waitForTimeout(300);
+
+    // Trigger a WebSocket re-sync while the form is clean (same data, simulates periodic update)
+    await harness.publishNetworkStatus([
+      {
+        name: 'eth0',
+        mac: '00:11:22:33:44:55',
+        online: true,
+        ipv4: {
+          addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
+          dns: ['8.8.8.8'],
+          gateways: ['192.168.1.1'],
+        },
+      },
+      {
+        name: 'wlan0',
+        mac: '00:11:22:33:44:66',
+        online: true,
+        ipv4: {
+          addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }],
+          dns: ['8.8.8.8'],
+          gateways: ['192.168.2.1'],
+        },
+      },
+    ]);
+
+    // Interact as soon as possible after the WebSocket update to hit the isSyncingFromCore window
+    await page.locator('.v-window-item--active').getByLabel('DHCP').click({ force: true });
+    await page.waitForTimeout(300);
+
+    const applyButton = page.locator('.v-window-item--active [data-cy=network-apply-button]');
+    await expect(applyButton).toBeEnabled({ timeout: 3000 });
+  });
+
+  test('dirty state on 2nd adapter after tab switch via discard dialog', async ({ page }) => {
+    // Reproduces Bug Path 2: confirmTabChange calls networkFormStartEdit twice due to watch(tab)
+    // also firing. If the second call resets original_data after the user starts editing, dirty=false.
+    await harness.setup(page, TWO_ADAPTERS, 'wlan0');
+    await page.getByRole('tab', { name: 'eth0' }).click();
+    await page.waitForTimeout(300);
+
+    // Make eth0 dirty
+    const eth0IpInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+    await expect(eth0IpInput).toHaveValue('localhost');
+    await eth0IpInput.fill('192.168.1.150');
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeEnabled({ timeout: 3000 });
+
+    // Switch to wlan0 — triggers unsaved changes dialog
+    await page.getByRole('tab', { name: 'wlan0' }).click();
+    await expect(page.locator('.v-overlay--active .v-card-title').filter({ hasText: 'Unsaved Changes' })).toBeVisible({ timeout: 3000 });
+    await page.locator('[data-cy=network-confirm-discard-button]').click();
+    await page.waitForTimeout(300);
+
+    // Now on wlan0 — apply/discard should be disabled (clean state)
+    await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeDisabled({ timeout: 3000 });
+
+    // Make wlan0 dirty
+    await page.locator('.v-window-item--active').getByLabel('DHCP').click({ force: true });
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeEnabled({ timeout: 3000 });
+  });
+
+  test('switching back to 1st adapter after editing 2nd does not carry over dirty flag', async ({ page }) => {
+    await harness.setup(page, TWO_ADAPTERS, 'wlan0');
+    await page.waitForTimeout(300);
+
+    // Make wlan0 dirty
+    const ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
+    await ipInput.fill('192.168.2.200');
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeEnabled();
+
+    // Switch back to eth0 — should show unsaved changes dialog
+    await page.getByRole('tab', { name: 'eth0' }).click();
+    await expect(page.locator('.v-overlay--active .v-card-title').filter({ hasText: 'Unsaved Changes' })).toBeVisible({ timeout: 3000 });
+    await page.locator('[data-cy=network-confirm-discard-button]').click();
+    await page.waitForTimeout(300);
+
+    // eth0's apply button must be disabled (no changes made to eth0)
+    await expect(page.locator('.v-window-item--active [data-cy=network-apply-button]')).toBeDisabled({ timeout: 3000 });
+  });
+
+  test('tab icon reflects online/offline state for non-active adapter', async ({ page }) => {
+    await harness.setup(page, TWO_ADAPTERS, 'eth0');
+    await page.waitForTimeout(300);
+
+    // wlan0 tab should initially show online icon (filled circle)
+    const wlan0Tab = page.locator('.v-tab').filter({ hasText: /^wlan0/ });
+    await expect(wlan0Tab.locator('.mdi-circle')).toBeVisible();
+    await expect(wlan0Tab.locator('.mdi-circle-outline')).not.toBeVisible();
+
+    // Simulate wlan0 going offline while user stays on eth0
+    await harness.publishNetworkStatus([
+      {
+        name: 'eth0',
+        mac: '00:11:22:33:44:55',
+        online: true,
+        ipv4: {
+          addrs: [{ addr: 'localhost', dhcp: false, prefix_len: 24 }],
+          dns: ['8.8.8.8'],
+          gateways: ['192.168.1.1'],
+        },
+      },
+      {
+        name: 'wlan0',
+        mac: '00:11:22:33:44:66',
+        online: false,
+        ipv4: {
+          addrs: [{ addr: '192.168.2.100', dhcp: false, prefix_len: 24 }],
+          dns: ['8.8.8.8'],
+          gateways: ['192.168.2.1'],
+        },
+      },
+    ]);
+
+    // wlan0 tab icon should switch to outline (offline)
+    await expect(wlan0Tab.locator('.mdi-circle-outline')).toBeVisible({ timeout: 3000 });
+    await expect(wlan0Tab.locator('.mdi-circle:not(.mdi-circle-outline)')).not.toBeVisible();
   });
 });

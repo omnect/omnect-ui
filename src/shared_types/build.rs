@@ -1,48 +1,60 @@
 use anyhow::Result;
 use crux_core::typegen::TypeGen;
 use omnect_ui_core::{
-    events::{AuthEvent, DeviceEvent, UiEvent, WebSocketEvent},
+    App,
+    events::{AuthEvent, DeviceEvent, UiEvent, WebSocketEvent, WifiEvent},
     types::{
         DeviceOperationState, FactoryResetStatus, NetworkChangeState, NetworkConfigRequest,
-        NetworkFormData, NetworkFormState, UploadState,
+        NetworkFormData, NetworkFormState, TimeoutSettings, UploadState, WifiConnectionState,
+        WifiConnectionStatus, WifiNetwork, WifiSavedNetwork, WifiScanState, WifiState,
     },
-    App,
 };
 use std::path::PathBuf;
 
 fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=../app");
 
-    let mut gen = TypeGen::new();
+    let mut typegen = TypeGen::new();
 
-    gen.register_app::<App>()?;
+    typegen.register_app::<App>()?;
 
     // Explicitly register domain event enums to ensure all variants are traced
-    gen.register_type::<AuthEvent>()?;
-    gen.register_type::<DeviceEvent>()?;
-    gen.register_type::<WebSocketEvent>()?;
-    gen.register_type::<UiEvent>()?;
+    typegen.register_type::<AuthEvent>()?;
+    typegen.register_type::<DeviceEvent>()?;
+    typegen.register_type::<WebSocketEvent>()?;
+    typegen.register_type::<UiEvent>()?;
+    typegen.register_type::<WifiEvent>()?;
 
     // Explicitly register other enums/structs to ensure all variants are traced
-    gen.register_type::<FactoryResetStatus>()?;
-    gen.register_type::<DeviceOperationState>()?;
-    gen.register_type::<NetworkChangeState>()?;
-    gen.register_type::<NetworkFormState>()?;
-    gen.register_type::<UploadState>()?;
-    gen.register_type::<NetworkConfigRequest>()?;
-    gen.register_type::<NetworkFormData>()?;
+    typegen.register_type::<FactoryResetStatus>()?;
+    typegen.register_type::<DeviceOperationState>()?;
+    typegen.register_type::<NetworkChangeState>()?;
+    typegen.register_type::<NetworkFormState>()?;
+    typegen.register_type::<UploadState>()?;
+    typegen.register_type::<NetworkConfigRequest>()?;
+    typegen.register_type::<NetworkFormData>()?;
+    typegen.register_type::<TimeoutSettings>()?;
+    typegen.register_type::<omnect_ui_core::types::WebSocketChannel>()?;
+
+    // Register WiFi types
+    typegen.register_type::<WifiState>()?;
+    typegen.register_type::<WifiScanState>()?;
+    typegen.register_type::<WifiConnectionState>()?;
+    typegen.register_type::<WifiConnectionStatus>()?;
+    typegen.register_type::<WifiNetwork>()?;
+    typegen.register_type::<WifiSavedNetwork>()?;
 
     // Register ODS types
-    gen.register_type::<omnect_ui_core::types::OdsOnlineStatus>()?;
-    gen.register_type::<omnect_ui_core::types::OdsSystemInfo>()?;
-    gen.register_type::<omnect_ui_core::types::OdsTimeouts>()?;
-    gen.register_type::<omnect_ui_core::types::OdsNetworkStatus>()?;
-    gen.register_type::<omnect_ui_core::types::OdsFactoryReset>()?;
-    gen.register_type::<omnect_ui_core::types::OdsUpdateValidationStatus>()?;
+    typegen.register_type::<omnect_ui_core::types::OdsOnlineStatus>()?;
+    typegen.register_type::<omnect_ui_core::types::OdsSystemInfo>()?;
+    typegen.register_type::<omnect_ui_core::types::OdsTimeouts>()?;
+    typegen.register_type::<omnect_ui_core::types::OdsNetworkStatus>()?;
+    typegen.register_type::<omnect_ui_core::types::OdsFactoryReset>()?;
+    typegen.register_type::<omnect_ui_core::types::OdsUpdateValidationStatus>()?;
 
     let output_root = PathBuf::from("./generated");
 
-    gen.typescript("shared_types", output_root.join("typescript"))?;
+    typegen.typescript("shared_types", output_root.join("typescript"))?;
 
     Ok(())
 }

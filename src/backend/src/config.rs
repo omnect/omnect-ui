@@ -8,8 +8,8 @@ pub struct AppConfig {
     /// UI server configuration
     pub ui: UiConfig,
 
-    /// Centrifugo WebSocket server configuration
-    pub centrifugo: CentrifugoConfig,
+    /// Internal Publish endpoint configuration
+    pub publish: PublishConfig,
 
     /// Keycloak SSO configuration
     pub keycloak: KeycloakConfig,
@@ -24,6 +24,9 @@ pub struct AppConfig {
     #[cfg_attr(feature = "mock", allow(dead_code))]
     pub iot_edge: IoTEdgeConfig,
 
+    /// WiFi commissioning service configuration
+    pub wifi: WifiConfig,
+
     /// Path configuration
     pub paths: PathConfig,
 
@@ -37,14 +40,9 @@ pub struct UiConfig {
 }
 
 #[derive(Clone, Debug)]
-pub struct CentrifugoConfig {
-    pub port: String,
-    pub client_token: String,
+pub struct PublishConfig {
     pub api_key: String,
-    pub publish_endpoint: crate::omnect_device_service_client::PublishEndpoint,
-    pub log_level: String,
-    pub binary_path: PathBuf,
-    pub config_path: PathBuf,
+    pub endpoint: crate::omnect_device_service_client::PublishEndpoint,
 }
 
 #[derive(Clone, Debug)]
@@ -79,6 +77,12 @@ pub struct PathConfig {
     pub password_file: PathBuf,
     pub host_update_file: PathBuf,
     pub local_update_file: PathBuf,
+    pub session_key_path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+pub struct WifiConfig {
+    pub socket_path: PathBuf,
 }
 
 impl AppConfig {
@@ -111,21 +115,23 @@ impl AppConfig {
         );
 
         let ui = UiConfig::load()?;
-        let centrifugo = CentrifugoConfig::load()?;
+        let publish = PublishConfig::load()?;
         let keycloak = KeycloakConfig::load()?;
         let device_service = DeviceServiceConfig::load()?;
         let certificate = CertificateConfig::load()?;
         let iot_edge = IoTEdgeConfig::load()?;
+        let wifi = WifiConfig::load();
         let paths = PathConfig::load()?;
         let tenant = env::var("TENANT").unwrap_or_else(|_| "cp".to_string());
 
         Ok(Self {
             ui,
-            centrifugo,
+            publish,
             keycloak,
             device_service,
             certificate,
             iot_edge,
+            wifi,
             paths,
             tenant,
         })
@@ -143,17 +149,14 @@ impl UiConfig {
     }
 }
 
-impl CentrifugoConfig {
+impl PublishConfig {
     fn load() -> Result<Self> {
-        let port = env::var("CENTRIFUGO_HTTP_SERVER_PORT").unwrap_or_else(|_| "8000".to_string());
-        let log_level = env::var("CENTRIFUGO_LOG_LEVEL").unwrap_or_else(|_| "none".to_string());
-
-        // Generate unique tokens for this instance
-        let client_token = Uuid::new_v4().to_string();
+        let port = env::var("PUBLISH_PORT").unwrap_or_else(|_| "8000".to_string());
+        // Generate a unique token for this instance to protect the internal publish endpoint
         let api_key = Uuid::new_v4().to_string();
 
-        let publish_endpoint = crate::omnect_device_service_client::PublishEndpoint {
-            url: format!("https://localhost:{port}/api/publish"),
+        let endpoint = crate::omnect_device_service_client::PublishEndpoint {
+            url: format!("http://localhost:{port}/api/internal/publish"),
             headers: vec![
                 crate::omnect_device_service_client::HeaderKeyValue {
                     name: String::from("Content-Type"),
@@ -166,26 +169,7 @@ impl CentrifugoConfig {
             ],
         };
 
-        #[cfg(any(test, feature = "mock"))]
-        let binary_path = PathBuf::from("tools/centrifugo");
-        #[cfg(not(any(test, feature = "mock")))]
-        let binary_path =
-            std::fs::canonicalize("centrifugo").context("failed to find centrifugo binary")?;
-
-        #[cfg(any(test, feature = "mock"))]
-        let config_path = PathBuf::from("src/backend/config/centrifugo_config.json");
-        #[cfg(not(any(test, feature = "mock")))]
-        let config_path = PathBuf::from("/centrifugo_config.json");
-
-        Ok(Self {
-            port,
-            client_token,
-            api_key,
-            publish_endpoint,
-            log_level,
-            binary_path,
-            config_path,
-        })
+        Ok(Self { api_key, endpoint })
     }
 }
 
@@ -205,7 +189,7 @@ impl KeycloakConfig {
 impl DeviceServiceConfig {
     fn load() -> Result<Self> {
         let socket_path = env::var("DEVICE_SERVICE_SOCKET_PATH")
-            .unwrap_or_else(|_| "/socket/device-service.sock".to_string())
+            .unwrap_or_else(|_| "/omnect-device-service/api.sock".to_string())
             .into();
 
         Ok(Self { socket_path })
@@ -271,6 +255,16 @@ impl IoTEdgeConfig {
     }
 }
 
+impl WifiConfig {
+    fn load() -> Self {
+        let socket_path = env::var("WIFI_COMMISSIONING_SOCKET_PATH")
+            .unwrap_or_else(|_| "/wifi-commissioning-service/wlan0/api.sock".to_string())
+            .into();
+
+        Self { socket_path }
+    }
+}
+
 impl PathConfig {
     fn load() -> Result<Self> {
         #[cfg(not(any(test, feature = "mock")))]
@@ -298,6 +292,7 @@ impl PathConfig {
         let password_file = config_dir.join("password");
         let host_update_file = host_data_dir.join("update.tar");
         let local_update_file = data_dir.join("update.tar");
+        let session_key_path = data_dir.join("session.key");
 
         Ok(Self {
             app_config_path,
@@ -305,6 +300,7 @@ impl PathConfig {
             password_file,
             host_update_file,
             local_update_file,
+            session_key_path,
         })
     }
 }

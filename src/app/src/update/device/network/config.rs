@@ -2,14 +2,16 @@ use crux_core::Command;
 use std::collections::HashMap;
 
 use crate::{
-    auth_post,
+    Effect, auth_post,
     events::Event,
     model::Model,
-    types::{subnet_to_cidr, NetworkChangeState, NetworkConfigRequest, NetworkFormState},
-    Effect,
+    types::{NetworkChangeState, NetworkConfigRequest, NetworkFormState, subnet_to_cidr},
 };
 
-use super::verification::update_network_state_and_spinner;
+use super::verification::{
+    schedule_new_ip_check_timeout, schedule_new_ip_countdown_tick, schedule_new_ip_poll,
+    update_network_state_and_spinner,
+};
 
 /// Success message for network configuration update
 const NETWORK_CONFIG_SUCCESS: &str = "Network configuration updated";
@@ -24,10 +26,10 @@ pub fn handle_set_network_config(config: String, model: &mut Model) -> Command<E
             let is_server_addr = model.is_current_adapter(&config_req.name);
 
             // If we are in editing state, we might need to fix up the netmask from the form's subnet_mask
-            if let NetworkFormState::Editing { form_data, .. } = &model.network_form_state {
-                if form_data.name == config_req.name {
-                    config_req.netmask = subnet_to_cidr(&form_data.subnet_mask);
-                }
+            if let NetworkFormState::Editing { form_data, .. } = &model.network_form_state
+                && form_data.name == config_req.name
+            {
+                config_req.netmask = subnet_to_cidr(&form_data.subnet_mask);
             }
 
             // Store network change state for later use
@@ -141,7 +143,41 @@ pub fn handle_set_network_config_response(
 
             // Clear rollback modal flag after config is applied
             model.should_show_rollback_modal = false;
-            crux_core::render::render()
+
+            match &model.network_change_state {
+                NetworkChangeState::WaitingForNewIp {
+                    switching_to_dhcp: false,
+                    rollback_timeout_seconds,
+                    ..
+                } => {
+                    // Static IP change: poll for new IP + timeout/countdown if rollback enabled
+                    let rollback = *rollback_timeout_seconds;
+                    if rollback > 0 {
+                        Command::all([
+                            crux_core::render::render(),
+                            schedule_new_ip_poll(),
+                            schedule_new_ip_check_timeout(rollback),
+                            schedule_new_ip_countdown_tick(),
+                        ])
+                    } else {
+                        Command::all([crux_core::render::render(), schedule_new_ip_poll()])
+                    }
+                }
+                NetworkChangeState::WaitingForNewIp {
+                    switching_to_dhcp: true,
+                    rollback_timeout_seconds,
+                    ..
+                } if *rollback_timeout_seconds > 0 => {
+                    // DHCP change with rollback: no polling (IP unknown) but timeout + countdown
+                    let rollback = *rollback_timeout_seconds;
+                    Command::all([
+                        crux_core::render::render(),
+                        schedule_new_ip_check_timeout(rollback),
+                        schedule_new_ip_countdown_tick(),
+                    ])
+                }
+                _ => crux_core::render::render(),
+            }
         }
         Err(e) => {
             model.set_error(e);

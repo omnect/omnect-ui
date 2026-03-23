@@ -74,10 +74,10 @@ pub fn subnet_to_cidr(subnet: &str) -> Option<u32> {
 /// Accepts "/24" or "24" format, returns prefix length if valid
 pub fn parse_netmask(mask: &str) -> Option<u32> {
     let cleaned = mask.trim_start_matches('/');
-    if let Ok(prefix_len) = cleaned.parse::<u32>() {
-        if prefix_len <= 32 {
-            return Some(prefix_len);
-        }
+    if let Ok(prefix_len) = cleaned.parse::<u32>()
+        && prefix_len <= 32
+    {
+        return Some(prefix_len);
     }
     None
 }
@@ -238,17 +238,14 @@ impl NetworkFormState {
             original_data,
             errors,
         } = self
+            && adapter_name == target_adapter_name
         {
-            if adapter_name == target_adapter_name {
-                Some(Self::Submitting {
-                    adapter_name: adapter_name.clone(),
-                    form_data: form_data.clone(),
-                    original_data: original_data.clone(),
-                    errors: errors.clone(),
-                })
-            } else {
-                None
-            }
+            Some(Self::Submitting {
+                adapter_name: adapter_name.clone(),
+                form_data: form_data.clone(),
+                original_data: original_data.clone(),
+                errors: errors.clone(),
+            })
         } else {
             None
         }
@@ -283,51 +280,41 @@ impl NetworkFormState {
 /// # State Machine Diagram
 ///
 /// ```text
-///                              ┌─────────────────────────────────────────────────────────┐
-///                              │                     START                                │
-///                              └────────────────────────┬────────────────────────────────┘
-///                                                       │
-///                                                       ▼
-///                                              ┌────────────────┐
-///                              ┌───────────────│      Idle      │───────────────┐
-///                              │               └────────────────┘               │
-///                              │                       │                        │
-///                              │     User applies      │                        │
-///                              │    network config     │                        │
-///                              │                       ▼                        │
-///                              │              ┌────────────────┐                │
-///                              │              │ ApplyingConfig │                │
-///                              │              └────────────────┘                │
-///                              │                       │                        │
-///                              │   Backend responds    │                        │
-///                              │    successfully       │                        │
-///                              │                       ▼                        │
-///                              │             ┌─────────────────┐                │
-///                              │             │ WaitingForNewIp │                │
-///                              │             └─────────────────┘                │
-///                              │              │               │                 │
-///                              │   Healthcheck│               │Timeout expires  │
-///                              │    succeeds  │               │(rollback enabled)│
-///                              │              ▼               ▼                 │
-///                              │   ┌────────────────┐  ┌─────────────────┐      │
-///                              │   │ NewIpReachable │  │ WaitingForOldIp │      │
-///                              │   └────────────────┘  └─────────────────┘      │
-///                              │          │                    │                │
-///                              │   Redirect to │    Healthcheck │                │
-///                              │     new IP    │    on old IP   │                │
-///                              │          │    │    succeeds    │                │
-///                              │          │    │       │        │                │
-///                              │          ▼    │       ▼        │                │
-///                              │   ┌───────────┴───────────┐    │                │
-///                              └───│        SUCCESS        │◄───┘                │
-///                                  └───────────────────────┘                     │
-///                                                                                │
-///                              ┌─────────────────────────────────────────────────┘
-///                              │ Timeout expires (rollback disabled)
-///                              ▼
-///                     ┌────────────────┐
-///                     │ NewIpTimeout   │  (Shows manual navigation message)
-///                     └────────────────┘
+///                    ┌───────┐
+///                    │ START │
+///                    └───┬───┘
+///                        │
+///                        ▼
+///              ┌─────────────────┐◄──────────────────────────────────────────┐
+///              │      Idle       │◄──────────────────────────────────────┐   │
+///              └────────┬────────┘                                       │   │
+///                       │ [user applies config]                          │   │
+///                       ▼                                                │   │
+///              ┌─────────────────┐ [backend error] ──────────────────────────┘
+///              │  ApplyingConfig │
+///              └────────┬────────┘ [DHCP + no rollback] ─────────────────┘
+///                       │ [backend ok]
+///                       ▼
+///             ┌──────────────────┐
+///             │  WaitingForNewIp │
+///             └────────┬─────────┘
+///          ┌───────────┼────────────────┐
+///          │           │                │
+///  [new IP │  [timeout,│rollback]  [timeout,
+///  reachable]          │           no rollback]
+///          │           ▼                │
+///          │  ┌─────────────────┐       ▼
+///          │  │ WaitingForOldIp │  ┌─────────────┐
+///          │  └────────┬────────┘  │ NewIpTimeout│
+///          │           │[old IP ok] └──────┬──────┘
+///          │           │                   │ [user navigates
+///          │           ▼                   │  manually → page reload]
+///          │          Idle ◄───────────────┘
+///          │
+///          ▼
+///   ┌────────────────┐
+///   │ NewIpReachable │  [browser redirects → page reload → Idle]
+///   └────────────────┘
 /// ```
 ///
 /// # State Descriptions
@@ -335,9 +322,9 @@ impl NetworkFormState {
 /// - **Idle**: No network change in progress
 /// - **ApplyingConfig**: Configuration request sent to backend, waiting for response
 /// - **WaitingForNewIp**: Polling new IP to verify reachability before rollback timeout
-/// - **NewIpReachable**: New IP confirmed reachable, will redirect browser
-/// - **NewIpTimeout**: Timeout expired without rollback enabled, show manual nav message
-/// - **WaitingForOldIp**: Rollback assumed, now polling old IP to verify device is back
+/// - **NewIpReachable**: New IP confirmed reachable; browser redirect causes page reload → Idle
+/// - **NewIpTimeout**: Timeout expired, rollback disabled; user manually navigates → page reload → Idle
+/// - **WaitingForOldIp**: Rollback assumed, polling old IP; on success → Idle
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum NetworkChangeState {

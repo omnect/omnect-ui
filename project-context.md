@@ -79,6 +79,13 @@ scripts/build-frontend.sh
 cargo test --features mock
 ```
 
+### Formatting (Rust)
+
+```bash
+# Requires nightly toolchain (rustfmt.toml uses unstable options)
+cargo +nightly fmt
+```
+
 ### End-to-End (e2e tests)
 
 ```bash
@@ -144,6 +151,7 @@ omnect-ui/
 ├── scripts/                      # Build and test scripts
 │   ├── build-frontend.sh         # Build WASM + Types + UI
 │   ├── build-and-deploy-image.sh # Docker build and deploy
+│   ├── build-and-run-image.sh    # Local docker development
 │   └── run-e2e-tests.sh          # Playwright test runner
 ├── src/
 │   ├── app/                      # Crux Core (business logic)
@@ -155,22 +163,27 @@ omnect-ui/
 │   │       ├── wasm.rs           # WASM FFI bindings
 │   │       ├── macros.rs         # URL and log macros
 │   │       ├── http_helpers.rs   # HTTP request utilities
+│   │       ├── wifi_psk.rs       # WiFi PSK utilities
 │   │       ├── commands/         # Custom side-effect commands
 │   │       │   ├── mod.rs
-│   │       │   └── centrifugo.rs # Centrifugo WebSocket commands
+│   │       │   └── websocket.rs      # WebSocket commands
 │   │       ├── types/            # Domain types
 │   │       │   ├── mod.rs
 │   │       │   ├── auth.rs       # Authentication types
 │   │       │   ├── common.rs     # Common shared types
 │   │       │   ├── device.rs     # Device information types
 │   │       │   ├── network.rs    # Network configuration types
+│   │       │   ├── wifi.rs       # WiFi types
 │   │       │   ├── ods.rs        # ODS-specific DTOs
+│   │       │   ├── settings.rs   # Timeout settings types
+│   │       │   ├── websocket.rs  # WebSocket channel enum
 │   │       │   ├── factory_reset.rs
 │   │       │   └── update.rs     # Update validation types
 │   │       └── update/           # Domain-based event handlers
 │   │           ├── mod.rs        # Main dispatcher
 │   │           ├── auth.rs       # Auth event handlers
 │   │           ├── ui.rs         # UI state handlers
+│   │           ├── wifi.rs       # WiFi event handlers
 │   │           ├── websocket.rs  # WebSocket state handlers
 │   │           └── device/       # Device domain handlers
 │   │               ├── mod.rs
@@ -181,21 +194,28 @@ omnect-ui/
 │   │   ├── Cargo.toml
 │   │   ├── src/
 │   │   │   ├── main.rs           # Application entry point
+│   │   │   ├── lib.rs            # Library entry point
 │   │   │   ├── api.rs            # API route handlers
+│   │   │   ├── build.rs          # Static resource generation
 │   │   │   ├── middleware.rs     # Auth middleware
 │   │   │   ├── config.rs         # Configuration loading
 │   │   │   ├── http_client.rs    # Internal HTTP client
 │   │   │   ├── keycloak_client.rs
 │   │   │   ├── omnect_device_service_client.rs
+│   │   │   ├── wifi_commissioning_client.rs
 │   │   │   └── services/         # Business logic services
 │   │   │       ├── mod.rs
 │   │   │       ├── certificate.rs
 │   │   │       ├── firmware.rs
 │   │   │       ├── network.rs
+│   │   │       ├── marker.rs
+│   │   │       ├── settings.rs   # Timeout settings service
+│   │   │       ├── websocket.rs  # WebSocket handlers
 │   │   │       └── auth/         # Auth logic
 │   │   │           ├── mod.rs
 │   │   │           ├── authorization.rs # JWT/SSO validation
 │   │   │           ├── password.rs      # Password hashing/storage
+│   │   │           ├── session_key.rs   # Session key management
 │   │   │           └── token.rs         # JWT generation
 │   │   └── tests/                # Integration tests
 │   ├── shared_types/             # TypeGen for TypeScript bindings
@@ -205,44 +225,52 @@ omnect-ui/
 │   └── ui/                       # Vue 3 Shell
 │       ├── package.json
 │       ├── playwright.config.ts  # E2E test configuration
+│       ├── vite.config.ts        # Build configuration
 │       ├── src/
 │       │   ├── App.vue           # Root component
 │       │   ├── main.ts           # UI entry point
 │       │   ├── components/       # UI components
 │       │   ├── composables/      # Logic & WASM bridge
 │       │   │   ├── useCore.ts    # Main bridge + effect handlers
-│       │   │   ├── useCentrifugo.ts
-│       │   │   └── core/         # Modular Core integration
-│       │   │       ├── index.ts  # Main entry point
-│       │   │       ├── state.ts  # Singleton reactive state
-│       │   │       ├── types.ts  # TypeScript type conversions
-│       │   │       ├── effects.ts # Effect processing
-│       │   │       ├── http.ts   # HTTP capability
-│       │   │       ├── centrifugo.ts # WebSocket capability
-│       │   │       ├── timers.ts # Timer/Polling logic
-│       │   │       └── sync.ts   # ViewModel synchronization
+│   │       │   ├── useWebSocket.ts # Native WebSocket client
+│   │       │   └── core/         # Modular Core integration
+│   │       │       ├── index.ts  # Main entry point
+│   │       │       ├── state.ts  # Singleton reactive state
+│   │       │       ├── types.ts  # TypeScript type conversions
+│   │       │       ├── effects.ts # Effect processing
+│   │       │       ├── http.ts   # HTTP capability
+│   │       │       ├── websocket.ts # WebSocket capability
+│   │       │       ├── time.ts   # Time/timer capability (crux_time)
+│   │       │       └── sync.ts   # ViewModel synchronization and navigation side-effects
 │       │   ├── pages/            # Route components
-│       │   │   ├── DeviceOverview.vue
-│       │   │   ├── DeviceUpdate.vue
-│       │   │   ├── Network.vue
-│       │   │   ├── Login.vue
-│       │   │   ├── SetPassword.vue
-│       │   │   ├── UpdatePassword.vue
-│       │   │   └── Callback.vue
-│       │   ├── plugins/          # Router, Vuetify
-│       │   └── types/            # UI-specific types
-│       └── tests/                # Playwright E2E tests
-│           ├── auth.spec.ts
-│           ├── device.spec.ts
-│           ├── error-handling.spec.ts
-│           ├── factory-reset.spec.ts
-│           ├── network-configuration.spec.ts
-│           ├── network-multi-adapter.spec.ts
-│           ├── reboot.spec.ts
-│           ├── smoke.spec.ts
-│           ├── update.spec.ts
-│           ├── version-mismatch.spec.ts
-│           └── fixtures/
+│   │   │   ├── DeviceOverview.vue
+│   │   │   ├── DeviceUpdate.vue
+│   │   │   ├── Network.vue
+│   │   │   ├── Settings.vue
+│   │   │   ├── Login.vue
+│   │   │   ├── SetPassword.vue
+│   │   │   ├── UpdatePassword.vue
+│   │   │   └── Callback.vue
+│   │   ├── plugins/          # Router, Vuetify
+│   │   └── types/            # UI-specific types
+│   └── tests/                # Playwright E2E tests
+│       ├── auth.spec.ts
+│       ├── device.spec.ts
+│       ├── error-handling.spec.ts
+│       ├── factory-reset.spec.ts
+│       ├── network-configuration.spec.ts
+│       ├── network-multi-adapter.spec.ts
+│       ├── reboot.spec.ts
+│       ├── settings.spec.ts
+│       ├── smoke.spec.ts
+│       ├── update.spec.ts
+│       ├── version-mismatch.spec.ts
+│       ├── wifi.spec.ts
+│       └── fixtures/
+│           ├── mock-api.ts
+│           ├── network-test-harness.ts
+│           ├── test-setup.ts
+│           └── websocket.ts      # WebSocket test mocks
 └── project-context.md            # This file
 ```
 
@@ -250,7 +278,7 @@ omnect-ui/
 
 **Frontend (Shell):**
 - `src/ui/src/composables/useCore.ts` - Core WASM bridge + effect handlers
-- `src/ui/src/composables/useCentrifugo.ts` - WebSocket client integration
+- `src/ui/src/composables/useWebSocket.ts` - WebSocket client integration
 - `src/ui/src/pages/DeviceOverview.vue` - Main device dashboard page
 
 **Core:**
@@ -259,12 +287,12 @@ omnect-ui/
 - `src/app/src/events.rs` - Event enum definitions
 - `src/app/src/types/` - Domain types organized by domain
 - `src/app/src/update/` - Domain-based event handlers
-- `src/app/src/commands/centrifugo.rs` - Custom Centrifugo commands
+- `src/app/src/commands/websocket.rs` - Custom WebSocket commands
 
 **Backend:**
 - `src/backend/src/main.rs` - Application entry point
 - `src/backend/src/api.rs` - API route handlers
-- `src/backend/src/services/` - Business logic services
+- `src/backend/src/services/websocket.rs` - Native WebSocket implementation
 
 **Scripts:**
 - `scripts/build-frontend.sh` - Build complete frontend (WASM + TypeScript types + UI)

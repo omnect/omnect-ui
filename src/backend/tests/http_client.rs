@@ -2,9 +2,11 @@ use omnect_ui::http_client::unix_socket_client;
 use serde::Serialize;
 use std::path::PathBuf;
 use tempfile::TempDir;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixListener;
-use tokio::sync::oneshot;
+use tokio::{
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    net::UnixListener,
+    sync::oneshot,
+};
 
 // Integration tests for unix_socket_client
 async fn start_mock_unix_socket_server(

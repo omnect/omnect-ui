@@ -1,13 +1,13 @@
 use base64::prelude::*;
-use crux_core::Command;
+use crux_core::{Command, render::render};
 
 use crate::{
-    auth_post, auth_post_basic,
-    events::{AuthEvent, Event},
+    Effect, auth_post, auth_post_basic,
+    events::{AuthEvent, Event, WifiEvent},
     handle_response,
     model::Model,
-    types::{AuthToken, SetPasswordRequest, UpdatePasswordRequest},
-    unauth_post, Effect,
+    types::{AuthToken, SetPasswordRequest, UpdatePasswordRequest, WifiState},
+    unauth_post,
 };
 
 /// Handle authentication-related events
@@ -20,12 +20,20 @@ pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
                 map: |token| AuthToken { token })
         }
 
-        AuthEvent::LoginResponse(result) => handle_response!(model, result, {
-            on_success: |model, auth| {
-                model.auth_token = Some(auth.token);
-                model.is_authenticated = true;
-            },
-        }),
+        AuthEvent::LoginResponse(result) => {
+            model.stop_loading();
+            match result {
+                Ok(auth) => {
+                    model.auth_token = Some(auth.token);
+                    model.is_authenticated = true;
+                    post_auth_commands(model)
+                }
+                Err(e) => {
+                    model.set_error(e);
+                    render()
+                }
+            }
+        }
 
         AuthEvent::Logout => {
             auth_post!(Auth, AuthEvent, model, "/logout", LogoutResponse, "Logout")
@@ -44,13 +52,21 @@ pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
                 map: |token| AuthToken { token })
         }
 
-        AuthEvent::SetPasswordResponse(result) => handle_response!(model, result, {
-            on_success: |model, auth| {
-                model.requires_password_set = false;
-                model.auth_token = Some(auth.token);
-                model.is_authenticated = true;
-            },
-        }),
+        AuthEvent::SetPasswordResponse(result) => {
+            model.stop_loading();
+            match result {
+                Ok(auth) => {
+                    model.requires_password_set = false;
+                    model.auth_token = Some(auth.token);
+                    model.is_authenticated = true;
+                    post_auth_commands(model)
+                }
+                Err(e) => {
+                    model.set_error(e);
+                    render()
+                }
+            }
+        }
 
         AuthEvent::UpdatePassword {
             current_password,
@@ -82,6 +98,25 @@ pub fn handle(event: AuthEvent, model: &mut Model) -> Command<Effect, Event> {
                 model.requires_password_set = requires;
             },
         }),
+
+        AuthEvent::RestoreSession(token) => {
+            model.auth_token = Some(token);
+            model.is_authenticated = true;
+            post_auth_commands(model)
+        }
+    }
+}
+
+/// After successful authentication, fetch WiFi data if WiFi is available
+fn post_auth_commands(model: &mut Model) -> Command<Effect, Event> {
+    if matches!(model.wifi_state, WifiState::Ready { .. }) {
+        Command::all([
+            render(),
+            super::wifi::handle(WifiEvent::GetStatus, model),
+            super::wifi::handle(WifiEvent::GetSavedNetworks, model),
+        ])
+    } else {
+        render()
     }
 }
 
@@ -91,6 +126,38 @@ mod tests {
 
     mod login {
         use super::*;
+
+        #[test]
+        fn posts_to_login_endpoint() {
+            let mut model = Model::default();
+            let mut cmd = handle(
+                AuthEvent::Login {
+                    password: "test_password".into(),
+                },
+                &mut model,
+            );
+
+            // Login produces render + http effects
+            let effects = [cmd.expect_effect(), cmd.expect_effect()];
+            let http_req = effects
+                .into_iter()
+                .find_map(|e| match e {
+                    Effect::Http(req) => Some(req),
+                    _ => None,
+                })
+                .expect("Expected Http effect");
+            let (http_request, _) = http_req.split();
+
+            assert_eq!(http_request.url, "https://relative/token/login");
+            assert_eq!(http_request.method, "POST");
+            assert!(
+                http_request
+                    .headers
+                    .iter()
+                    .any(|h| h.name.eq_ignore_ascii_case("authorization")
+                        && h.value.starts_with("Basic "))
+            );
+        }
 
         #[test]
         fn sets_loading_state() {
@@ -165,6 +232,36 @@ mod tests {
 
     mod logout {
         use super::*;
+
+        #[test]
+        fn posts_to_logout_endpoint() {
+            let mut model = Model {
+                is_authenticated: true,
+                auth_token: Some("bearer-token".into()),
+                ..Default::default()
+            };
+            let mut cmd = handle(AuthEvent::Logout, &mut model);
+
+            let effects = [cmd.expect_effect(), cmd.expect_effect()];
+            let http_req = effects
+                .into_iter()
+                .find_map(|e| match e {
+                    Effect::Http(req) => Some(req),
+                    _ => None,
+                })
+                .expect("Expected Http effect");
+            let (http_request, _) = http_req.split();
+
+            assert_eq!(http_request.url, "https://relative/logout");
+            assert_eq!(http_request.method, "POST");
+            assert!(
+                http_request
+                    .headers
+                    .iter()
+                    .any(|h| h.name.eq_ignore_ascii_case("authorization")
+                        && h.value.starts_with("Bearer "))
+            );
+        }
 
         #[test]
         fn sets_loading_state() {
@@ -346,8 +443,46 @@ mod tests {
         }
     }
 
+    mod restore_session {
+        use super::*;
+
+        #[test]
+        fn sets_authenticated_and_stores_token() {
+            let mut model = Model::default();
+
+            let _ = handle(
+                AuthEvent::RestoreSession("restored-token-123".into()),
+                &mut model,
+            );
+
+            assert!(model.is_authenticated);
+            assert_eq!(model.auth_token, Some("restored-token-123".into()));
+            assert!(!model.is_loading);
+            assert!(model.error_message.is_none());
+        }
+    }
+
     mod check_requires_password_set {
         use super::*;
+
+        #[test]
+        fn sends_get_to_check_endpoint() {
+            let mut model = Model::default();
+            let mut cmd = handle(AuthEvent::CheckRequiresPasswordSet, &mut model);
+
+            let effects = [cmd.expect_effect(), cmd.expect_effect()];
+            let http_req = effects
+                .into_iter()
+                .find_map(|e| match e {
+                    Effect::Http(req) => Some(req),
+                    _ => None,
+                })
+                .expect("Expected Http effect");
+            let (http_request, _) = http_req.split();
+
+            assert_eq!(http_request.url, "https://relative/require-set-password");
+            assert_eq!(http_request.method, "GET");
+        }
 
         #[test]
         fn sets_loading_state() {

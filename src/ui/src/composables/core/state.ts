@@ -7,7 +7,7 @@
 
 import { ref, reactive } from 'vue'
 import type { ViewModel } from './types'
-import { useCentrifuge } from '../useCentrifugo'
+import { useWebSocket } from '../useWebSocket'
 
 // ============================================================================
 // Singleton Reactive State
@@ -48,10 +48,22 @@ export const viewModel = reactive<ViewModel>({
 	// Network rollback modal state
 	shouldShowRollbackModal: false,
 	defaultRollbackEnabled: true,
+	// Version mismatch state
+	versionMismatch: false,
+	versionMismatchMessage: null,
 	// Firmware upload state
 	firmwareUploadState: { type: 'idle' },
 	// Overlay spinner state
 	overlaySpinner: { overlay: false, title: '', text: null, timedOut: false, progress: null, countdownSeconds: null },
+	// WiFi state
+	wifiState: { type: 'unknown' },
+	// User-configurable timeout settings
+	timeoutSettings: {
+		rebootTimeoutSecs: 300,
+		factoryResetTimeoutSecs: 600,
+		firmwareUpdateTimeoutSecs: 900,
+		networkRollbackTimeoutSecs: 90,
+	},
 })
 
 /**
@@ -60,7 +72,7 @@ export const viewModel = reactive<ViewModel>({
 export const isInitialized = ref(false)
 
 /**
- * Whether we're subscribed to Centrifugo channels
+ * Whether we're subscribed to WebSocket channels
  */
 export const isSubscribed = ref(false)
 
@@ -96,13 +108,13 @@ export function setInitializationPromise(promise: Promise<void>): void {
 }
 
 // ============================================================================
-// Centrifugo Instance
+// WebSocket Instance
 // ============================================================================
 
 /**
- * Centrifugo instance for WebSocket operations
+ * WebSocket instance for WebSocket operations
  */
-export const centrifugoInstance = useCentrifuge()
+export const websocketInstance = useWebSocket()
 
-// Inject the auth token ref into Centrifugo to avoid circular dependency
-centrifugoInstance.setAuthToken(authToken)
+// Inject the auth token ref into WebSocket to avoid circular dependency
+websocketInstance.setAuthToken(authToken)

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { setupAndLogin } from './fixtures/test-setup';
-import { publishToCentrifugo } from './fixtures/centrifugo';
+import { publishToWebsocket } from './fixtures/websocket';
 
 const mockUpdateEndpoints = async (page: import('@playwright/test').Page, version = '4.0.24') => {
   await page.route('**/update/file', route => route.fulfill({ status: 200, body: 'OK' }));
@@ -65,8 +65,8 @@ test.describe('Device Update Rollback', () => {
   test.beforeEach(async ({ page }) => {
     page.on('console', msg => console.log(`BROWSER CONSOLE: ${msg.type()} - ${msg.text()}`));
     
-    // Reset Centrifugo state from previous tests to prevent modals from appearing on login
-    await publishToCentrifugo('UpdateValidationStatusV1', { status: 'NoUpdate' });
+    // Reset WebSocket state from previous tests to prevent modals from appearing on login
+    await publishToWebsocket('UpdateValidationStatusV1', { status: 'NoUpdate' });
 
     await setupAndLogin(page, { updateValidationAcked: false });
 
@@ -173,7 +173,7 @@ test.describe('Device Update Rollback', () => {
     await expect(page.getByText('Common Info')).toBeVisible();
 
     // Simulate WebSocket message with update validation result arriving
-    await publishToCentrifugo('UpdateValidationStatusV1', { status: 'Recovered' });
+    await publishToWebsocket('UpdateValidationStatusV1', { status: 'Recovered' });
 
     // The modal should be visible in App.vue
     const rollbackModal = page.getByText('Update Rolled Back');
@@ -266,7 +266,7 @@ test.describe('Device Update Rollback', () => {
     await expect(page.locator('#overlay .v-progress-circular')).toBeVisible();
     await expect(page.locator('#overlay .mdi-alert-circle-outline')).not.toBeVisible();
 
-    // After VITE_FIRMWARE_UPDATE_TIMEOUT_MS (2s in test build), spinner is replaced by warning icon
+    // After Core-driven timeout fires (capped to 500ms by TIMER_CAP_MS), spinner is replaced by warning icon
     await expect(page.locator('#overlay .mdi-alert-circle-outline')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('#overlay .v-progress-circular')).not.toBeVisible();
 
@@ -288,8 +288,8 @@ test.describe('Device Update Rollback', () => {
 
     page.on('console', msg => console.log(`BROWSER CONSOLE: ${msg.type()} - ${msg.text()}`));
 
-    // Stage first rollback in Centrifugo history so it replays immediately on subscription
-    await publishToCentrifugo('UpdateValidationStatusV1', { status: 'Recovered' });
+    // Stage first rollback in WebSocket history so it replays immediately on subscription
+    await publishToWebsocket('UpdateValidationStatusV1', { status: 'Recovered' });
 
     // Login with updateValidationAcked: false — first rollback not yet acked
     await setupAndLogin(page, { updateValidationAcked: false });
@@ -334,8 +334,8 @@ test.describe('Device Update Rollback', () => {
     await page.getByRole('button', { name: /log in/i }).click();
     await expect(page.getByText('Common Info')).toBeVisible();
 
-    // Centrifugo delivers Recovered. Combined watcher: ackedInHealthcheck=false → notAcked=true → modal shown
-    await publishToCentrifugo('UpdateValidationStatusV1', { status: 'Recovered' });
+    // WebSocket delivers Recovered. Combined watcher: ackedInHealthcheck=false → notAcked=true → modal shown
+    await publishToWebsocket('UpdateValidationStatusV1', { status: 'Recovered' });
 
     const secondModal = page.getByText('Update Rolled Back');
     await expect(secondModal).toBeVisible({ timeout: 15000 });
@@ -428,7 +428,7 @@ test.describe('Device Update Rollback', () => {
     await expect(page.getByText('Common Info')).toBeVisible();
 
     // Simulate WebSocket message
-    await publishToCentrifugo('UpdateValidationStatusV1', { status: 'Succeeded' });
+    await publishToWebsocket('UpdateValidationStatusV1', { status: 'Succeeded' });
 
     // Verify Success Modal
     await expect(page.getByText('Update Succeeded')).toBeVisible({ timeout: 15000 });

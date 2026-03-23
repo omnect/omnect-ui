@@ -6,7 +6,6 @@ export async function mockConfig(page: Page) {
     KEYCLOAK_URL: 'http://localhost:8080',
     REALM: 'omnect',
     CLIENT_ID: 'omnect-ui',
-    CENTRIFUGO_URL: 'wss://localhost:8000/connection/websocket'
   };
 
   // Add as init script so it's available even before config.js loads
@@ -31,6 +30,12 @@ export async function mockLoginSuccess(page: Page) {
       status: 200,
       contentType: 'text/plain',
       body: token,
+      // Plant the session cookie so that subsequent token/refresh calls in the
+      // same browser context include it — matching real backend behavior where
+      // actix-session sets Set-Cookie on every successful login.
+      headers: {
+        'Set-Cookie': 'omnect-ui-session=mock-session-value; Path=/; HttpOnly; SameSite=Strict',
+      },
     });
   });
 }
@@ -131,6 +136,76 @@ export async function mockUpdatePasswordFailure(page: Page, message = 'current p
       contentType: 'text/plain',
       body: message,
     });
+  });
+}
+
+export async function mockTokenRefresh(page: Page, status = 200) {
+  const token = jwt.sign({ sub: 'user123' }, 'secret', { expiresIn: '1h' });
+  await page.route('**/token/refresh', async (route) => {
+    if (route.request().method() === 'GET') {
+      // Mirror the real backend: AuthMw validates the session cookie before
+      // issuing a token. Return 401 when the cookie is absent, catching bugs
+      // where the login response failed to plant it or the browser failed to
+      // send it on the refresh request.
+      const cookieHeader = route.request().headers()['cookie'] ?? '';
+      const hasSession = cookieHeader.includes('omnect-ui-session=');
+      const effectiveStatus = status === 200 && !hasSession ? 401 : status;
+      await route.fulfill({
+        status: effectiveStatus,
+        contentType: 'text/plain',
+        body: effectiveStatus === 200 ? token : '',
+      });
+    } else {
+      await route.continue();
+    }
+  });
+}
+
+export interface TimeoutSettingsPayload {
+  rebootTimeoutSecs: number;
+  factoryResetTimeoutSecs: number;
+  firmwareUpdateTimeoutSecs: number;
+  networkRollbackTimeoutSecs: number;
+}
+
+export const DEFAULT_TIMEOUT_SETTINGS: TimeoutSettingsPayload = {
+  rebootTimeoutSecs: 300,
+  factoryResetTimeoutSecs: 600,
+  firmwareUpdateTimeoutSecs: 900,
+  networkRollbackTimeoutSecs: 90,
+};
+
+export async function mockGetSettings(page: Page, settings: TimeoutSettingsPayload = DEFAULT_TIMEOUT_SETTINGS) {
+  await page.route('**/api/settings', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(settings),
+      });
+    } else {
+      await route.continue();
+    }
+  });
+}
+
+export async function mockSaveSettingsSuccess(page: Page) {
+  await page.route('**/api/settings', async (route) => {
+    if (route.request().method() === 'POST') {
+      await route.fulfill({ status: 200, body: '' });
+    } else {
+      await route.continue();
+    }
+  });
+}
+
+export async function mockSaveSettingsFailure(page: Page, message = 'failed to save settings') {
+  await page.route('**/api/settings', async (route) => {
+    if (route.request().method() === 'POST') {
+      await route.fulfill({ status: 500, contentType: 'text/plain', body: message });
+    } else {
+      await route.continue();
+    }
   });
 }
 

@@ -1,29 +1,35 @@
+use std::collections::HashMap;
+
 use crux_core::Command;
 
 use crate::{
+    Effect, WebSocketCmd,
     events::{Event, WebSocketEvent},
     model::Model,
     parse_ods_update,
-    types::ods::{
-        OdsFactoryReset, OdsNetworkStatus, OdsOnlineStatus, OdsSystemInfo, OdsTimeouts,
-        OdsUpdateValidationStatus,
+    types::{
+        NetworkFormData, NetworkFormState,
+        ods::{
+            OdsFactoryReset, OdsNetworkStatus, OdsOnlineStatus, OdsSystemInfo, OdsTimeouts,
+            OdsUpdateValidationStatus,
+        },
     },
-    update_field, CentrifugoCmd, Effect,
+    update_field,
 };
 
-/// Handle WebSocket and Centrifugo-related events
+/// Handle WebSocket and WebSocket-related events
 pub fn handle(event: WebSocketEvent, model: &mut Model) -> Command<Effect, Event> {
     match event {
         WebSocketEvent::SubscribeToChannels => {
-            // Issue Centrifugo effect (shell sends WebSocket data as events directly)
-            CentrifugoCmd::subscribe_all()
+            // Issue WebSocket effect (shell sends WebSocket data as events directly)
+            WebSocketCmd::subscribe_all()
                 .build()
                 .then_send(|_| Event::WebSocket(WebSocketEvent::Connected))
         }
 
         WebSocketEvent::UnsubscribeFromChannels => {
-            // Issue Centrifugo effect
-            CentrifugoCmd::unsubscribe_all()
+            // Issue WebSocket effect
+            WebSocketCmd::unsubscribe_all()
                 .build()
                 .then_send(|_| Event::WebSocket(WebSocketEvent::Disconnected))
         }
@@ -40,6 +46,7 @@ pub fn handle(event: WebSocketEvent, model: &mut Model) -> Command<Effect, Event
                 |m, status| {
                     m.network_status = Some(status.into());
                     m.update_current_connection_adapter();
+                    sync_network_form_from_status(m);
                     crux_core::render::render()
                 }
             )
@@ -68,12 +75,68 @@ pub fn handle(event: WebSocketEvent, model: &mut Model) -> Command<Effect, Event
     }
 }
 
+/// When the form has no unsaved changes, re-initialize it from freshly updated adapter data.
+/// This keeps the form in sync when external events (e.g. WiFi connecting) change the
+/// adapter's IP/config at the OS level.
+fn sync_network_form_from_status(m: &mut Model) {
+    let maybe_adapter_name = if !m.network_form_dirty {
+        if let NetworkFormState::Editing { adapter_name, .. } = &m.network_form_state {
+            Some(adapter_name.clone())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    if let Some(adapter_name) = maybe_adapter_name
+        && let Some(form_data) = m
+            .network_status
+            .as_ref()
+            .and_then(|ns| ns.network_status.iter().find(|n| n.name == adapter_name))
+            .map(NetworkFormData::from)
+    {
+        m.network_form_state = NetworkFormState::Editing {
+            adapter_name,
+            form_data: form_data.clone(),
+            original_data: form_data,
+            errors: HashMap::new(),
+        };
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{
-        FactoryReset, FactoryResetStatus, OnlineStatus, OsInfo, SystemInfo, UpdateValidationStatus,
+    use crate::{
+        WebSocketOperation,
+        types::{
+            FactoryReset, FactoryResetStatus, OnlineStatus, OsInfo, SystemInfo,
+            UpdateValidationStatus,
+        },
     };
+
+    mod subscribe {
+        use super::*;
+
+        #[test]
+        fn subscribe_to_channels_emits_subscribe_all_effect() {
+            let mut model = Model::default();
+            let mut cmd = handle(WebSocketEvent::SubscribeToChannels, &mut model);
+
+            // SubscribeToChannels produces a single WebSocket effect (no render wrapper)
+            let (operation, _) = cmd.expect_one_effect().expect_web_socket().split();
+            assert!(matches!(operation, WebSocketOperation::SubscribeAll));
+        }
+
+        #[test]
+        fn unsubscribe_from_channels_emits_unsubscribe_all_effect() {
+            let mut model = Model::default();
+            let mut cmd = handle(WebSocketEvent::UnsubscribeFromChannels, &mut model);
+
+            let (operation, _) = cmd.expect_one_effect().expect_web_socket().split();
+            assert!(matches!(operation, WebSocketOperation::UnsubscribeAll));
+        }
+    }
 
     mod system_info {
         use super::*;
@@ -177,8 +240,7 @@ mod tests {
 
     mod timeouts {
         use super::*;
-        use crate::types::Duration;
-        use crate::types::Timeouts;
+        use crate::types::{TimeoutDuration, Timeouts};
 
         #[test]
         fn updates_timeouts() {
@@ -187,7 +249,7 @@ mod tests {
             let json = r#"{"wait_online_timeout": {"nanos": 0, "secs": 300}}"#;
 
             let expected_timeouts = Timeouts {
-                wait_online_timeout: Duration {
+                wait_online_timeout: TimeoutDuration {
                     nanos: 0,
                     secs: 300,
                 },

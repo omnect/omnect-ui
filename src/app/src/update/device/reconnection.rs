@@ -1,15 +1,20 @@
 use crux_core::Command;
 
 use crate::{
+    Effect, TimeCmd,
     events::Event,
     http_get,
     http_helpers::build_url,
     model::Model,
     types::{DeviceOperationState, NetworkChangeState, OverlaySpinnerState, UploadState},
-    Effect,
 };
 
-use super::operations::{is_actual_update_result, is_update_complete};
+/// Reconnection poll interval
+const RECONNECTION_POLL_INTERVAL_MS: u64 = 5000;
+
+use super::operations::{
+    is_actual_update_result, is_update_complete, schedule_reconnection_countdown_tick,
+};
 
 /// Handle reconnection check tick - polls healthcheck endpoint
 pub fn handle_reconnection_check_tick(model: &mut Model) -> Command<Effect, Event> {
@@ -26,14 +31,45 @@ pub fn handle_reconnection_check_tick(model: &mut Model) -> Command<Effect, Even
 
     model.reconnection_attempt += 1;
 
-    // Send healthcheck request
-    http_get!(
-        Device,
-        DeviceEvent,
-        &build_url("/healthcheck"),
-        HealthcheckResponse,
-        crate::types::HealthcheckInfo
-    )
+    Command::all([
+        http_get!(
+            Device,
+            DeviceEvent,
+            &build_url("/healthcheck"),
+            HealthcheckResponse,
+            crate::types::HealthcheckInfo
+        ),
+        schedule_reconnection_poll(),
+    ])
+}
+
+pub(super) fn schedule_reconnection_poll() -> Command<Effect, Event> {
+    use crate::events::DeviceEvent;
+    let (timer, handle) = TimeCmd::notify_after(std::time::Duration::from_millis(
+        RECONNECTION_POLL_INTERVAL_MS,
+    ));
+    std::mem::forget(handle);
+    timer.then_send(|_| Event::Device(DeviceEvent::ReconnectionCheckTick))
+}
+
+/// Handle reconnection countdown tick - decrements the displayed countdown each second
+pub fn handle_reconnection_countdown_tick(model: &mut Model) -> Command<Effect, Event> {
+    let is_active = matches!(
+        model.device_operation_state,
+        DeviceOperationState::Rebooting
+            | DeviceOperationState::FactoryResetting
+            | DeviceOperationState::Updating
+            | DeviceOperationState::WaitingReconnection { .. }
+    );
+    if is_active && model.overlay_spinner.countdown_seconds() > Some(0) {
+        model.overlay_spinner.decrement_countdown();
+        Command::all([
+            crux_core::render::render(),
+            schedule_reconnection_countdown_tick(),
+        ])
+    } else {
+        Command::done()
+    }
 }
 
 /// Handle reconnection timeout - device didn't come back online
@@ -71,21 +107,39 @@ pub fn handle_healthcheck_response(
     result: Result<crate::types::HealthcheckInfo, String>,
     model: &mut Model,
 ) -> Command<Effect, Event> {
-    // Update healthcheck info if success
     if let Ok(info) = &result {
         model.healthcheck = Some(info.clone());
+        update_version_info(info, model);
     }
+    advance_device_operation_state(&result, model);
+    advance_network_change_state(&result, model);
+    crux_core::render::render()
+}
 
-    // Handle reconnection state machine
+fn update_version_info(info: &crate::types::HealthcheckInfo, model: &mut Model) {
+    model.version_mismatch = info.version_info.mismatch;
+    model.version_mismatch_message = if info.version_info.mismatch {
+        Some(format!(
+            "Current version: {}. Required version {}. Please consider to update omnect Secure OS.",
+            info.version_info.current, info.version_info.required,
+        ))
+    } else {
+        None
+    };
+}
+
+fn advance_device_operation_state(
+    result: &Result<crate::types::HealthcheckInfo, String>,
+    model: &mut Model,
+) {
     match &model.device_operation_state {
         DeviceOperationState::Rebooting
         | DeviceOperationState::FactoryResetting
         | DeviceOperationState::Updating => {
-            // First check - if it fails, mark as "waiting"
             let is_updating =
                 matches!(model.device_operation_state, DeviceOperationState::Updating);
 
-            // For updates, we also check the status field
+            // For updates, completion requires a terminal status field (not just reachability)
             let update_done = if is_updating {
                 result.as_ref().ok().is_some_and(is_update_complete)
             } else {
@@ -93,52 +147,43 @@ pub fn handle_healthcheck_response(
             };
 
             if result.is_err() {
-                // Device went offline - mark it
                 model.device_went_offline = true;
-                // Transition to waiting
                 let operation = model.device_operation_state.operation_name();
                 model.device_operation_state = DeviceOperationState::WaitingReconnection {
                     operation,
                     attempt: model.reconnection_attempt,
                 };
             } else if (update_done || !is_updating) && model.device_went_offline {
-                // Device came back online after going offline - reconnection successful
                 let operation = model.device_operation_state.operation_name();
                 model.device_operation_state =
                     DeviceOperationState::ReconnectionSuccessful { operation };
-
                 // Invalidate session as backend restart clears tokens
                 model.invalidate_session();
-
-                // Clear overlay spinner
                 model.overlay_spinner.clear();
 
                 // Clear stale firmware page state so the update page is fresh on re-login.
                 // Only when an actual update ran — "NoUpdate" preserves the loaded manifest.
-                if is_updating {
-                    if let Ok(info) = &result {
-                        if is_actual_update_result(info) {
-                            model.update_manifest = None;
-                            model.firmware_upload_state = UploadState::Idle;
-                        }
-                    }
+                if is_updating
+                    && let Ok(info) = &result
+                    && is_actual_update_result(info)
+                {
+                    model.update_manifest = None;
+                    model.firmware_upload_state = UploadState::Idle;
                 }
             }
-            // else: healthcheck succeeded but device never went offline - keep checking
+            // else: device never went offline - keep checking
         }
         DeviceOperationState::WaitingReconnection { operation, .. } => {
             let is_update = operation == "Update";
 
             if result.is_err() {
-                // Still offline - mark it
                 model.device_went_offline = true;
-                // Update attempt count
                 model.device_operation_state = DeviceOperationState::WaitingReconnection {
                     operation: operation.clone(),
                     attempt: model.reconnection_attempt,
                 };
             } else {
-                // Consider update done when status is Succeeded, Recovered, or NoUpdate
+                // For updates, completion requires a terminal status field
                 let update_done = if is_update {
                     result.as_ref().ok().is_some_and(is_update_complete)
                 } else {
@@ -146,35 +191,34 @@ pub fn handle_healthcheck_response(
                 };
 
                 if update_done && model.device_went_offline {
-                    // Success! Device is back online (or update finished) AND it went offline
                     model.device_operation_state = DeviceOperationState::ReconnectionSuccessful {
                         operation: operation.clone(),
                     };
-
                     // Invalidate session as backend restart clears tokens
                     model.invalidate_session();
-
-                    // Clear overlay spinner
                     model.overlay_spinner.clear();
 
                     // Clear stale firmware page state so the update page is fresh on re-login.
                     // Only when an actual update ran — "NoUpdate" preserves the loaded manifest.
-                    if is_update {
-                        if let Ok(info) = &result {
-                            if is_actual_update_result(info) {
-                                model.update_manifest = None;
-                                model.firmware_upload_state = UploadState::Idle;
-                            }
-                        }
+                    if is_update
+                        && let Ok(info) = &result
+                        && is_actual_update_result(info)
+                    {
+                        model.update_manifest = None;
+                        model.firmware_upload_state = UploadState::Idle;
                     }
                 }
-                // else: healthcheck succeeded but device never went offline - keep checking
+                // else: device never went offline - keep checking
             }
         }
-        _ => {} // Do nothing for other states
+        _ => {}
     }
+}
 
-    // Handle network change state machine for IP change polling
+fn advance_network_change_state(
+    result: &Result<crate::types::HealthcheckInfo, String>,
+    model: &mut Model,
+) {
     match &model.network_change_state {
         NetworkChangeState::WaitingForNewIp {
             new_ip, ui_port, ..
@@ -183,45 +227,41 @@ pub fn handle_healthcheck_response(
                 // Clone values before reassigning state to avoid borrow conflict
                 let new_ip = new_ip.clone();
                 let port = *ui_port;
-                // New IP is reachable
                 model.network_change_state = NetworkChangeState::NewIpReachable {
                     new_ip: new_ip.clone(),
                     ui_port: port,
                 };
-                // Clear any leftover messages
                 model.success_message = None;
                 model.error_message = None;
-                // Update overlay for redirect
                 model.overlay_spinner = OverlaySpinnerState::new("Network settings applied")
                     .with_text(format!("Redirecting to new IP: {new_ip}:{port}"));
             }
         }
         NetworkChangeState::WaitingForOldIp { .. } => {
             if result.is_ok() {
-                // Old IP is reachable - Rollback successful
+                // Old IP is reachable — rollback successful.
+                // No success message here: the "Network Settings Rolled Back" modal
+                // is triggered by the `network_rollback_occurred` flag in the healthcheck response.
                 model.network_change_state = NetworkChangeState::Idle;
                 model.overlay_spinner.clear();
                 model.invalidate_session();
-                // Clear any leftover messages
                 model.success_message = None;
                 model.error_message = None;
-                // Do not show success message here. The "Network Settings Rolled Back" modal
-                // will be triggered by the `network_rollback_occurred` flag in the healthcheck response.
             }
         }
         _ => {}
     }
-
-    crux_core::render::render()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Model;
-    use crate::types::{
-        DeviceOperationState, HealthcheckInfo, NetworkChangeState, UpdateValidationStatus,
-        VersionInfo,
+    use crate::{
+        model::Model,
+        types::{
+            DeviceOperationState, HealthcheckInfo, NetworkChangeState, UpdateValidationStatus,
+            VersionInfo,
+        },
     };
 
     fn create_healthcheck(status: &str, mismatch: bool) -> HealthcheckInfo {
@@ -292,6 +332,32 @@ mod tests {
             let _ = handle_reconnection_check_tick(&mut model);
 
             assert_eq!(model.reconnection_attempt, 0);
+        }
+
+        #[test]
+        fn sends_get_to_healthcheck_endpoint() {
+            let mut model = Model {
+                device_operation_state: DeviceOperationState::Rebooting,
+                ..Default::default()
+            };
+            let mut cmd = handle_reconnection_check_tick(&mut model);
+
+            // Command::all([http_get!(...), schedule_poll()]) produces Http + Time effects;
+            // find the Http one.
+            let http_effect = cmd
+                .effects()
+                .find_map(|e| {
+                    if let Effect::Http(_) = e {
+                        Some(e.expect_http())
+                    } else {
+                        None
+                    }
+                })
+                .expect("expected Http effect");
+            let (http_request, _) = http_effect.split();
+
+            assert_eq!(http_request.url, "https://relative/healthcheck");
+            assert_eq!(http_request.method, "GET");
         }
     }
 
@@ -875,6 +941,142 @@ mod tests {
                     NetworkChangeState::WaitingForNewIp { .. }
                 ));
             }
+        }
+
+        mod derived_state {
+            use super::*;
+
+            #[test]
+            fn version_mismatch_sets_model_fields() {
+                let mut model = Model::default();
+                let info = HealthcheckInfo {
+                    version_info: VersionInfo {
+                        required: ">=1.0.0".to_string(),
+                        current: "0.9.0".to_string(),
+                        mismatch: true,
+                    },
+                    ..Default::default()
+                };
+
+                let _ = handle_healthcheck_response(Ok(info), &mut model);
+
+                assert!(model.version_mismatch);
+                let msg = model.version_mismatch_message.unwrap();
+                assert!(msg.contains("0.9.0"));
+                assert!(msg.contains(">=1.0.0"));
+            }
+
+            #[test]
+            fn no_version_mismatch_clears_fields() {
+                let mut model = Model {
+                    version_mismatch: true,
+                    version_mismatch_message: Some("old".to_string()),
+                    ..Default::default()
+                };
+
+                let _ =
+                    handle_healthcheck_response(Ok(create_healthcheck("valid", false)), &mut model);
+
+                assert!(!model.version_mismatch);
+                assert!(model.version_mismatch_message.is_none());
+            }
+
+            #[test]
+            fn error_response_does_not_change_derived_state() {
+                let mut model = Model {
+                    version_mismatch: true,
+                    ..Default::default()
+                };
+
+                let _ =
+                    handle_healthcheck_response(Err("Connection failed".to_string()), &mut model);
+
+                // Derived state unchanged on error
+                assert!(model.version_mismatch);
+            }
+        }
+    }
+
+    mod schedule_timers {
+        use super::*;
+        use crux_time::protocol::{Duration as TimeDuration, TimeRequest};
+
+        fn find_time_effect(cmd: &mut Command<Effect, Event>) -> Option<TimeRequest> {
+            cmd.effects().find_map(|e| {
+                if let Effect::Time(_) = e {
+                    let (time_request, _) = e.expect_time().split();
+                    Some(time_request)
+                } else {
+                    None
+                }
+            })
+        }
+
+        #[test]
+        fn schedule_reconnection_poll_emits_5000ms_time_effect() {
+            let mut cmd = schedule_reconnection_poll();
+            let time_request = find_time_effect(&mut cmd).expect("expected Time effect");
+            let TimeRequest::NotifyAfter { duration, .. } = time_request else {
+                panic!("expected NotifyAfter");
+            };
+            assert_eq!(
+                duration,
+                TimeDuration::from_millis(RECONNECTION_POLL_INTERVAL_MS)
+            );
+        }
+
+        #[test]
+        fn check_tick_reschedules_poll() {
+            let mut model = Model {
+                device_operation_state: DeviceOperationState::Rebooting,
+                ..Default::default()
+            };
+            let mut cmd = handle_reconnection_check_tick(&mut model);
+            let time_request = find_time_effect(&mut cmd).expect("expected Time effect");
+            let TimeRequest::NotifyAfter { duration, .. } = time_request else {
+                panic!("expected NotifyAfter");
+            };
+            assert_eq!(
+                duration,
+                TimeDuration::from_millis(RECONNECTION_POLL_INTERVAL_MS)
+            );
+        }
+
+        #[test]
+        fn countdown_tick_reschedules_when_active_and_nonzero() {
+            let mut model = Model {
+                device_operation_state: DeviceOperationState::Rebooting,
+                overlay_spinner: OverlaySpinnerState::new("Test").with_countdown(30),
+                ..Default::default()
+            };
+            let mut cmd = handle_reconnection_countdown_tick(&mut model);
+            let time_request = find_time_effect(&mut cmd).expect("expected Time effect");
+            let TimeRequest::NotifyAfter { duration, .. } = time_request else {
+                panic!("expected NotifyAfter");
+            };
+            assert_eq!(duration, TimeDuration::from_millis(1_000));
+        }
+
+        #[test]
+        fn countdown_tick_stops_when_countdown_is_zero() {
+            let mut model = Model {
+                device_operation_state: DeviceOperationState::Rebooting,
+                overlay_spinner: OverlaySpinnerState::new("Test").with_countdown(0),
+                ..Default::default()
+            };
+            let mut cmd = handle_reconnection_countdown_tick(&mut model);
+            assert!(find_time_effect(&mut cmd).is_none());
+        }
+
+        #[test]
+        fn countdown_tick_stops_when_idle() {
+            let mut model = Model {
+                device_operation_state: DeviceOperationState::Idle,
+                overlay_spinner: OverlaySpinnerState::new("Test").with_countdown(30),
+                ..Default::default()
+            };
+            let mut cmd = handle_reconnection_countdown_tick(&mut model);
+            assert!(find_time_effect(&mut cmd).is_none());
         }
     }
 }

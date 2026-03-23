@@ -6,9 +6,7 @@
 //! boot cycle.
 
 use log::{error, info};
-use std::io::ErrorKind;
-use std::path::Path;
-use std::{fs, io};
+use std::{fs, io, io::ErrorKind, path::Path};
 
 /// A volatile marker file in `/tmp/`.
 pub struct MarkerFile {

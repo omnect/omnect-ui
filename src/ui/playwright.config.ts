@@ -7,13 +7,13 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   /* Run tests in files in parallel */
-  /* Disabled: Network tests share a Centrifugo WebSocket channel, parallel execution causes interference */
+  /* Disabled: Network tests share a WebSocket channel, parallel execution causes interference */
   fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* Use single worker to prevent Centrifugo channel interference between test files */
+  /* Use single worker to prevent WebSocket channel interference between test files */
   workers: 1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: 'html',
@@ -24,7 +24,7 @@ export default defineConfig({
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
-    
+
     /* Ignore HTTPS errors for self-signed certs */
     ignoreHTTPSErrors: true,
   },

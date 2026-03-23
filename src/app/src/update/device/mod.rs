@@ -5,17 +5,19 @@ mod reconnection;
 pub use network::{
     handle_ack_factory_reset_result, handle_ack_rollback, handle_ack_update_validation,
     handle_network_form_start_edit, handle_network_form_update, handle_new_ip_check_tick,
-    handle_new_ip_check_timeout, handle_set_network_config, handle_set_network_config_response,
+    handle_new_ip_check_timeout, handle_new_ip_countdown_tick, handle_set_network_config,
+    handle_set_network_config_response,
 };
 pub use operations::handle_device_operation_response;
 pub use reconnection::{
-    handle_healthcheck_response, handle_reconnection_check_tick, handle_reconnection_timeout,
+    handle_healthcheck_response, handle_reconnection_check_tick,
+    handle_reconnection_countdown_tick, handle_reconnection_timeout,
 };
 
 use crux_core::Command;
 
 use crate::{
-    auth_post,
+    Effect, auth_post,
     events::{DeviceEvent, Event},
     handle_response,
     model::Model,
@@ -23,7 +25,6 @@ use crate::{
         DeviceOperationState, FactoryResetRequest, LoadUpdateRequest, OverlaySpinnerState,
         RunUpdateRequest, UpdateManifest, UploadState,
     },
-    Effect,
 };
 
 /// Handle device action events (reboot, factory reset, network, updates)
@@ -116,13 +117,7 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
             handle_set_network_config_response(result, model)
         }
 
-        DeviceEvent::AckRollbackResponse(result) => {
-            model.stop_loading();
-            if let Err(e) = result {
-                model.set_error(e);
-            }
-            crux_core::render::render()
-        }
+        DeviceEvent::AckRollbackResponse(result) => handle_ack_response(result, model),
 
         DeviceEvent::LoadUpdate { file_path } => {
             let request = LoadUpdateRequest { file_path };
@@ -161,16 +156,18 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
             Some("The device is restarting with the updated firmware.".to_string()),
         ),
 
+        DeviceEvent::FetchInitialHealthcheck => build_initial_healthcheck_cmd(),
+
         DeviceEvent::HealthcheckResponse(result) => handle_healthcheck_response(result, model),
 
-        // Device reconnection events (reboot/factory reset/update)
-        // Shell sends these tick events based on watching device_operation_state
+        // Device reconnection events - tick events scheduled by Core via crux_time
         DeviceEvent::ReconnectionCheckTick => handle_reconnection_check_tick(model),
+        DeviceEvent::ReconnectionCountdownTick => handle_reconnection_countdown_tick(model),
         DeviceEvent::ReconnectionTimeout => handle_reconnection_timeout(model),
 
-        // Network IP change events
-        // Shell sends these tick events based on watching network_change_state
+        // Network IP change events - tick events scheduled by Core via crux_time
         DeviceEvent::NewIpCheckTick => handle_new_ip_check_tick(model),
+        DeviceEvent::NewIpCountdownTick => handle_new_ip_countdown_tick(model),
         DeviceEvent::NewIpCheckTimeout => handle_new_ip_check_timeout(model),
 
         // Acknowledge events
@@ -178,21 +175,9 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
         DeviceEvent::AckFactoryResetResult => handle_ack_factory_reset_result(model),
         DeviceEvent::AckUpdateValidation => handle_ack_update_validation(model),
 
-        DeviceEvent::AckFactoryResetResultResponse(result) => {
-            model.stop_loading();
-            if let Err(e) = result {
-                model.set_error(e);
-            }
-            crux_core::render::render()
-        }
+        DeviceEvent::AckFactoryResetResultResponse(result) => handle_ack_response(result, model),
 
-        DeviceEvent::AckUpdateValidationResponse(result) => {
-            model.stop_loading();
-            if let Err(e) = result {
-                model.set_error(e);
-            }
-            crux_core::render::render()
-        }
+        DeviceEvent::AckUpdateValidationResponse(result) => handle_ack_response(result, model),
 
         // Network form events
         DeviceEvent::NetworkFormStartEdit { adapter_name } => {
@@ -207,16 +192,48 @@ pub fn handle(event: DeviceEvent, model: &mut Model) -> Command<Effect, Event> {
     }
 }
 
+fn handle_ack_response(result: Result<(), String>, model: &mut Model) -> Command<Effect, Event> {
+    model.stop_loading();
+    if let Err(e) = result {
+        model.set_error(e);
+    }
+    crux_core::render::render()
+}
+
+fn build_initial_healthcheck_cmd() -> Command<Effect, Event> {
+    // crux_http converts 4xx/5xx to HttpError::Http but preserves the body.
+    // The backend returns 503 on version mismatch with a valid JSON body,
+    // so we must parse the body from both success and error paths.
+    crate::HttpCmd::get(crate::http_helpers::build_url("/healthcheck"))
+        .build()
+        .then_send(|result| {
+            let event_result = match result {
+                Ok(mut response) => crate::http_helpers::parse_json_response_any_status(
+                    "Healthcheck",
+                    &mut response,
+                ),
+                Err(crux_http::HttpError::Http {
+                    body: Some(body), ..
+                }) => serde_json::from_slice(&body)
+                    .map_err(|e| format!("Healthcheck: JSON parse error: {e}")),
+                Err(e) => Err(e.to_string()),
+            };
+            Event::Device(DeviceEvent::HealthcheckResponse(event_result))
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::DeviceEvent;
-    use crate::types::{DeviceOperationState, UploadState};
-    use crate::UpdateManifest;
+    use crate::{
+        UpdateManifest,
+        events::DeviceEvent,
+        types::{DeviceOperationState, UploadState},
+    };
 
     mod reboot {
         use super::*;
-        use crate::update::device::operations::REBOOT_TIMEOUT_SECS;
+        use crate::types::DEFAULT_REBOOT_TIMEOUT_SECS;
 
         #[test]
         fn success_sets_rebooting_state() {
@@ -236,7 +253,7 @@ mod tests {
             assert!(model.overlay_spinner.is_visible());
             assert_eq!(
                 model.overlay_spinner.countdown_seconds(),
-                Some(REBOOT_TIMEOUT_SECS)
+                Some(DEFAULT_REBOOT_TIMEOUT_SECS)
             );
         }
 
@@ -299,11 +316,13 @@ mod tests {
 
             assert!(!model.is_loading);
             assert!(model.error_message.is_some());
-            assert!(model
-                .error_message
-                .as_ref()
-                .unwrap()
-                .contains("Invalid factory reset mode"));
+            assert!(
+                model
+                    .error_message
+                    .as_ref()
+                    .unwrap()
+                    .contains("Invalid factory reset mode")
+            );
         }
 
         #[test]
@@ -413,11 +432,13 @@ mod tests {
                 UploadState::Failed(_)
             ));
             assert!(model.error_message.is_some());
-            assert!(model
-                .error_message
-                .as_ref()
-                .unwrap()
-                .contains("Upload failed"));
+            assert!(
+                model
+                    .error_message
+                    .as_ref()
+                    .unwrap()
+                    .contains("Upload failed")
+            );
             assert!(!model.overlay_spinner.is_visible());
         }
     }

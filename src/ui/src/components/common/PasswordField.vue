@@ -8,6 +8,7 @@
     @click:append-inner="visible = !visible"
     :rules="rules"
     :disabled="disabled"
+    :autofocus="autofocus"
     variant="outlined"
     density="comfortable"
   />
@@ -21,11 +22,13 @@ interface Props {
   modelValue: string
   rules?: Array<(value: string) => boolean | string>
   disabled?: boolean
+  autofocus?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
   label: 'Password',
   disabled: false,
+  autofocus: false,
 })
 
 defineEmits<{

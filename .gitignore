@@ -1,7 +1,6 @@
 /target
 /temp
 .vscode/settings.json
-tools/centrifugo
 *.tar.gz
 *.env
 *.http
