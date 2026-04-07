@@ -214,6 +214,10 @@ impl CertificateConfig {
 }
 
 impl IoTEdgeConfig {
+    #[cfg_attr(
+        any(test, feature = "mock"),
+        allow(clippy::unnecessary_wraps) // mock branch provides defaults; non-mock uses ?
+    )]
     fn load() -> Result<Self> {
         #[cfg(any(test, feature = "mock"))]
         {
