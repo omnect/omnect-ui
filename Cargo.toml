@@ -25,7 +25,9 @@ panic = "abort"     # Remove unwinding code to further reduce size
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 # Suppressed pedantic/nursery lints
+doc_markdown = "allow"
 missing_errors_doc = "allow"
+missing_panics_doc = "allow"
 module_name_repetitions = "allow"
 option_if_let_else = "allow"
 redundant_pub_crate = "allow"
