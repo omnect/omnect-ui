@@ -37,7 +37,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await page.getByRole('tab', { name: 'eth0' }).click();
       await expect(page.getByText('This is your current connection')).toBeVisible();
 
-      const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      const ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('localhost');
       await ipInput.fill('192.168.1.150');
       await page.waitForTimeout(300);
@@ -96,7 +96,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       ]);
       await page.waitForTimeout(300);
 
-      const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      const ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('192.168.2.100');
       await ipInput.click();
       await ipInput.clear();
@@ -125,7 +125,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
       // Make unsaved changes on eth0 (current connection)
       await page.getByRole('tab', { name: 'eth0' }).click();
-      const eth0IpInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      const eth0IpInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await eth0IpInput.fill('192.168.1.200');
       await page.waitForTimeout(300);
 
@@ -147,7 +147,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await page.waitForTimeout(300);
 
       // Verify we switched to wlan0
-      const wlan0IpInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      const wlan0IpInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(wlan0IpInput).toHaveValue('192.168.2.100');
     });
   });
@@ -194,7 +194,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await page.getByRole('tab', { name: 'eth0' }).click();
       await expect(page.getByText('This is your current connection')).toBeVisible();
 
-      let ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      let ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
       await page.waitForTimeout(300);
       await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
@@ -208,7 +208,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await page.getByRole('tab', { name: 'wlan0' }).click();
       await expect(page.getByText('This is your current connection')).not.toBeVisible();
 
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('192.168.2.100');
       await ipInput.click();
       await ipInput.clear();
@@ -230,7 +230,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await page.getByRole('tab', { name: 'eth1' }).click();
       await expect(page.getByText('This is your current connection')).not.toBeVisible();
 
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('10.0.0.50');
       await ipInput.click();
       await ipInput.clear();
@@ -272,7 +272,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       // Wait for NetworkFormStartEdit to be called and form to initialize
       await page.waitForTimeout(500);
 
-      let ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      let ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.click();
       await ipInput.clear();
       await ipInput.fill('10.0.0.99');
@@ -287,17 +287,17 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await page.waitForTimeout(300);
 
       // Verify we're on wlan0
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('192.168.2.100');
 
       // Switch back to eth1 - form should be reset (changes were discarded)
       await page.getByRole('tab', { name: 'eth1' }).click();
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('10.0.0.50'); // Original value, not 10.0.0.99
 
       // Make changes on eth0 (current connection)
       await page.getByRole('tab', { name: 'eth0' }).click();
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.88');
       await page.waitForTimeout(300);
 
@@ -307,7 +307,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await page.getByRole('button', { name: /cancel/i }).click();
 
       // Verify we're still on eth0 with unsaved changes
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('192.168.1.88');
 
       // Now discard and verify each adapter has its correct original state
@@ -316,11 +316,11 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await expect(ipInput).toHaveValue('localhost');
 
       await page.getByRole('tab', { name: 'wlan0' }).click();
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('192.168.2.100');
 
       await page.getByRole('tab', { name: 'eth1' }).click();
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('10.0.0.50');
     });
   });
@@ -347,7 +347,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await page.getByRole('tab', { name: 'wlan0' }).click();
       await page.waitForTimeout(300);
 
-      const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      const ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('192.168.2.100');
 
       // User changes wlan0 IP to 192.168.2.150 (form becomes dirty)
@@ -407,7 +407,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
       // Edit eth0 IP
       await page.getByRole('tab', { name: 'eth0' }).click();
-      const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      const ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
       await page.waitForTimeout(300);
 
@@ -435,7 +435,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
       // Now tab switch should work normally (no modal blocking)
       await wlan0Tab.click();
-      const wlan0IpInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      const wlan0IpInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(wlan0IpInput).toHaveValue('192.168.2.100');
     });
 
@@ -464,7 +464,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await expect(page.getByText('This is your current connection')).toBeVisible();
 
       // Edit eth0, verify rollback modal appears
-      let ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      let ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
       await page.waitForTimeout(300);
       await page.locator('.v-window-item--active [data-cy=network-apply-button]').click();
@@ -478,7 +478,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await expect(page.getByText('This is your current connection')).not.toBeVisible();
 
       // Edit wlan0, verify rollback modal does NOT appear
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('localhost');
       await ipInput.click();
       await ipInput.clear();
@@ -497,7 +497,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await page.getByRole('tab', { name: 'eth1' }).click();
       await expect(page.getByText('This is your current connection')).not.toBeVisible();
 
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('10.0.0.50');
       await ipInput.click();
       await ipInput.clear();
@@ -545,7 +545,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
 
       // Edit eth0 IP (dirty = true)
       await page.getByRole('tab', { name: 'eth0' }).click();
-      let ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      let ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.99');
       await page.waitForTimeout(300);
 
@@ -556,7 +556,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await page.waitForTimeout(300);
 
       // Still on eth0, verify IP changed
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('192.168.1.99');
 
       // Click wlan0 again → discard changes
@@ -566,7 +566,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await page.waitForTimeout(300);
 
       // Now on wlan0, verify original IP
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('192.168.2.100');
 
       // Edit wlan0 IP (dirty = true)
@@ -582,17 +582,17 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await page.waitForTimeout(300);
 
       // Verify eth1 shows original IP, dirty = false (no unsaved changes)
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('10.0.0.50');
 
       // Switch back to eth0 - should show original IP (changes were discarded)
       await page.getByRole('tab', { name: 'eth0' }).click();
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('localhost'); // Original, not 192.168.1.99
 
       // Switch back to wlan0 - should show original IP (changes were discarded)
       await page.getByRole('tab', { name: 'wlan0' }).click();
-      ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await expect(ipInput).toHaveValue('192.168.2.100'); // Original, not 192.168.2.88
     });
 
@@ -685,7 +685,7 @@ test.describe('Network Multi-Adapter Rollback Modal', () => {
       await expect(page.locator('.v-chip').filter({ hasText: 'Online' })).toBeVisible();
 
       // Make form dirty by editing IP
-      const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+      const ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
       await ipInput.fill('192.168.1.150');
       await page.waitForTimeout(500);
 
@@ -846,7 +846,7 @@ test.describe('2nd Adapter Dirty State Detection', () => {
     await harness.setup(page, TWO_ADAPTERS, 'wlan0');
     await page.waitForTimeout(300);
 
-    const ipInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+    const ipInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
     await ipInput.fill('192.168.2.200');
     await page.waitForTimeout(300);
 
@@ -906,7 +906,7 @@ test.describe('2nd Adapter Dirty State Detection', () => {
     await page.waitForTimeout(300);
 
     // Make eth0 dirty
-    const eth0IpInput = page.getByRole('textbox', { name: /IP Address/i }).first();
+    const eth0IpInput = page.locator('.v-window-item--active').getByRole('textbox', { name: /IP Address/i }).first();
     await expect(eth0IpInput).toHaveValue('localhost');
     await eth0IpInput.fill('192.168.1.150');
     await page.waitForTimeout(300);
