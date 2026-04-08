@@ -114,6 +114,13 @@ impl NetworkConfigService {
 
         request.validate().context("network validation failed")?;
 
+        anyhow::ensure!(
+            Path::new(&request.name)
+                .file_name()
+                .is_some_and(|f| f == request.name.as_str()),
+            "invalid network interface name: must not contain path separators"
+        );
+
         let enable_rollback = request.enable_rollback.unwrap_or(false);
         let switching_to_dhcp = request.switching_to_dhcp;
 
@@ -694,6 +701,56 @@ mod tests {
             // and completes correctly when the rollback file is missing.
             let result = NetworkConfigService::process_pending_rollback(service_client).await;
             assert!(result.is_ok());
+        }
+    }
+
+    mod path_traversal {
+        use super::*;
+        use crate::omnect_device_service_client::MockDeviceServiceClient;
+
+        fn config_with_name(name: &str) -> NetworkConfigRequest {
+            NetworkConfigRequest {
+                name: name.to_string(),
+                ..create_valid_dhcp_config()
+            }
+        }
+
+        #[tokio::test]
+        async fn rejects_parent_directory_traversal() {
+            let client = MockDeviceServiceClient::new();
+            let result =
+                NetworkConfigService::set_network_config(&client, &config_with_name("../etc/foo"))
+                    .await;
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("path separators"));
+        }
+
+        #[tokio::test]
+        async fn rejects_absolute_path() {
+            let client = MockDeviceServiceClient::new();
+            let result =
+                NetworkConfigService::set_network_config(&client, &config_with_name("/tmp/evil"))
+                    .await;
+            assert!(result.is_err());
+        }
+
+        #[tokio::test]
+        async fn rejects_dotdot_only() {
+            let client = MockDeviceServiceClient::new();
+            let result =
+                NetworkConfigService::set_network_config(&client, &config_with_name("..")).await;
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn accepts_valid_interface_names() {
+            for name in ["eth0", "wlan0", "enp3s0", "br-lan", "eth0.100"] {
+                let p = Path::new(name);
+                assert!(
+                    p.file_name().is_some_and(|f| f == name),
+                    "valid name '{name}' was incorrectly rejected"
+                );
+            }
         }
     }
 
