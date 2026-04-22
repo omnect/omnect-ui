@@ -47,5 +47,5 @@ docker run --rm \
   -e KEYCLOAK_URL=https://keycloak.omnect.conplement.cloud/realms/cp-dev \
   -e TENANT=cp \
   -p "${UI_PORT}:${UI_PORT}" \
-  -p "${PUBLISH_PORT}:${PUBLISH_PORT}" \
+  -p "127.0.0.1:${PUBLISH_PORT}:${PUBLISH_PORT}" \
   "$IMAGE_NAME"
