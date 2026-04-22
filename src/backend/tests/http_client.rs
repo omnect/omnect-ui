@@ -23,9 +23,8 @@ async fn start_mock_unix_socket_server(
 
         tokio::spawn(async move {
             let mut reader = BufReader::new(&mut stream);
-            let mut _headers = Vec::new();
 
-            // Read HTTP headers
+            // Read and discard HTTP headers
             loop {
                 let mut line = String::new();
                 if reader.read_line(&mut line).await.is_err() {
@@ -35,8 +34,6 @@ async fn start_mock_unix_socket_server(
                 if line.trim().is_empty() {
                     break;
                 }
-
-                _headers.push(line);
             }
 
             // Simple mock response
@@ -92,6 +89,12 @@ async fn test_unix_socket_client_integration_success() {
     server_handle.abort();
 }
 
+#[derive(Serialize)]
+struct TestPayload {
+    name: String,
+    value: i32,
+}
+
 #[tokio::test]
 async fn test_unix_socket_client_integration_post_request() {
     // Create a temporary directory for the Unix socket
@@ -115,12 +118,6 @@ async fn test_unix_socket_client_integration_post_request() {
         .expect("failed to create unix socket client");
 
     // Make a POST request with JSON payload
-    #[derive(Serialize)]
-    struct TestPayload {
-        name: String,
-        value: i32,
-    }
-
     let payload = TestPayload {
         name: "test".to_string(),
         value: 42,

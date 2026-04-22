@@ -291,7 +291,7 @@ mod tests {
         fn tick_skips_polling_when_switching_to_dhcp() {
             let mut model = Model {
                 network_change_state: NetworkChangeState::WaitingForNewIp {
-                    new_ip: "".to_string(),
+                    new_ip: String::new(),
                     old_ip: "192.168.1.100".to_string(),
                     attempt: 0,
                     rollback_timeout_seconds: 60,

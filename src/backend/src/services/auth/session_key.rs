@@ -81,7 +81,7 @@ mod tests {
         let path = dir.path().join("session.key");
 
         // Write a known 64-byte key.
-        let original_bytes: Vec<u8> = (0..SESSION_KEY_LEN as u8).collect();
+        let original_bytes: Vec<u8> = (0..u8::try_from(SESSION_KEY_LEN).unwrap()).collect();
         std::fs::write(&path, &original_bytes).unwrap();
 
         let key = SessionKeyService::load_or_generate(&path);

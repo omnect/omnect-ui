@@ -6,6 +6,8 @@ use omnect_ui::{
     keycloak_client::SingleSignOnProvider, omnect_device_service_client::DeviceServiceClient,
 };
 
+// actix's test service uses Rc internally, so the returned future cannot be Send.
+#[allow(clippy::future_not_send)]
 async fn call_validate(
     api: Api<DeviceServiceClient, SingleSignOnProvider>,
 ) -> actix_web::dev::ServiceResponse {
@@ -26,7 +28,11 @@ fn make_claims(role: &str, tenant: &str, fleets: Option<Vec<&str>>) -> TokenClai
     TokenClaims {
         roles: Some(vec![role.to_string()]),
         tenant_list: Some(vec![tenant.to_string()]),
-        fleet_list: fleets.map(|fs| fs.into_iter().map(|f| f.to_string()).collect()),
+        fleet_list: fleets.map(|fs| {
+            fs.into_iter()
+                .map(std::string::ToString::to_string)
+                .collect()
+        }),
     }
 }
 
@@ -52,6 +58,7 @@ fn make_api(
     }
 }
 
+#[allow(clippy::future_not_send)]
 async fn assert_status(
     api: Api<DeviceServiceClient, SingleSignOnProvider>,
     expected: actix_web::http::StatusCode,

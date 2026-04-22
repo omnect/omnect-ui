@@ -574,7 +574,7 @@ mod tests {
             let mut ini = Ini::new();
             ini.with_section(Some("Match".to_owned()))
                 .set("Name", &config.name);
-            let mut network_section = ini.with_section(Some("Network").to_owned());
+            let mut network_section = ini.with_section(Some("Network"));
             network_section.set("DHCP", "yes");
 
             let config_path = temp_dir.path().join("10-eth0.network");
@@ -609,18 +609,18 @@ mod tests {
             let mut ini = Ini::new();
             ini.with_section(Some("Match".to_owned()))
                 .set("Name", &config.name);
-            let mut network_section = ini.with_section(Some("Network").to_owned());
+            let mut network_section = ini.with_section(Some("Network"));
 
             let ip = config.ip.as_ref().expect("ip required for static");
             let mask = config.netmask.expect("mask required for static");
             network_section.set("Address", format!("{ip}/{mask}"));
 
             for gateway in &config.gateway {
-                network_section.add("Gateway", gateway.to_string());
+                network_section.add("Gateway", gateway.clone());
             }
 
             for dns in &config.dns {
-                network_section.add("DNS", dns.to_string());
+                network_section.add("DNS", dns.clone());
             }
 
             let config_path = temp_dir.path().join("10-eth0.network");
