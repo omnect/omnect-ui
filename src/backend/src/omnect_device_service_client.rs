@@ -450,7 +450,7 @@ mod tests {
         #[test]
         fn detects_version_mismatch_when_below_requirement() {
             let status = create_test_status("0.38.0");
-            let current_version = status.system_info.omnect_device_service_version.clone();
+            let current_version = status.system_info.omnect_device_service_version;
 
             let required_version = OmnectDeviceServiceClient::required_version();
             let parsed_current = Version::parse(&current_version).unwrap();
@@ -463,7 +463,7 @@ mod tests {
         #[test]
         fn detects_no_mismatch_when_matching_requirement() {
             let status = create_test_status("0.40.0");
-            let current_version = status.system_info.omnect_device_service_version.clone();
+            let current_version = status.system_info.omnect_device_service_version;
 
             let required_version = OmnectDeviceServiceClient::required_version();
             let parsed_current = Version::parse(&current_version).unwrap();

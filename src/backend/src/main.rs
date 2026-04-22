@@ -279,9 +279,7 @@ fn optimal_worker_count() -> usize {
     const MIN_WORKERS: usize = 2;
     const MAX_WORKERS: usize = 4;
 
-    let cpu_count = std::thread::available_parallelism()
-        .map(std::num::NonZero::get)
-        .unwrap_or(2);
+    let cpu_count = std::thread::available_parallelism().map_or(2, std::num::NonZero::get);
 
     // For I/O-bound workloads, use fewer workers than CPUs
     let workers = (cpu_count / 2).clamp(MIN_WORKERS, MAX_WORKERS);
@@ -593,6 +591,8 @@ mod tests {
 
     /// Build a test app mirroring production route + middleware layout.
     /// Uses stub handlers — we're testing auth enforcement, not handler logic.
+    // actix's test service uses Rc internally, so the returned future cannot be Send.
+    #[allow(clippy::future_not_send)]
     async fn create_route_auth_service() -> impl actix_service::Service<
         actix_http::Request,
         Response = ServiceResponse,

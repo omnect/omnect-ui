@@ -195,6 +195,9 @@ mod tests {
     // Note: Streaming tests would require mocking actix_multipart::Field which is complex.
     // Focusing on file system operations for now.
 
+    // Tests serialize access to the data folder via a std::sync::Mutex;
+    // holding it across .await is intentional to prevent parallel test interference.
+    #[allow(clippy::await_holding_lock)]
     mod clear_data_folder {
         use super::*;
 

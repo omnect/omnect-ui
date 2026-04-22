@@ -209,9 +209,9 @@ pub mod tests {
         }
     }
 
-    fn generate_token(claim: TestClaims) -> String {
-        let key = EncodingKey::from_secret("test-secret-key!".as_bytes());
-        encode(&Header::default(), &claim, &key).unwrap()
+    fn generate_token(claim: &TestClaims) -> String {
+        let key = EncodingKey::from_secret(b"test-secret-key!");
+        encode(&Header::default(), claim, &key).unwrap()
     }
 
     async fn index() -> impl Responder {
@@ -230,6 +230,8 @@ pub mod tests {
         0x8, 0x15, 0xc9, 0xe0,
     ];
 
+    // actix's service types use Rc internally, so the returned future cannot be Send.
+    #[allow(clippy::future_not_send)]
     async fn create_service() -> impl actix_service::Service<
         actix_http::Request,
         Response = ServiceResponse,
@@ -270,10 +272,7 @@ pub mod tests {
         let ttl = actix_web::cookie::time::Duration::seconds(ttl.try_into().unwrap());
 
         let session_value = session_store
-            .save(
-                HashMap::from([(token_name, format!("\"{}\"", token))]),
-                &ttl,
-            )
+            .save(HashMap::from([(token_name, format!("\"{token}\""))]), &ttl)
             .await
             .unwrap()
             .as_ref()
@@ -287,7 +286,7 @@ pub mod tests {
     #[tokio::test]
     async fn middleware_correct_token_should_succeed() {
         let claim = generate_valid_claim();
-        let token = generate_token(claim);
+        let token = generate_token(&claim);
 
         let app = create_service().await;
         let cookie = create_cookie_for_token(&token).await;
@@ -304,7 +303,7 @@ pub mod tests {
     #[tokio::test]
     async fn middleware_expired_token_should_require_login() {
         let claim = generate_expired_claim();
-        let token = generate_token(claim);
+        let token = generate_token(&claim);
 
         let app = create_service().await;
         let cookie = create_cookie_for_token(&token).await;
@@ -321,7 +320,7 @@ pub mod tests {
     #[tokio::test]
     async fn middleware_token_with_invalid_subject_should_require_login() {
         let claim = generate_invalid_subject_claim();
-        let token = generate_token(claim);
+        let token = generate_token(&claim);
 
         let app = create_service().await;
         let cookie = create_cookie_for_token(&token).await;
@@ -335,7 +334,7 @@ pub mod tests {
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 
         let claim = generate_unset_subject_claim();
-        let token = generate_token(claim);
+        let token = generate_token(&claim);
 
         let app = create_service().await;
         let cookie = create_cookie_for_token(&token).await;
@@ -352,7 +351,7 @@ pub mod tests {
     #[tokio::test]
     async fn middleware_invalid_token_should_require_login() {
         let claim = generate_unset_subject_claim();
-        let _ = generate_token(claim);
+        let _ = generate_token(&claim);
         let token = "someinvalidtestbytes".to_string();
 
         let app = create_service().await;
@@ -417,7 +416,7 @@ pub mod tests {
     #[tokio::test]
     async fn middleware_correct_bearer_token_should_succeed() {
         let claim = generate_valid_claim();
-        let token = generate_token(claim);
+        let token = generate_token(&claim);
 
         let app = create_service().await;
 
@@ -433,7 +432,7 @@ pub mod tests {
     #[tokio::test]
     async fn middleware_bearer_auth_preserves_request_body() {
         let claim = generate_valid_claim();
-        let token = generate_token(claim);
+        let token = generate_token(&claim);
 
         let app = create_service().await;
 
@@ -483,7 +482,7 @@ pub mod tests {
     #[tokio::test]
     async fn verify_correct_token_should_succeed() {
         let claim = generate_valid_claim();
-        let token = generate_token(claim);
+        let token = generate_token(&claim);
         let token_manager = TokenManager::new("test-secret-key!");
 
         assert!(token_manager.verify_token(token.as_str()));
@@ -492,7 +491,7 @@ pub mod tests {
     #[tokio::test]
     async fn verify_expired_token_should_fail() {
         let claim = generate_expired_claim();
-        let token = generate_token(claim);
+        let token = generate_token(&claim);
         let token_manager = TokenManager::new("test-secret-key!");
 
         assert!(!token_manager.verify_token(token.as_str()));
@@ -501,13 +500,13 @@ pub mod tests {
     #[tokio::test]
     async fn verify_token_with_invalid_subject_should_fail() {
         let claim = generate_unset_subject_claim();
-        let token = generate_token(claim);
+        let token = generate_token(&claim);
         let token_manager = TokenManager::new("test-secret-key!");
 
         assert!(!token_manager.verify_token(token.as_str()));
 
         let claim = generate_invalid_subject_claim();
-        let token = generate_token(claim);
+        let token = generate_token(&claim);
 
         assert!(!token_manager.verify_token(token.as_str()));
     }
@@ -515,7 +514,7 @@ pub mod tests {
     #[tokio::test]
     async fn verify_token_with_invalid_token_should_fail() {
         let claim = generate_invalid_subject_claim();
-        let _ = generate_token(claim);
+        let _ = generate_token(&claim);
         let token = "someinvalidtestbytes".to_string();
         let token_manager = TokenManager::new("test-secret-key!");
 

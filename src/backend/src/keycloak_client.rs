@@ -132,21 +132,21 @@ Y0282ogmR+NZiE25/g1ZBLkIDBuXU52hE2yKsO1VHf7ixbkxozNCt45XfzfNes9rH9swg4+sZWJ\
 
     const TOKEN_EXPIRE_HOURS: u64 = 2;
 
+    // Wrap TokenClaims with standard JWT fields
+    #[derive(Serialize)]
+    struct FullClaims<'a> {
+        iat: u64,
+        exp: u64,
+        #[serde(flatten)]
+        inner: &'a TokenClaims,
+    }
+
     fn sign_test_token(claims: &TokenClaims) -> String {
         let key = EncodingKey::from_rsa_pem(TEST_RSA_PRIVATE_KEY_PEM.as_bytes())
             .expect("test private key should parse");
 
         let iat = get_current_timestamp();
         let exp = iat + TOKEN_EXPIRE_HOURS * 3600;
-
-        // Wrap TokenClaims with standard JWT fields
-        #[derive(Serialize)]
-        struct FullClaims<'a> {
-            iat: u64,
-            exp: u64,
-            #[serde(flatten)]
-            inner: &'a TokenClaims,
-        }
 
         let full = FullClaims {
             iat,

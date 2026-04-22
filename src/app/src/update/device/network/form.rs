@@ -149,7 +149,7 @@ mod tests {
             let adapter = create_test_network_adapter("eth0", "192.168.1.100", false);
             let mut model = Model {
                 network_status: Some(NetworkStatus {
-                    network_status: vec![adapter.clone()],
+                    network_status: vec![adapter],
                 }),
                 ..Default::default()
             };
@@ -221,7 +221,7 @@ mod tests {
                 network_form_state: NetworkFormState::Editing {
                     adapter_name: "eth0".to_string(),
                     form_data: original_data.clone(),
-                    original_data: original_data.clone(),
+                    original_data,
                     errors: HashMap::new(),
                 },
                 network_form_dirty: false,
@@ -301,7 +301,7 @@ mod tests {
                 network_form_state: NetworkFormState::Editing {
                     adapter_name: "eth0".to_string(),
                     form_data: eth0_data.clone(),
-                    original_data: eth0_data.clone(),
+                    original_data: eth0_data,
                     errors: HashMap::new(),
                 },
                 network_form_dirty: false,
@@ -374,7 +374,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let mut changed_data = original_data.clone();
+            let mut changed_data = original_data;
             changed_data.ip_address = "192.168.1.101".to_string();
 
             let _ = handle_network_form_update(

@@ -204,7 +204,7 @@ pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
                             }
                             // Sort by RSSI descending (strongest first)
                             let mut networks: Vec<WifiNetwork> = best.into_values().collect();
-                            networks.sort_by(|a, b| b.rssi.cmp(&a.rssi));
+                            networks.sort_by_key(|n| std::cmp::Reverse(n.rssi));
 
                             *scan_results = networks;
                             *scan_state = WifiScanState::Finished;
@@ -765,7 +765,7 @@ mod tests {
             let _ = handle(
                 WifiEvent::Connect {
                     ssid: "MyNet".to_string(),
-                    password: "".to_string(),
+                    password: String::new(),
                 },
                 &mut model,
             );
@@ -933,7 +933,7 @@ mod tests {
                     },
                     WifiSavedNetwork {
                         ssid: "Work".to_string(),
-                        flags: "".to_string(),
+                        flags: String::new(),
                     },
                 ],
             };

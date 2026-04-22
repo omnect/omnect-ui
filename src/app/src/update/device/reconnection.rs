@@ -223,32 +223,28 @@ fn advance_network_change_state(
     match &model.network_change_state {
         NetworkChangeState::WaitingForNewIp {
             new_ip, ui_port, ..
-        } => {
-            if result.is_ok() {
-                // Clone values before reassigning state to avoid borrow conflict
-                let new_ip = new_ip.clone();
-                let port = *ui_port;
-                model.network_change_state = NetworkChangeState::NewIpReachable {
-                    new_ip: new_ip.clone(),
-                    ui_port: port,
-                };
-                model.success_message = None;
-                model.error_message = None;
-                model.overlay_spinner = OverlaySpinnerState::new("Network settings applied")
-                    .with_text(format!("Redirecting to new IP: {new_ip}:{port}"));
-            }
+        } if result.is_ok() => {
+            // Clone values before reassigning state to avoid borrow conflict
+            let new_ip = new_ip.clone();
+            let port = *ui_port;
+            model.network_change_state = NetworkChangeState::NewIpReachable {
+                new_ip: new_ip.clone(),
+                ui_port: port,
+            };
+            model.success_message = None;
+            model.error_message = None;
+            model.overlay_spinner = OverlaySpinnerState::new("Network settings applied")
+                .with_text(format!("Redirecting to new IP: {new_ip}:{port}"));
         }
-        NetworkChangeState::WaitingForOldIp { .. } => {
-            if result.is_ok() {
-                // Old IP is reachable — rollback successful.
-                // No success message here: the "Network Settings Rolled Back" modal
-                // is triggered by the `network_rollback_occurred` flag in the healthcheck response.
-                model.network_change_state = NetworkChangeState::Idle;
-                model.overlay_spinner.clear();
-                model.invalidate_session();
-                model.success_message = None;
-                model.error_message = None;
-            }
+        NetworkChangeState::WaitingForOldIp { .. } if result.is_ok() => {
+            // Old IP is reachable — rollback successful.
+            // No success message here: the "Network Settings Rolled Back" modal
+            // is triggered by the `network_rollback_occurred` flag in the healthcheck response.
+            model.network_change_state = NetworkChangeState::Idle;
+            model.overlay_spinner.clear();
+            model.invalidate_session();
+            model.success_message = None;
+            model.error_message = None;
         }
         _ => {}
     }
