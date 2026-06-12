@@ -3,15 +3,16 @@ use std::collections::HashMap;
 use crux_core::{Command, render::render};
 
 use crate::{
-    Effect, TimeCmd, auth_get, auth_post,
+    Effect, TimeCmd, auth_get, auth_post, build_url,
     events::{Event, WifiEvent},
+    http_get,
     model::Model,
     types::{
         WifiAvailability, WifiConnectionState, WifiConnectionStatus, WifiNetwork,
         WifiSavedNetworksResponse, WifiScanResultsResponse, WifiScanState, WifiState,
         WifiStatusResponse,
     },
-    unauth_post, wifi_psk,
+    wifi_psk,
 };
 
 /// Max scan poll attempts (500ms each → 30s total)
@@ -48,12 +49,14 @@ macro_rules! with_ready_state {
 pub fn handle(event: WifiEvent, model: &mut Model) -> Command<Effect, Event> {
     match event {
         WifiEvent::CheckAvailability => {
-            unauth_post!(
-                Wifi, WifiEvent, model,
-                "/wifi/available",
-                CheckAvailabilityResponse, "Check WiFi availability",
-                method: get,
-                expect_json: WifiAvailability
+            // Silent background check fired on init — must not drive the global
+            // loading spinner (CheckAvailabilityResponse never clears it).
+            http_get!(
+                Wifi,
+                WifiEvent,
+                build_url("/wifi/available"),
+                CheckAvailabilityResponse,
+                WifiAvailability
             )
         }
 
@@ -532,19 +535,16 @@ mod tests {
             let mut model = Model::default();
             let mut cmd = handle(WifiEvent::CheckAvailability, &mut model);
 
-            // unauth_post! GET pattern produces render + http effects
-            let effects = [cmd.expect_effect(), cmd.expect_effect()];
-            let http_req = effects
-                .into_iter()
-                .find_map(|e| match e {
-                    Effect::Http(req) => Some(req),
-                    _ => None,
-                })
-                .expect("Expected Http effect");
+            // Silent http_get! produces a single Http effect (no loading, no render).
+            let Effect::Http(http_req) = cmd.expect_one_effect() else {
+                panic!("Expected Http effect");
+            };
             let (http_request, _) = http_req.split();
 
             assert_eq!(http_request.url, "https://relative/wifi/available");
             assert_eq!(http_request.method, "GET");
+            // The silent check must not set the global loading flag.
+            assert!(!model.is_loading);
         }
 
         #[test]
