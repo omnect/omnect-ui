@@ -43,7 +43,7 @@ onMounted(async () => {
 <template>
 	<v-sheet class="mx-auto pa-8 m-t-16 flex flex-col gap-y-16" border elevation="0" max-width="448" rounded="lg">
 		<OmnectLogo></OmnectLogo>
-		<v-form v-if="!isCheckingPasswordSetNeeded" @submit.prevent @submit="doLogin">
+		<v-form v-if="!isCheckingPasswordSetNeeded" @submit.prevent="doLogin">
 			<v-text-field ref="passwordField" label="Password" :append-inner-icon="visible ? 'mdi-eye-off' : 'mdi-eye'"
 				:type="visible ? 'text' : 'password'" density="compact" placeholder="Enter your password"
 				prepend-inner-icon="mdi-lock-outline" variant="outlined" @click:append-inner="visible = !visible"

@@ -43,7 +43,7 @@ const handleSubmit = async (): Promise<void> => {
 	<v-sheet class="mx-auto pa-8 m-t-16 flex flex-col gap-y-16" border elevation="0" max-width="448" rounded="lg">
 		<OmnectLogo></OmnectLogo>
 		<h1 class="text-h4 text-secondary border-b pb-2 mb-4">Set Password</h1>
-		<v-form @submit.prevent @submit="handleSubmit">
+		<v-form @submit.prevent="handleSubmit">
 			<PasswordField
 				v-model="password"
 				label="Password"
