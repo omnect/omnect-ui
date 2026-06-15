@@ -56,6 +56,13 @@ mod tests {
         };
 
         let _ = update(Event::Initialize, &mut model);
+        // Init itself must never set the global loading flag — guards against
+        // reintroducing start_loading() that a later response happens to clear.
+        assert!(
+            !model.is_loading,
+            "Initialize must not set the global loading flag"
+        );
+
         let _ = update(
             Event::Ui(UiEvent::LoadSettingsResponse(
                 Ok(TimeoutSettings::default()),
@@ -85,6 +92,11 @@ mod tests {
         let mut model = Model::default();
 
         let _ = update(Event::Initialize, &mut model);
+        assert!(
+            !model.is_loading,
+            "Initialize must not set the global loading flag"
+        );
+
         let _ = update(
             Event::Wifi(WifiEvent::CheckAvailabilityResponse(Ok(
                 WifiAvailability::Unavailable {
