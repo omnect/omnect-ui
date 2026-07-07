@@ -200,9 +200,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crux_http::{http::StatusCode, testing::ResponseBuilder};
+    use crux_http::testing::ResponseBuilder;
 
-    fn make_response(status: StatusCode, body: &[u8]) -> Response<Vec<u8>> {
+    fn make_response(status: u16, body: &[u8]) -> Response<Vec<u8>> {
         ResponseBuilder::with_status(status)
             .body(body.to_vec())
             .build()
@@ -220,7 +220,7 @@ mod tests {
             ok: bool,
         }
 
-        let mut response = make_response(StatusCode::ServiceUnavailable, b"{\"ok\":false}");
+        let mut response = make_response(503, b"{\"ok\":false}");
         let result: Result<Info, String> = parse_json_response_any_status("test", &mut response);
         assert_eq!(result.unwrap(), Info { ok: false });
     }
@@ -232,14 +232,14 @@ mod tests {
             value: u32,
         }
 
-        let mut response = make_response(StatusCode::Ok, b"{\"value\":42}");
+        let mut response = make_response(200, b"{\"value\":42}");
         let result: Result<Info, String> = parse_json_response_any_status("test", &mut response);
         assert_eq!(result.unwrap(), Info { value: 42 });
     }
 
     #[test]
     fn parse_json_response_any_status_returns_error_on_invalid_json() {
-        let mut response = make_response(StatusCode::Ok, b"not json");
+        let mut response = make_response(200, b"not json");
         let result: Result<String, String> = parse_json_response_any_status("test", &mut response);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("JSON parse error"));
