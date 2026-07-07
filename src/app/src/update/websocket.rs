@@ -106,7 +106,7 @@ fn sync_network_form_from_status(m: &mut Model) {
 mod tests {
     use super::*;
     use crate::{
-        WebSocketOperation,
+        EffectTestExt, WebSocketOperation,
         types::{
             FactoryReset, FactoryResetStatus, OnlineStatus, OsInfo, SystemInfo,
             UpdateValidationStatus,
@@ -122,8 +122,9 @@ mod tests {
             let mut cmd = handle(WebSocketEvent::SubscribeToChannels, &mut model);
 
             // SubscribeToChannels produces a single WebSocket effect (no render wrapper)
-            let (operation, _) = cmd.expect_one_effect().expect_web_socket().split();
-            assert!(matches!(operation, WebSocketOperation::SubscribeAll));
+            cmd.expect_only_web_socket_with(|op| {
+                assert!(matches!(op, WebSocketOperation::SubscribeAll));
+            });
         }
 
         #[test]
@@ -131,8 +132,9 @@ mod tests {
             let mut model = Model::default();
             let mut cmd = handle(WebSocketEvent::UnsubscribeFromChannels, &mut model);
 
-            let (operation, _) = cmd.expect_one_effect().expect_web_socket().split();
-            assert!(matches!(operation, WebSocketOperation::UnsubscribeAll));
+            cmd.expect_only_web_socket_with(|op| {
+                assert!(matches!(op, WebSocketOperation::UnsubscribeAll));
+            });
         }
     }
 

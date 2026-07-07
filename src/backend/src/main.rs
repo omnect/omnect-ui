@@ -531,35 +531,23 @@ async fn run_server(
 }
 
 fn load_tls_config() -> Result<rustls::ServerConfig> {
+    use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
+
     let paths = &AppConfig::get().certificate;
 
-    let mut tls_certs = std::io::BufReader::new(
-        std::fs::File::open(&paths.cert_path).context("failed to open certificate file")?,
-    );
-
-    let mut tls_key = std::io::BufReader::new(
-        std::fs::File::open(&paths.key_path).context("failed to open key file")?,
-    );
-
-    let tls_certs = rustls_pemfile::certs(&mut tls_certs)
+    let tls_certs = CertificateDer::pem_file_iter(&paths.cert_path)
+        .context("failed to open certificate file")?
         .collect::<Result<Vec<_>, _>>()
         .context("failed to parse certificate pem")?;
 
-    let key_item = rustls_pemfile::read_one(&mut tls_key)
-        .context("failed to read key pem file")?
-        .context("no valid key found in pem file")?;
+    // from_pem_file auto-detects the key format (PKCS#1, PKCS#8, SEC1)
+    let tls_key =
+        PrivateKeyDer::from_pem_file(&paths.key_path).context("failed to parse private key pem")?;
 
-    let config = match key_item {
-        rustls_pemfile::Item::Pkcs1Key(key) => rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs1(key))
-            .context("failed to create tls config with pkcs1 key")?,
-        rustls_pemfile::Item::Pkcs8Key(key) => rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(tls_certs, rustls::pki_types::PrivateKeyDer::Pkcs8(key))
-            .context("failed to create tls config with pkcs8 key")?,
-        _ => anyhow::bail!("unexpected key type in pem file"),
-    };
+    let config = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(tls_certs, tls_key)
+        .context("failed to create tls config")?;
 
     Ok(config)
 }

@@ -254,6 +254,7 @@ fn advance_network_change_state(
 mod tests {
     use super::*;
     use crate::{
+        EffectTestExt,
         model::Model,
         types::{
             DeviceOperationState, HealthcheckInfo, NetworkChangeState, UpdateValidationStatus,
@@ -339,22 +340,12 @@ mod tests {
             };
             let mut cmd = handle_reconnection_check_tick(&mut model);
 
-            // Command::all([http_get!(...), schedule_poll()]) produces Http + Time effects;
-            // find the Http one.
-            let http_effect = cmd
-                .effects()
-                .find_map(|e| {
-                    if let Effect::Http(_) = e {
-                        Some(e.expect_http())
-                    } else {
-                        None
-                    }
-                })
-                .expect("expected Http effect");
-            let (http_request, _) = http_effect.split();
-
-            assert_eq!(http_request.url, "https://relative/healthcheck");
-            assert_eq!(http_request.method, "GET");
+            // Command::all([http_get!(...), schedule_poll()]) produces [Http, Time];
+            // the Http effect comes first.
+            cmd.expect_http_with(|op| {
+                assert_eq!(op.url, "https://relative/healthcheck");
+                assert_eq!(op.method, "GET");
+            });
         }
     }
 

@@ -507,7 +507,10 @@ fn schedule_connect_poll() -> Command<Effect, Event> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{WifiAvailability, WifiSavedNetwork};
+    use crate::{
+        EffectTestExt,
+        types::{WifiAvailability, WifiSavedNetwork},
+    };
 
     fn model_with_ready_state() -> Model {
         Model {
@@ -536,13 +539,10 @@ mod tests {
             let mut cmd = handle(WifiEvent::CheckAvailability, &mut model);
 
             // Silent http_get! produces a single Http effect (no loading, no render).
-            let Effect::Http(http_req) = cmd.expect_one_effect() else {
-                panic!("Expected Http effect");
-            };
-            let (http_request, _) = http_req.split();
-
-            assert_eq!(http_request.url, "https://relative/wifi/available");
-            assert_eq!(http_request.method, "GET");
+            cmd.expect_only_http_with(|op| {
+                assert_eq!(op.url, "https://relative/wifi/available");
+                assert_eq!(op.method, "GET");
+            });
             // The silent check must not set the global loading flag.
             assert!(!model.is_loading);
         }

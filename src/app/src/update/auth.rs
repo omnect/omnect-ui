@@ -123,6 +123,7 @@ fn post_auth_commands(model: &mut Model) -> Command<Effect, Event> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::EffectTestExt;
 
     mod login {
         use super::*;
@@ -138,25 +139,16 @@ mod tests {
             );
 
             // Login produces render + http effects
-            let effects = [cmd.expect_effect(), cmd.expect_effect()];
-            let http_req = effects
-                .into_iter()
-                .find_map(|e| match e {
-                    Effect::Http(req) => Some(req),
-                    _ => None,
-                })
-                .expect("Expected Http effect");
-            let (http_request, _) = http_req.split();
-
-            assert_eq!(http_request.url, "https://relative/token/login");
-            assert_eq!(http_request.method, "POST");
-            assert!(
-                http_request
-                    .headers
-                    .iter()
-                    .any(|h| h.name.eq_ignore_ascii_case("authorization")
-                        && h.value.starts_with("Basic "))
-            );
+            cmd.expect_render().expect_http_with(|op| {
+                assert_eq!(op.url, "https://relative/token/login");
+                assert_eq!(op.method, "POST");
+                assert!(
+                    op.headers
+                        .iter()
+                        .any(|h| h.name.eq_ignore_ascii_case("authorization")
+                            && h.value.starts_with("Basic "))
+                );
+            });
         }
 
         #[test]
@@ -242,25 +234,16 @@ mod tests {
             };
             let mut cmd = handle(AuthEvent::Logout, &mut model);
 
-            let effects = [cmd.expect_effect(), cmd.expect_effect()];
-            let http_req = effects
-                .into_iter()
-                .find_map(|e| match e {
-                    Effect::Http(req) => Some(req),
-                    _ => None,
-                })
-                .expect("Expected Http effect");
-            let (http_request, _) = http_req.split();
-
-            assert_eq!(http_request.url, "https://relative/logout");
-            assert_eq!(http_request.method, "POST");
-            assert!(
-                http_request
-                    .headers
-                    .iter()
-                    .any(|h| h.name.eq_ignore_ascii_case("authorization")
-                        && h.value.starts_with("Bearer "))
-            );
+            cmd.expect_render().expect_http_with(|op| {
+                assert_eq!(op.url, "https://relative/logout");
+                assert_eq!(op.method, "POST");
+                assert!(
+                    op.headers
+                        .iter()
+                        .any(|h| h.name.eq_ignore_ascii_case("authorization")
+                            && h.value.starts_with("Bearer "))
+                );
+            });
         }
 
         #[test]
@@ -470,18 +453,10 @@ mod tests {
             let mut model = Model::default();
             let mut cmd = handle(AuthEvent::CheckRequiresPasswordSet, &mut model);
 
-            let effects = [cmd.expect_effect(), cmd.expect_effect()];
-            let http_req = effects
-                .into_iter()
-                .find_map(|e| match e {
-                    Effect::Http(req) => Some(req),
-                    _ => None,
-                })
-                .expect("Expected Http effect");
-            let (http_request, _) = http_req.split();
-
-            assert_eq!(http_request.url, "https://relative/require-set-password");
-            assert_eq!(http_request.method, "GET");
+            cmd.expect_render().expect_http_with(|op| {
+                assert_eq!(op.url, "https://relative/require-set-password");
+                assert_eq!(op.method, "GET");
+            });
         }
 
         #[test]
