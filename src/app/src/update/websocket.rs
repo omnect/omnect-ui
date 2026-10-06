@@ -295,7 +295,7 @@ mod tests {
             assert_eq!(result.status, FactoryResetStatus::Success);
             assert_eq!(result.error, None);
             assert_eq!(result.context, None);
-            assert!(result.paths.is_empty());
+            assert_eq!(result.paths, Vec::<String>::new());
             assert!(!result.data_wiped);
         }
     }
