@@ -21,12 +21,12 @@ typegen = ["crux_core/typegen", "crux_http/typegen", "crux_time/typegen"]
 workspace = true
 
 [dependencies]
-base64 = { version = "0.22", default-features = false, features = ["alloc"] }
-console_log = { version = "1.0", default-features = false }
-crux_core = { version = "0.19", default-features = false }
-crux_http = { version = "0.19", default-features = false }
+base64 = { version = "0.23", default-features = false, features = ["alloc"] }
+console_log = { version = "1.1", default-features = false }
+crux_core = { version = "0.20", default-features = false }
+crux_http = { version = "0.20", default-features = false }
 crux_macros = { version = "0.10", default-features = false }
-crux_time = { version = "0.17", default-features = false }
+crux_time = { version = "0.18", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 hmac = { version = "0.13", default-features = false }
 log = { version = "0.4", default-features = false }
@@ -34,7 +34,7 @@ pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false }
 serde_repr = { version = "0.1", default-features = false }
-serde_valid = { version = "2.0", default-features = false }
+serde_valid = { version = "3.2", default-features = false }
 sha1 = { version = "0.11", default-features = false }
 wasm-bindgen = { version = "0.2", default-features = false }
 
@@ -47,8 +47,8 @@ getrandom = { version = "0.3" }
 [dev-dependencies]
 # Enable the crux testing helpers (expect_*, ResponseBuilder). These moved
 # behind feature flags in crux 0.19 and must not leak into the WASM build.
-crux_core = { version = "0.19", default-features = false, features = ["testing"] }
-crux_http = { version = "0.19", default-features = false, features = ["http-types"] }
+crux_core = { version = "0.20", default-features = false, features = ["testing"] }
+crux_http = { version = "0.20", default-features = false, features = ["http-types"] }
 
 [build-dependencies]
-crux_core = { version = "0.19.0", default-features = false, features = ["typegen"] }
+crux_core = { version = "0.20.0", default-features = false, features = ["typegen"] }

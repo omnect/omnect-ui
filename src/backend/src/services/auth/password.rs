@@ -4,10 +4,7 @@
 
 use crate::config::AppConfig;
 use anyhow::{Context, Result, anyhow, ensure};
-use argon2::{
-    Argon2, PasswordHash, PasswordVerifier,
-    password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
-};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use log::debug;
 use std::{fs::File, io::Write};
 
@@ -68,11 +65,8 @@ impl PasswordService {
     fn hash_password(password: &str) -> Result<String> {
         debug!("hash_password() called");
 
-        let salt = SaltString::generate(&mut OsRng);
-        let argon2 = Argon2::default();
-
-        argon2
-            .hash_password(password.as_bytes(), &salt)
+        Argon2::default()
+            .hash_password(password.as_bytes())
             .map(|hash| hash.to_string())
             .map_err(|e| anyhow!(e))
             .context("failed to hash password")
@@ -164,6 +158,21 @@ mod tests {
         assert!(PasswordService::password_exists());
 
         // Cleanup
+        let _ = std::fs::remove_file(password_file);
+    }
+
+    #[test]
+    fn test_validate_password_from_previous_release() {
+        // Created by argon2 0.5; devices keep their stored hash across updates.
+        const STORED_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$HGHw67HpI+1WXkPHY9FtmQ$mfMwQkgUHtotw5oCvxSYGXxcVl2bm+gJ0uUmrRVQKfs";
+
+        let _lock = PasswordService::lock_for_test();
+        let password_file = &AppConfig::get().paths.password_file;
+        std::fs::write(password_file, STORED_HASH).expect("should write password file");
+
+        assert!(PasswordService::validate_password("legacy-password").is_ok());
+        assert!(PasswordService::validate_password("wrong-password").is_err());
+
         let _ = std::fs::remove_file(password_file);
     }
 }
