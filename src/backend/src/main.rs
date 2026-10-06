@@ -19,8 +19,10 @@ use crate::{
     },
     wifi_commissioning_client::{WifiAvailability, WifiCommissioningServiceClient},
 };
+use actix_http::HttpService;
 use actix_multipart::form::MultipartFormConfig;
 use actix_server::ServerHandle;
+use actix_service::map_config;
 use actix_session::{
     SessionMiddleware,
     config::{BrowserSession, CookieContentSecurity},
@@ -36,7 +38,7 @@ use anyhow::{Context, Result};
 use env_logger::{Builder, Env, Target};
 use log::{debug, error, info, warn};
 use rustls::crypto::{CryptoProvider, ring::default_provider};
-use std::{io::Write, sync::Mutex};
+use std::{io::Write, sync::Mutex, time::Duration};
 use tokio::{
     signal::unix::{SignalKind, signal},
     sync::broadcast,
@@ -45,6 +47,8 @@ use uuid::Uuid;
 
 const UPLOAD_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
 const MULTIPART_CHUNK_SIZE_BYTES: usize = 512 * 1024;
+// Same as HttpServer's default.
+const CLIENT_DISCONNECT_TIMEOUT: Duration = Duration::from_secs(1);
 
 // Cached common name (IP address) used for the current certificate
 static CACHED_COMMON_NAME: Mutex<Option<String>> = Mutex::new(None);
@@ -360,7 +364,7 @@ async fn run_server(
     let internal_task = tokio::spawn(internal_server);
 
     // Main HTTPS server — serves UI, API, and WebSocket routes
-    let ui_server = HttpServer::new(move || {
+    let ui_app = move || {
         App::new()
             .app_data(
                 MultipartFormConfig::default()
@@ -517,12 +521,31 @@ async fn run_server(
                     ),
             )
             .default_service(web::route().to(UiApi::index))
-    })
-    .workers(optimal_worker_count())
-    .bind_rustls_0_23(format!("0.0.0.0:{ui_port}"), tls_config)
-    .context("failed to bind HTTPS server")?
-    .disable_signals()
-    .run();
+    };
+
+    // TODO: remove me, as soon as actix-http depends on h2 >= 0.4.16; then go back to
+    // HttpServer::bind_rustls_0_23. HttpServer always offers HTTP/2 over TLS, and h2 0.3 has an
+    // unfixed DoS advisory, so this listener serves HTTP/1.1 only.
+    let builder = actix_server::Server::build();
+    let shutdown_signal = builder.graceful_shutdown_signal();
+    let ui_server = builder
+        .workers(optimal_worker_count())
+        .disable_signals()
+        .bind("omnect-ui", format!("0.0.0.0:{ui_port}"), move || {
+            let shutdown_signal = shutdown_signal.clone();
+            HttpService::build()
+                .client_disconnect_timeout(CLIENT_DISCONNECT_TIMEOUT)
+                .graceful_shutdown_signal(move || {
+                    let signal = shutdown_signal.clone();
+                    async move { signal.notified().await }
+                })
+                .finish(map_config(ui_app(), |()| {
+                    actix_web::dev::AppConfig::default()
+                }))
+                .rustls_0_23(tls_config.clone())
+        })
+        .context("failed to bind HTTPS server")?
+        .run();
 
     let ui_handle = ui_server.handle();
     let ui_task = tokio::spawn(ui_server);

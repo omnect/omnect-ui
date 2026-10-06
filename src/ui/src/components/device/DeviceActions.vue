@@ -27,13 +27,13 @@ const handleFactoryReset = () => execute(async () => {
 
 <template>
 	<div class="flex flex-col gap-y-4 items-start w-full">
-		<div class="text-h4 text-secondary border-b pb-2 mb-4 w-full">Commands</div>
+		<div class="text-headline-large text-secondary border-b pb-2 mb-4 w-full">Commands</div>
 		<v-btn :prepend-icon="'mdi-restart'" color="primary" variant="flat" class="justify-start" density="compact" width="180">
 			Reboot
 			<v-dialog v-model="dialogs.reboot" activator="parent" max-width="340" :no-click-animation="true" persistent
 				@keydown.esc="dialogs.reboot = false">
 				<v-card>
-					<v-card-title class="text-h5">Reboot device</v-card-title>
+					<v-card-title class="text-headline-small">Reboot device</v-card-title>
 					<v-card-text>
 						Do you really want to restart the device?
 					</v-card-text>
@@ -51,11 +51,11 @@ const handleFactoryReset = () => execute(async () => {
 			<v-dialog v-model="dialogs.factoryReset" activator="parent" max-width="340" :no-click-animation="true"
 				persistent @keydown.esc="dialogs.factoryReset = false">
 				<v-card>
-					<v-card-title class="text-h5">Factory reset</v-card-title>
+					<v-card-title class="text-headline-small">Factory reset</v-card-title>
 					<v-card-text>
 						<div class="flex flex-col gap-2">
 							<div v-if="factoryResetKeys?.keys && factoryResetKeys.keys.length > 0">
-								<div class="text-subtitle-2 mb-2">Preserve options:</div>
+								<div class="text-title-small mb-2">Preserve options:</div>
 								<v-checkbox-btn v-for="(option, index) in factoryResetKeys.keys" :label="option"
 									v-model:model-value="selectedFactoryResetKeys" :value="option" :key="index"
 									density="compact"></v-checkbox-btn>

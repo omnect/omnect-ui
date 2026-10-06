@@ -39,6 +39,7 @@ test.describe('Device Factory Reset', () => {
 
     // Verify UI feedback
     await expect(page.getByText('The device is resetting')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Factory reset', { exact: true })).not.toBeVisible();
   });
 
   test('user can cancel the factory reset dialog', async ({ page }) => {

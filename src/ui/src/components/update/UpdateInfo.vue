@@ -32,13 +32,13 @@ const toggleEnforceConnect = (v: boolean | null) => {
 <template>
 	<div class="flex flex-col gap-y-6">
 		<!-- Header -->
-		<div class="text-h4 text-secondary border-b pb-2 mb-4">Update Details</div>
+		<div class="text-headline-large text-secondary border-b pb-2 mb-4">Update Details</div>
 
 		<!-- Info Grid -->
 		<div v-if="updateManifest" class="grid grid-cols-1 md:grid-cols-3 gap-6">
 			<!-- Column 1: Version Info -->
 			<div class="flex flex-col gap-2">
-				<div class="text-subtitle-2 text-medium-emphasis mb-1">Version</div>
+				<div class="text-title-small text-medium-emphasis mb-1">Version</div>
 				<KeyValuePair title="Current Version">{{ props.currentVersion }}</KeyValuePair>
 				<KeyValuePair title="Update Version">{{ updateManifest.updateId.version }}</KeyValuePair>
 				<KeyValuePair title="Variant">{{ updateManifest.updateId.name }}</KeyValuePair>
@@ -46,7 +46,7 @@ const toggleEnforceConnect = (v: boolean | null) => {
 
 			<!-- Column 2: Provider Info -->
 			<div class="flex flex-col gap-2">
-				<div class="text-subtitle-2 text-medium-emphasis mb-1">Provider</div>
+				<div class="text-title-small text-medium-emphasis mb-1">Provider</div>
 				<KeyValuePair title="Provider">{{ updateManifest.updateId.provider }}</KeyValuePair>
 				<KeyValuePair title="Created">{{ updateManifest.createdDateTime ? new
 					Date(updateManifest.createdDateTime).toLocaleString() : "" }}</KeyValuePair>
@@ -54,7 +54,7 @@ const toggleEnforceConnect = (v: boolean | null) => {
 
 			<!-- Column 3: Compatibility -->
 			<div class="flex flex-col gap-2">
-				<div class="text-subtitle-2 text-medium-emphasis mb-1">Compatibility</div>
+				<div class="text-title-small text-medium-emphasis mb-1">Compatibility</div>
 				<KeyValuePair title="Manufacturer">{{ updateManifest.compatibility[0]?.manufacturer }}</KeyValuePair>
 				<KeyValuePair title="Model">{{ updateManifest.compatibility[0]?.model }}</KeyValuePair>
 				<KeyValuePair title="Compatibility Id">{{ updateManifest.compatibility[0]?.compatibilityid }}</KeyValuePair>
@@ -62,7 +62,7 @@ const toggleEnforceConnect = (v: boolean | null) => {
 		</div>
 
 		<!-- Empty State / Placeholder -->
-		<div v-else class="text-body-1 text-medium-emphasis py-8 text-center italic">
+		<div v-else class="text-body-large text-medium-emphasis py-8 text-center italic">
 			Upload a file to see update details.
 		</div>
 

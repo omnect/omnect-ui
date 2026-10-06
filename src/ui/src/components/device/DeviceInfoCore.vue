@@ -59,11 +59,11 @@ const displayItems = computed(() =>
 
 <template>
   <div class="flex flex-col gap-y-4 w-full">
-    <div class="text-h4 text-secondary border-b pb-2 mb-4">Common Info</div>
+    <div class="text-headline-large text-secondary border-b pb-2 mb-4">Common Info</div>
     <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 w-full">
       <div v-for="item of displayItems" :key="item.title" class="grid grid-cols-[max-content_1fr] items-baseline border-b pb-1 gap-x-4">
-        <dt class="text-subtitle-2 text-medium-emphasis">{{ item.title }}</dt>
-        <dd class="text-body-1 font-weight-medium text-gray-900 text-right">{{ item.value }}</dd>
+        <dt class="text-title-small text-medium-emphasis">{{ item.title }}</dt>
+        <dd class="text-body-large font-weight-medium text-gray-900 text-right">{{ item.value }}</dd>
       </div>
     </dl>
   </div>

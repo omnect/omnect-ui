@@ -77,7 +77,7 @@ const cancelNavigation = () => {
     <!-- Unsaved changes confirmation dialog (page navigation) -->
     <v-dialog v-model="showNavigationDialog" max-width="500">
       <v-card>
-        <v-card-title class="text-h5">Unsaved Changes</v-card-title>
+        <v-card-title class="text-headline-small">Unsaved Changes</v-card-title>
         <v-card-text>
           You have unsaved changes. Do you want to discard them and leave this page?
         </v-card-text>

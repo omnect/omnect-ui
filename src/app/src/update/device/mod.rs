@@ -208,9 +208,8 @@ fn build_initial_healthcheck_cmd() -> Command<Effect, Event> {
                     "Healthcheck",
                     &mut response,
                 ),
-                Err(crux_http::HttpError::Http {
-                    body: Some(body), ..
-                }) => serde_json::from_slice(&body)
+                Err(e) if e.body().is_some() => e
+                    .body_json()
                     .map_err(|e| format!("Healthcheck: JSON parse error: {e}")),
                 Err(e) => Err(e.to_string()),
             };

@@ -57,18 +57,18 @@ function save() {
 	<v-sheet :border="true" rounded class="ma-4">
 		<v-row class="ma-4">
 			<v-col cols="12">
-				<div class="text-h4 text-secondary border-b pb-2 mb-4">Settings</div>
+				<div class="text-headline-large text-secondary border-b pb-2 mb-4">Settings</div>
 			</v-col>
 			<v-col cols="12" md="8" lg="6">
-				<div class="text-h5 text-secondary font-weight-bold border-b pb-2 mb-4">Operation Timeouts</div>
-				<p class="text-body-2 text-medium-emphasis mb-6">
+				<div class="text-headline-small text-secondary font-weight-bold border-b pb-2 mb-4">Operation Timeouts</div>
+				<p class="text-body-medium text-medium-emphasis mb-6">
 					How long the UI waits for device operations to complete before reporting failure.
 					Changes take effect on the next operation.
 				</p>
 
 				<v-row dense>
 					<v-col cols="8">
-						<span class="text-subtitle-2 text-medium-emphasis">Network config rollback</span>
+						<span class="text-title-small text-medium-emphasis">Network config rollback</span>
 					</v-col>
 					<v-col cols="4">
 						<v-text-field
@@ -85,7 +85,7 @@ function save() {
 					</v-col>
 
 					<v-col cols="8">
-						<span class="text-subtitle-2 text-medium-emphasis">Reboot</span>
+						<span class="text-title-small text-medium-emphasis">Reboot</span>
 					</v-col>
 					<v-col cols="4">
 						<v-text-field
@@ -102,7 +102,7 @@ function save() {
 					</v-col>
 
 					<v-col cols="8">
-						<span class="text-subtitle-2 text-medium-emphasis">Factory reset</span>
+						<span class="text-title-small text-medium-emphasis">Factory reset</span>
 					</v-col>
 					<v-col cols="4">
 						<v-text-field
@@ -119,7 +119,7 @@ function save() {
 					</v-col>
 
 					<v-col cols="8">
-						<span class="text-subtitle-2 text-medium-emphasis">Firmware update</span>
+						<span class="text-title-small text-medium-emphasis">Firmware update</span>
 					</v-col>
 					<v-col cols="4">
 						<v-text-field

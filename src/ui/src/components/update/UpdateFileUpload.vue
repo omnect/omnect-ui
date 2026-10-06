@@ -115,8 +115,8 @@ const uploadFile = async () => {
 		<v-card v-else variant="outlined" class="d-flex align-center pa-4 bg-surface-light">
 			<v-icon icon="mdi-file-check" color="success" class="mr-4" size="large"></v-icon>
 			<div class="flex-grow-1">
-				<div class="text-subtitle-1 font-weight-medium">{{ updateFile.name }}</div>
-				<div class="text-caption text-medium-emphasis">
+				<div class="text-body-large font-weight-medium">{{ updateFile.name }}</div>
+				<div class="text-body-small text-medium-emphasis">
 					{{ (updateFile.size / 1024 / 1024).toFixed(2) }} MB
 					<span v-if="isUploading"> - Uploading...</span>
 				</div>

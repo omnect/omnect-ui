@@ -157,13 +157,8 @@ pub fn process_json_response<T: serde::de::DeserializeOwned>(
 
 #[must_use]
 pub fn map_http_error(action: &str, e: &HttpError) -> String {
-    match e {
-        HttpError::Http {
-            body: Some(body), ..
-        } => match String::from_utf8(body.clone()) {
-            Ok(msg) => msg,
-            Err(_) => format!("{action} failed: {e}"),
-        },
+    match e.body().map(std::str::from_utf8) {
+        Some(Ok(msg)) => msg.to_string(),
         _ => format!("{action} failed: {e}"),
     }
 }
@@ -214,15 +209,15 @@ mod tests {
     }
 
     #[test]
-    fn parse_json_response_any_status_parses_on_503() {
-        #[derive(serde::Deserialize, PartialEq, Debug)]
-        struct Info {
-            ok: bool,
-        }
+    fn map_http_error_returns_rejection_body() {
+        let err = crux_http::testing::rejection::<Vec<u8>>(503, "version mismatch").unwrap_err();
+        assert_eq!(map_http_error("test", &err), "version mismatch");
+    }
 
-        let mut response = make_response(503, b"{\"ok\":false}");
-        let result: Result<Info, String> = parse_json_response_any_status("test", &mut response);
-        assert_eq!(result.unwrap(), Info { ok: false });
+    #[test]
+    fn map_http_error_without_body_names_action() {
+        let err = crux_http::testing::rejection::<Vec<u8>>(503, "").unwrap_err();
+        assert!(map_http_error("test", &err).starts_with("test failed: "));
     }
 
     #[test]
