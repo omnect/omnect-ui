@@ -187,7 +187,7 @@ async function loginAndNavigateWith(page: Page, adapters = defaultAdapters) {
 
   // Navigate to network page
   await page.getByRole('link', { name: /network/i }).click();
-  await expect(page.locator('.text-h4', { hasText: 'Network' })).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('.text-headline-large', { hasText: 'Network' })).toBeVisible({ timeout: 5000 });
 
   // Wait for adapter tabs to appear from WebSocket data
   await expect(page.getByRole('tab', { name: /eth0/i })).toBeVisible({ timeout: 10000 });

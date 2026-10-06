@@ -473,7 +473,7 @@ export class NetworkTestHarness {
     await networkLink.dispatchEvent('click');
     
     // Wait for the Network header to be visible to confirm navigation
-    await expect(page.locator('.text-h4', { hasText: 'Network' })).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.text-headline-large', { hasText: 'Network' })).toBeVisible({ timeout: 10000 });
   }
 
   /**

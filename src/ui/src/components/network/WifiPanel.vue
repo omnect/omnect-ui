@@ -50,11 +50,11 @@ const openForgetDialog = (ssid: string) => {
 <template>
   <div v-if="wifi" class="mt-8">
     <!-- Connection Status -->
-    <div class="text-h5 text-secondary font-weight-bold border-b pb-2 mb-4">WiFi Connection</div>
+    <div class="text-headline-small text-secondary font-weight-bold border-b pb-2 mb-4">WiFi Connection</div>
 
     <div class="mb-6">
       <div v-if="wifi.status.state.type === 'connected'" class="d-flex align-center gap-4">
-        <span class="text-body-1">{{ wifi.status.ssid }}</span>
+        <span class="text-body-large">{{ wifi.status.ssid }}</span>
         <v-btn
           color="error" variant="flat" size="small"
           @click="wifiDisconnect()"
@@ -66,20 +66,20 @@ const openForgetDialog = (ssid: string) => {
 
       <div v-else-if="wifi.status.state.type === 'connecting'" class="d-flex align-center gap-2">
         <v-progress-circular indeterminate size="16" width="2" />
-        <span class="text-body-2">Connecting to {{ wifi.status.ssid }}...</span>
+        <span class="text-body-medium">Connecting to {{ wifi.status.ssid }}...</span>
       </div>
 
       <v-alert v-else-if="wifi.status.state.type === 'failed'" type="error" variant="tonal" density="compact">
         {{ wifi.status.state.message }}
       </v-alert>
 
-      <div v-else class="text-body-2 text-medium-emphasis">
+      <div v-else class="text-body-medium text-medium-emphasis">
         Not connected
       </div>
     </div>
 
     <!-- Available Networks -->
-    <div class="text-h5 text-secondary font-weight-bold border-b pb-2 mb-4">Available Networks</div>
+    <div class="text-headline-small text-secondary font-weight-bold border-b pb-2 mb-4">Available Networks</div>
 
     <div class="mb-2">
       <v-btn color="primary" variant="flat" size="small"
@@ -108,17 +108,17 @@ const openForgetDialog = (ssid: string) => {
         </template>
         <v-list-item-title>{{ network.ssid }}</v-list-item-title>
         <template #append>
-          <span class="text-caption text-medium-emphasis">Ch {{ network.channel }}</span>
+          <span class="text-body-small text-medium-emphasis">Ch {{ network.channel }}</span>
         </template>
       </v-list-item>
     </v-list>
 
-    <div v-else-if="wifi.scanState.type === 'finished'" class="text-body-2 text-medium-emphasis mb-6">
+    <div v-else-if="wifi.scanState.type === 'finished'" class="text-body-medium text-medium-emphasis mb-6">
       No networks found.
     </div>
 
     <!-- Saved Networks -->
-    <div class="text-h5 text-secondary font-weight-bold border-b pb-2 mb-4">Saved Networks</div>
+    <div class="text-headline-small text-secondary font-weight-bold border-b pb-2 mb-4">Saved Networks</div>
 
     <v-list v-if="wifi.savedNetworks.length > 0" lines="one" density="compact">
       <v-list-item
@@ -138,7 +138,7 @@ const openForgetDialog = (ssid: string) => {
       </v-list-item>
     </v-list>
 
-    <div v-else class="text-body-2 text-medium-emphasis">
+    <div v-else class="text-body-medium text-medium-emphasis">
       No saved networks.
     </div>
 

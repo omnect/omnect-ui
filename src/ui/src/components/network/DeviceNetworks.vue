@@ -96,7 +96,7 @@ const cancelTabChange = () => {
 
 <template>
   <div class="flex flex-col gap-y-4 flex-wrap w-full">
-    <div class="text-h4 text-secondary border-b pb-2 mb-4 w-full">Network</div>
+    <div class="text-headline-large text-secondary border-b pb-2 mb-4 w-full">Network</div>
     <div class="d-flex flex-row">
       <v-tabs v-model="tab" color="primary" direction="vertical" class="border-r network-tabs" density="compact">
         <v-tab v-for="networkAdapter in networkStatus?.networkStatus" :value="networkAdapter.name" 
@@ -124,7 +124,7 @@ const cancelTabChange = () => {
     <!-- Unsaved changes confirmation dialog (tab switching) -->
     <v-dialog v-model="showUnsavedChangesDialog" max-width="500">
       <v-card>
-        <v-card-title class="text-h5">Unsaved Changes</v-card-title>
+        <v-card-title class="text-headline-small">Unsaved Changes</v-card-title>
         <v-card-text>
           You have unsaved changes. Do you want to discard them and switch to another network adapter?
         </v-card-text>

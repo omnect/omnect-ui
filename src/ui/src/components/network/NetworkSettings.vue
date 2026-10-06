@@ -170,7 +170,7 @@ const errors = computed(() => {
         <!-- Rollback Confirmation Modal -->
         <v-dialog v-model="confirmationModalOpen" max-width="600">
             <v-card>
-                <v-card-title class="text-h5">
+                <v-card-title class="text-headline-small">
                     Confirm Network Configuration Change
                 </v-card-title>
                 <v-card-text>
@@ -196,7 +196,7 @@ const errors = computed(() => {
               <strong>{{ switchingToDhcp ? 'Enable automatic rollback' : 'Enable automatic rollback (recommended)' }}</strong>
             </template>
           </v-checkbox>
-          <div class="text-caption text-medium-emphasis ml-8">
+          <div class="text-body-small text-medium-emphasis ml-8">
             <template v-if="switchingToDhcp">
               Not recommended for DHCP: You won't know the new IP address, making it difficult to confirm the change before the 90 second timeout triggers a rollback.
             </template>
@@ -251,7 +251,7 @@ const errors = computed(() => {
             </div>
 
             <!-- Connectivity -->
-            <div class="text-subtitle-2 text-medium-emphasis mb-1">Connectivity</div>
+            <div class="text-title-small text-medium-emphasis mb-1">Connectivity</div>
             <v-row>
                 <v-col cols="12" md="6">
                     <v-text-field :readonly="isDHCP" v-model="ipAddress" label="IP Address" :error-messages="errors?.ipAddress" :variant="managedVariant"
@@ -290,7 +290,7 @@ const errors = computed(() => {
             </v-row>
 
             <!-- Network Services -->
-            <div class="text-subtitle-2 text-medium-emphasis mb-1">Network Services</div>
+            <div class="text-title-small text-medium-emphasis mb-1">Network Services</div>
             <v-row>
                 <v-col cols="12" md="6">
                     <v-textarea :readonly="isDHCP" v-model="gateways" label="Gateways" :variant="managedVariant" rows="3" no-resize
@@ -327,7 +327,7 @@ const errors = computed(() => {
                 </v-btn>
                 <v-spacer></v-spacer>
                 <v-fade-transition>
-                    <div v-if="viewModel.networkFormDirty" class="text-caption text-medium-emphasis d-flex align-center">
+                    <div v-if="viewModel.networkFormDirty" class="text-body-small text-medium-emphasis d-flex align-center">
                         <v-icon icon="mdi-pencil-circle-outline" size="small" class="mr-1"></v-icon>
                         You have unsaved changes
                     </div>

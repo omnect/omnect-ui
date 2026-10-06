@@ -26,7 +26,7 @@ const cancel = () => {
 <template>
   <v-dialog :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" max-width="450">
     <v-card>
-      <v-card-title class="text-h5">Forget Network</v-card-title>
+      <v-card-title class="text-headline-small">Forget Network</v-card-title>
       <v-card-text>
         <v-alert
           v-if="isCurrentConnection"

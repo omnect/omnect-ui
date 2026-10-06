@@ -43,7 +43,7 @@ watch(() => props.modelValue, (open) => {
 <template>
   <v-dialog :model-value="modelValue" @update:model-value="emit('update:modelValue', $event)" max-width="450">
     <v-card>
-      <v-card-title class="text-h5">Connect to {{ ssid }}</v-card-title>
+      <v-card-title class="text-headline-small">Connect to {{ ssid }}</v-card-title>
       <v-card-text>
         <v-text-field
           v-model="password"

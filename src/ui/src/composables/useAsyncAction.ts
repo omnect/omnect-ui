@@ -1,5 +1,5 @@
-import { ref } from 'vue'
-import { useMessageWatchers } from './useMessageWatchers'
+import { ref, watch } from 'vue'
+import { useCore } from './useCore'
 
 /**
  * Composable for managing async action state with automatic loading state management
@@ -25,17 +25,30 @@ export function useAsyncAction(options?: {
   onError?: (message: string) => void
 }) {
   const loading = ref(false)
+  const { viewModel } = useCore()
 
-  useMessageWatchers({
-    onSuccess: (message) => {
-      loading.value = false
-      options?.onSuccess?.(message)
+  // Sync watchers: App.vue shows the toast and clears the message before a default watcher here would run.
+  watch(
+    () => viewModel.successMessage,
+    (message) => {
+      if (message) {
+        loading.value = false
+        options?.onSuccess?.(message)
+      }
     },
-    onError: (message) => {
-      loading.value = false
-      options?.onError?.(message)
-    }
-  })
+    { flush: 'sync' }
+  )
+
+  watch(
+    () => viewModel.errorMessage,
+    (message) => {
+      if (message) {
+        loading.value = false
+        options?.onError?.(message)
+      }
+    },
+    { flush: 'sync' }
+  )
 
   /**
    * Execute an async action with automatic loading state management
