@@ -1,6 +1,9 @@
 #![cfg_attr(feature = "mock", allow(dead_code, unused_imports))]
 
-use crate::http_client::{handle_http_response, unix_socket_client};
+use crate::{
+    http_client::{handle_http_response, unix_socket_client},
+    version::version_info,
+};
 use anyhow::{Context, Result};
 use log::info;
 #[cfg(feature = "mock")]
@@ -8,7 +11,7 @@ use mockall::automock;
 pub use omnect_ui_core::types::{
     WifiAvailability, WifiConnectRequest, WifiConnectResponse, WifiDisconnectResponse,
     WifiForgetRequest, WifiForgetResponse, WifiSavedNetworksResponse, WifiScanResultsResponse,
-    WifiScanStartedResponse, WifiStatusResponse, WifiVersionResponse,
+    WifiScanStartedResponse, WifiServiceInfoResponse, WifiStatusResponse,
 };
 use reqwest::Client;
 use serde::Serialize;
@@ -27,7 +30,7 @@ pub trait WifiCommissioningClient {
     async fn status(&self) -> Result<WifiStatusResponse>;
     async fn saved_networks(&self) -> Result<WifiSavedNetworksResponse>;
     async fn forget_network(&self, request: WifiForgetRequest) -> Result<WifiForgetResponse>;
-    async fn version(&self) -> Result<WifiVersionResponse>;
+    async fn service_info(&self) -> Result<WifiServiceInfoResponse>;
 }
 
 #[cfg(feature = "mock")]
@@ -52,72 +55,72 @@ impl WifiCommissioningServiceClient {
     const STATUS_ENDPOINT: &str = "/api/v1/status";
     const NETWORKS_ENDPOINT: &str = "/api/v1/networks";
     const FORGET_ENDPOINT: &str = "/api/v1/networks/forget";
-    const VERSION_ENDPOINT: &str = "/api/v1/version";
+    const SERVICE_INFO_ENDPOINT: &str = "/api/v1/service-info";
 
-    pub const MIN_REQUIRED_VERSION: semver::Version = semver::Version::new(0, 1, 0);
+    // Tracks the released wifi-commissioning-service tag. Raise it together with a released tag.
+    const REQUIRED_CLIENT_VERSION: &str = ">=0.2.1";
 
     pub async fn check_availability(&self) -> WifiAvailability {
-        let status_result = self.status().await;
-        let version_result = self.version().await;
+        Self::availability(self.service_info().await)
+    }
 
-        match (status_result, version_result) {
-            (Ok(status), Ok(version_response)) => {
-                let is_version_compatible = match semver::Version::parse(&version_response.version)
-                {
-                    Ok(v) => v >= Self::MIN_REQUIRED_VERSION,
-                    Err(e) => {
-                        log::warn!(
-                            "Failed to parse WiFi service version '{}': {}",
-                            version_response.version,
-                            e
-                        );
-                        false
-                    }
-                };
+    fn availability(probe: Result<WifiServiceInfoResponse>) -> WifiAvailability {
+        let unknown_version = WifiAvailability::Unavailable {
+            socket_present: true,
+            version_info: None,
+        };
 
-                if is_version_compatible {
-                    log::info!(
-                        "WiFi service available (version {})",
-                        version_response.version
-                    );
-
-                    if let Some(interface_name) = status.interface_name {
-                        return WifiAvailability::Available {
-                            version: version_response.version,
-                            interface_name,
-                        };
-                    }
-                    log::error!("WiFi service reported OK status but no interface name");
-                } else {
-                    log::warn!(
-                        "WiFi service version '{}' is lower than required minimum {}",
-                        version_response.version,
-                        Self::MIN_REQUIRED_VERSION
-                    );
-                }
-
-                WifiAvailability::Unavailable {
-                    socket_present: true,
-                    version: Some(version_response.version),
-                    min_required_version: Self::MIN_REQUIRED_VERSION.to_string(),
-                }
+        // A service without the service-info endpoint answers 404, which ends up here.
+        let info = match probe {
+            Ok(info) => info,
+            Err(e) => {
+                log::warn!("WiFi service-info probe failed: {e:#}");
+                return unknown_version;
             }
-            (Err(e), _) => {
-                log::error!("WiFi service status probe failed: {e:#}");
-                WifiAvailability::Unavailable {
-                    socket_present: true,
-                    version: None,
-                    min_required_version: Self::MIN_REQUIRED_VERSION.to_string(),
-                }
+        };
+
+        let version_info = match version_info(Self::REQUIRED_CLIENT_VERSION, &info.version) {
+            Ok(version_info) => version_info,
+            Err(e) => {
+                log::warn!("WiFi service version check failed: {e:#}");
+                return unknown_version;
             }
-            (_, Err(e)) => {
-                log::error!("WiFi service version probe failed: {e:#}");
-                WifiAvailability::Unavailable {
-                    socket_present: true,
-                    version: None,
-                    min_required_version: Self::MIN_REQUIRED_VERSION.to_string(),
-                }
+        };
+
+        if version_info.mismatch {
+            log::warn!(
+                "WiFi service version '{}' does not satisfy {}",
+                info.version,
+                Self::REQUIRED_CLIENT_VERSION
+            );
+            return WifiAvailability::Unavailable {
+                socket_present: true,
+                version_info: Some(version_info),
+            };
+        }
+
+        if info.interface_name.is_empty() {
+            log::error!("WiFi service reported no interface name");
+            return WifiAvailability::Unavailable {
+                socket_present: true,
+                version_info: Some(version_info),
+            };
+        }
+
+        log::info!(
+            "WiFi service available (version {}, interface {}, BLE {})",
+            info.version,
+            info.interface_name,
+            if info.ble_enabled {
+                "enabled"
+            } else {
+                "disabled"
             }
+        );
+
+        WifiAvailability::Available {
+            version: info.version,
+            interface_name: info.interface_name,
         }
     }
 
@@ -228,9 +231,9 @@ impl WifiCommissioningClient for WifiCommissioningServiceClient {
         serde_json::from_str(&body).context("failed to parse forget response")
     }
 
-    async fn version(&self) -> Result<WifiVersionResponse> {
-        let body = self.get(Self::VERSION_ENDPOINT).await?;
-        serde_json::from_str(&body).context("failed to parse version response")
+    async fn service_info(&self) -> Result<WifiServiceInfoResponse> {
+        let body = self.get(Self::SERVICE_INFO_ENDPOINT).await?;
+        serde_json::from_str(&body).context("failed to parse service info response")
     }
 }
 
@@ -363,9 +366,109 @@ mod tests {
                 "/api/v1/networks/forget"
             );
             assert_eq!(
-                WifiCommissioningServiceClient::VERSION_ENDPOINT,
-                "/api/v1/version"
+                WifiCommissioningServiceClient::SERVICE_INFO_ENDPOINT,
+                "/api/v1/service-info"
             );
+        }
+    }
+
+    mod availability {
+        use super::*;
+        use omnect_ui_core::types::VersionInfo;
+
+        fn service_info(version: &str, interface_name: &str) -> WifiServiceInfoResponse {
+            WifiServiceInfoResponse {
+                ble_enabled: true,
+                interface_name: interface_name.to_string(),
+                version: version.to_string(),
+            }
+        }
+
+        fn unavailable(version_info: Option<VersionInfo>) -> WifiAvailability {
+            WifiAvailability::Unavailable {
+                socket_present: true,
+                version_info,
+            }
+        }
+
+        fn version(current: &str, mismatch: bool) -> VersionInfo {
+            VersionInfo {
+                required: ">=0.2.1".to_string(),
+                current: current.to_string(),
+                mismatch,
+            }
+        }
+
+        #[test]
+        fn probe_error_has_no_version() {
+            let probe = Err(anyhow::anyhow!("404 Not Found"));
+            assert_eq!(
+                WifiCommissioningServiceClient::availability(probe),
+                unavailable(None)
+            );
+        }
+
+        #[test]
+        fn older_version_is_a_mismatch() {
+            let probe = Ok(service_info("0.1.9", "wlan0"));
+            assert_eq!(
+                WifiCommissioningServiceClient::availability(probe),
+                unavailable(Some(version("0.1.9", true)))
+            );
+        }
+
+        #[test]
+        fn version_that_does_not_parse_has_no_version() {
+            let probe = Ok(service_info("x", "wlan0"));
+            assert_eq!(
+                WifiCommissioningServiceClient::availability(probe),
+                unavailable(None)
+            );
+        }
+
+        #[test]
+        fn empty_interface_is_unavailable() {
+            let probe = Ok(service_info("0.2.1", ""));
+            assert_eq!(
+                WifiCommissioningServiceClient::availability(probe),
+                unavailable(Some(version("0.2.1", false)))
+            );
+        }
+
+        #[test]
+        fn mismatch_is_checked_before_the_interface() {
+            let probe = Ok(service_info("0.1.9", ""));
+            assert_eq!(
+                WifiCommissioningServiceClient::availability(probe),
+                unavailable(Some(version("0.1.9", true)))
+            );
+        }
+
+        #[test]
+        fn matching_version_with_interface_is_available() {
+            for current in ["0.2.1", "1.0.0"] {
+                let probe = Ok(service_info(current, "wlan0"));
+                assert_eq!(
+                    WifiCommissioningServiceClient::availability(probe),
+                    WifiAvailability::Available {
+                        version: current.to_string(),
+                        interface_name: "wlan0".to_string(),
+                    }
+                );
+            }
+        }
+    }
+
+    mod service_info_response {
+        use super::*;
+
+        #[test]
+        fn deserializes_service_payload() {
+            let json =
+                r#"{"status":"ok","ble_enabled":true,"interface_name":"wlan0","version":"0.2.1"}"#;
+            let resp: WifiServiceInfoResponse = serde_json::from_str(json).unwrap();
+            assert_eq!(resp.interface_name, "wlan0");
+            assert_eq!(resp.version, "0.2.1");
         }
     }
 }

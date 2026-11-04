@@ -5,6 +5,7 @@ mod keycloak_client;
 mod middleware;
 mod omnect_device_service_client;
 mod services;
+mod version;
 mod wifi_commissioning_client;
 
 use crate::{
@@ -295,8 +296,7 @@ fn optimal_worker_count() -> usize {
 async fn initialize_wifi_client() -> (Option<WifiCommissioningServiceClient>, WifiAvailability) {
     let unavailable = WifiAvailability::Unavailable {
         socket_present: false,
-        version: None,
-        min_required_version: WifiCommissioningServiceClient::MIN_REQUIRED_VERSION.to_string(),
+        version_info: None,
     };
 
     let config = &AppConfig::get().wifi;

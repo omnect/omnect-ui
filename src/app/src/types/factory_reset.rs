@@ -5,22 +5,29 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum FactoryResetStatus {
+    /// No result received yet.
     #[default]
     Unknown,
-    ModeSupported,
-    ModeUnsupported,
-    BackupRestoreError,
-    ConfigurationError,
+    Success,
+    Invalid,
+    Error,
+    ConfigError,
+    /// Reset succeeded, but a partition needed a second format attempt.
+    Warning,
+    /// A status code this version does not know.
+    Unrecognized,
 }
 
 impl fmt::Display for FactoryResetStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unknown => write!(f, "unknown"),
-            Self::ModeSupported => write!(f, "modeSupported"),
-            Self::ModeUnsupported => write!(f, "modeUnsupported"),
-            Self::BackupRestoreError => write!(f, "backupRestoreError"),
-            Self::ConfigurationError => write!(f, "configurationError"),
+            Self::Success => write!(f, "success"),
+            Self::Invalid => write!(f, "invalid"),
+            Self::Error => write!(f, "error"),
+            Self::ConfigError => write!(f, "configError"),
+            Self::Warning => write!(f, "warning"),
+            Self::Unrecognized => write!(f, "unrecognized"),
         }
     }
 }
@@ -31,8 +38,11 @@ impl fmt::Display for FactoryResetStatus {
 pub struct FactoryResetResult {
     pub status: FactoryResetStatus,
     pub context: Option<String>,
-    pub error: String,
+    pub error: Option<String>,
     pub paths: Vec<String>,
+    /// `true` once the reset started wiping data. On a failure this separates a
+    /// safe abort from one that left the device half wiped.
+    pub data_wiped: bool,
 }
 
 /// Factory reset state from WebSocket

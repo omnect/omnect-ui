@@ -8,6 +8,7 @@ import OmnectLogo from "./components/branding/OmnectLogo.vue"
 import OverlaySpinner from "./components/feedback/OverlaySpinner.vue"
 import UserMenu from "./components/UserMenu.vue"
 import { useCore } from "./composables/useCore"
+import { isFactoryResetSuccess } from "./composables/core/types"
 import { useSnackbar } from "./composables/useSnackbar"
 import { useMessageWatchers } from "./composables/useMessageWatchers"
 
@@ -93,6 +94,8 @@ const acknowledgeUpdateValidation = () => {
 const factoryResetModalSuccess = ref(false)
 const factoryResetError = ref<string | null>(null)
 const factoryResetContext = ref<string | null>(null)
+const factoryResetDataWiped = ref(false)
+const factoryResetUnrecognized = ref(false)
 const updateValidationIsRollback = ref(false)
 
 // Watch authentication state to redirect to login if session is lost
@@ -132,7 +135,9 @@ watch(
 			// Snapshot once so the template is decoupled from the live ViewModel during close animation
 			factoryResetError.value = result.error ?? null
 			factoryResetContext.value = result.context ?? null
-			factoryResetModalSuccess.value = result.status === 'modeSupported'
+			factoryResetModalSuccess.value = isFactoryResetSuccess(result.status)
+			factoryResetDataWiped.value = result.dataWiped
+			factoryResetUnrecognized.value = result.status === 'unrecognized'
 			showFactoryResetResultModal.value = true
 		}
 	}
@@ -196,10 +201,16 @@ watch(
         <div class="flex flex-col gap-4 mb-4">
           <template v-if="factoryResetModalSuccess">
             <p>The factory reset completed successfully.</p>
+            <p v-if="factoryResetContext">{{ factoryResetContext }}</p>
           </template>
           <template v-else>
+            <p v-if="factoryResetUnrecognized">The device reported an unknown result.</p>
             <p v-if="factoryResetError">{{ factoryResetError }}</p>
             <p v-if="factoryResetContext">{{ factoryResetContext }}</p>
+            <p v-if="factoryResetDataWiped" data-testid="factory-reset-data-wiped">
+              Data on the device was already changed when the reset failed. Preserved data may
+              be lost.
+            </p>
           </template>
           <div class="flex justify-end">
             <v-btn color="primary" @click="acknowledgeFactoryResetResult">OK</v-btn>
